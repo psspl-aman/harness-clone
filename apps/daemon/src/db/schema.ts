@@ -13,6 +13,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import type {
+  OnboardingReport,
   AgentRole,
   AppSettings,
   AuthStatus,
@@ -73,6 +74,9 @@ export const projects = sqliteTable(
       .$type<'pending' | 'running' | 'done' | 'failed' | 'skipped'>()
       .notNull()
       .default('pending'),
+    onboardingReport: json<OnboardingReport>('onboarding_report'),
+    onboardingError: text('onboarding_error'),
+    onboardedAt: integer('onboarded_at'),
     runningStatus: text('running_status')
       .$type<'stopped' | 'starting' | 'running' | 'crashed'>()
       .notNull()
@@ -693,5 +697,18 @@ export const terminalSessions = sqliteTable(
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: json<unknown>('value').notNull(),
+  updatedAt: updatedAt(),
+});
+
+// ─── Secrets (encrypted at rest, AES-256-GCM) ────────────────────────────────
+
+export const secrets = sqliteTable('secrets', {
+  id: text('id').primaryKey(),
+  /** Stable lookup name, e.g. "github.token". */
+  name: text('name').notNull().unique(),
+  ciphertext: text('ciphertext').notNull(),
+  iv: text('iv').notNull(),
+  authTag: text('auth_tag').notNull(),
+  createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

@@ -1,4 +1,4 @@
-import { FolderKanban, Settings, type LucideIcon } from 'lucide-react';
+import { FolderKanban, Plug, Settings, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   href: string;
@@ -10,6 +10,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Projects', icon: FolderKanban, shortcut: 'p' },
+  { href: '/integrations', label: 'Integrations', icon: Plug, shortcut: 'i' },
   { href: '/settings', label: 'Settings', icon: Settings, shortcut: 's' },
 ];
 

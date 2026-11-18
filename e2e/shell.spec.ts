@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test';
 import { E2E } from '../playwright.config';
 
 test.beforeEach(async ({ request }) => {
+  // Start from an empty project registry (removes DB rows only; test folders stay in tmp).
+  const projects = (await (await request.get(`${E2E.daemonUrl}/api/projects`)).json()) as {
+    id: string;
+  }[];
+  for (const p of projects) await request.delete(`${E2E.daemonUrl}/api/projects/${p.id}`);
   // Reset settings touched by tests to defaults.
   await request.patch(`${E2E.daemonUrl}/api/settings`, {
     data: { pipeline: { maxFixLoops: 3, requireHumanReviewBeforeMerge: false } },

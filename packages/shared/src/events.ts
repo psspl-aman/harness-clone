@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AUTH_STATUSES, TASK_STATUSES } from './enums';
 import { AppSettingsSchema } from './settings';
 import { ProjectSummarySchema } from './entities';
+import type { GithubStatus } from './projects';
 
 /**
  * Every event that flows over the EventBus/WebSocket. Add new events here;
@@ -19,6 +20,12 @@ export const EventPayloads = {
   'project.created': z.object({ project: ProjectSummarySchema }),
   'project.updated': z.object({ project: ProjectSummarySchema }),
   'project.deleted': z.object({ projectId: z.string() }),
+  'project.onboarding': z.object({
+    projectId: z.string(),
+    status: z.enum(['pending', 'running', 'done', 'failed', 'skipped']),
+    error: z.string().nullable(),
+  }),
+  'github.status_changed': z.object({ status: z.custom<GithubStatus>() }),
   'task.status_changed': z.object({
     projectId: z.string(),
     taskId: z.string(),

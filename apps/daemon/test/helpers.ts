@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { buildApp, type BuiltApp } from '../src/app';
+import { dirname, join } from 'node:path';
+import { buildApp, type BuildOptions, type BuiltApp } from '../src/app';
 import { loadConfig } from '../src/config';
 
 export interface TestApp extends BuiltApp {
@@ -10,7 +10,10 @@ export interface TestApp extends BuiltApp {
 }
 
 /** Fresh daemon backed by a throwaway AGENTFORGE_HOME. */
-export async function createTestApp(env: Record<string, string> = {}): Promise<TestApp> {
+export async function createTestApp(
+  env: Record<string, string> = {},
+  opts: BuildOptions = {},
+): Promise<TestApp> {
   const home = mkdtempSync(join(tmpdir(), 'agentforge-test-'));
   const config = loadConfig({
     AGENTFORGE_HOME: home,
@@ -18,7 +21,10 @@ export async function createTestApp(env: Record<string, string> = {}): Promise<T
     NODE_ENV: 'test',
     ...env,
   });
-  const built = await buildApp(config);
+  const built = await buildApp(config, {
+    ...opts,
+    github: { ghCommand: '/nonexistent/gh', ...opts.github },
+  });
   return {
     ...built,
     home,
@@ -28,3 +34,19 @@ export async function createTestApp(env: Record<string, string> = {}): Promise<T
     },
   };
 }
+
+/** Temp directory removed by the caller's cleanup. */
+export function tempDir(prefix = 'af-fixture-'): string {
+  return mkdtempSync(join(tmpdir(), prefix));
+}
+
+/** Write a tree of files: { 'src/a.ts': 'content' }. */
+export function writeTree(root: string, files: Record<string, string>): void {
+  for (const [rel, content] of Object.entries(files)) {
+    const full = join(root, rel);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, content);
+  }
+}
+
+export const GIT_ID = ['-c', 'user.name=Test', '-c', 'user.email=test@example.com'];

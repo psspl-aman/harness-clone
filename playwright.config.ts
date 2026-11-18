@@ -9,6 +9,8 @@ import { join } from 'node:path';
  * The env var is set once in the main process and inherited by workers.
  */
 process.env.AF_E2E_HOME ??= mkdtempSync(join(tmpdir(), 'agentforge-e2e-'));
+/** Scratch area for project folders created by tests (outside AGENTFORGE_HOME). */
+process.env.AF_E2E_WORK ??= mkdtempSync(join(tmpdir(), 'agentforge-e2e-work-'));
 const DAEMON_PORT = 4417;
 const WEB_PORT = 4418;
 

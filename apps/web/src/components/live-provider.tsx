@@ -39,8 +39,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             break;
           case 'project.created':
           case 'project.updated':
-          case 'project.deleted':
+            // Prefix match also refreshes the project's detail query.
             void queryClient.invalidateQueries({ queryKey: qk.projects });
+            break;
+          case 'project.deleted':
+            queryClient.removeQueries({ queryKey: qk.project(e.payload.projectId) });
+            void queryClient.invalidateQueries({ queryKey: qk.projects, exact: true });
+            break;
+          case 'project.onboarding':
+            void queryClient.invalidateQueries({ queryKey: qk.project(e.payload.projectId) });
+            break;
+          case 'github.status_changed':
+            queryClient.setQueryData(qk.github, e.payload.status);
+            void queryClient.invalidateQueries({ queryKey: ['github', 'repos'] });
+            void queryClient.invalidateQueries({ queryKey: qk.githubOwners });
             break;
           case 'notification': {
             const { level, title, message } = e.payload;

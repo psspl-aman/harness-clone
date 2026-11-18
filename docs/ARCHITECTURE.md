@@ -69,6 +69,25 @@ Conventions:
 
 Migrations live in `apps/daemon/drizzle/` and run at startup.
 
+## Projects (Phase 2)
+
+- **`services/fs.ts`.** A directory browser built on the daemon, because a browser can't read local paths itself. It also runs the project path safety checks (`check(path, mode)`).
+- **`services/git.ts`.** Helpers built on `simple-git`:
+  - `initRepo` creates the repository and makes an initial commit, so later phases can branch into worktrees.
+  - `ensureSafeGitignore` adds secret-file patterns to `.gitignore`. As a second safety net, any secret-looking file that still gets staged is removed before the commit.
+- **`services/github.ts`.** Uses Octokit to:
+  - connect with a personal access token, or import the token from an installed `gh` CLI
+  - list repositories and owners
+  - create repositories
+  - clone, passing the token as an `http.extraheader` through `GIT_CONFIG_*` environment variables
+- **`services/secrets.ts`.** Encrypts values with AES-256-GCM, using the secret's name as associated data. The key lives in `AGENTFORGE_HOME/secret.key` with mode 0600.
+- **`services/onboarding/analyzer.ts`.** A deterministic analysis with no LLM involved, which produces the `OnboardingReport`.
+  - `ProjectService.runOnboarding` runs it in the background and emits `project.onboarding` and `project.updated` events.
+  - It fills in only commands the user hasn't set.
+  - It replaces the project memory entries that came from earlier onboarding runs.
+  - Analyses interrupted by a daemon restart resume on boot.
+  - Shutdown waits for any analysis still running before closing the database.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.
@@ -78,5 +97,8 @@ Migrations live in `apps/daemon/drizzle/` and run at startup.
   - "g then key" navigation (`g p` for Projects, `g s` for Settings).
   - An animated banner whenever the daemon is unreachable.
 - **Pages:**
+  - New-project wizard (`/projects/new`): one flow for starting from scratch and one for attaching an existing project. It has a side stepper, validates each step, checks paths live, and lets you connect GitHub without leaving the wizard.
+  - Project page (`/projects/[id]`): live onboarding status, editable commands showing where each was detected, stack, conventions, structure, git state, env file names, requirements, per-role engine overrides, and removal with a typed confirmation.
+  - Integrations: connect GitHub.
   - Projects dashboard: cards show source, stack, task progress, run status, an error badge and last activity.
   - Settings: a draft-and-diff form that sends only changed fields, validates client-side with the shared schema, and picks up changes made elsewhere live.

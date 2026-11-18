@@ -15,9 +15,12 @@
     "@agentforge/shared": "workspace:*",
     "@fastify/cors": "^11.1.0",
     "@fastify/websocket": "^11.2.0",
+    "@octokit/rest": "^22.0.1",
     "better-sqlite3": "^12.4.0",
     "drizzle-orm": "^0.45.0",
+    "execa": "^9.6.1",
     "fastify": "^5.6.0",
+    "simple-git": "^3.36.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {

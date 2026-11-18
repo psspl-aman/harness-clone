@@ -1,18 +1,30 @@
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { eq } from 'drizzle-orm';
+import { join } from 'node:path';
 import { ensureHome, type DaemonConfig } from './config';
 import type { AppContext } from './context';
 import { openDb, type DbHandle } from './db/client';
+import { projects as projectsTable } from './db/schema';
 import { EventBus } from './events/bus';
 import { registerErrorHandler } from './http/errors';
 import { originChecker, registerLocalOnlyGuard } from './http/security';
+import { registerFsRoutes } from './routes/fs';
+import { registerGithubRoutes } from './routes/github';
 import { registerProjectRoutes } from './routes/projects';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerSystemRoutes } from './routes/system';
+import { FsService } from './services/fs';
+import { GithubService, type GithubServiceOptions } from './services/github';
 import { ProjectService } from './services/projects';
+import { SecretStore } from './services/secrets';
 import { SettingsService } from './services/settings';
 import { WsGateway } from './ws/gateway';
+
+export interface BuildOptions {
+  github?: GithubServiceOptions;
+}
 
 export interface BuiltApp {
   app: FastifyInstance;
@@ -20,7 +32,7 @@ export interface BuiltApp {
   dbHandle: DbHandle;
 }
 
-export async function buildApp(config: DaemonConfig): Promise<BuiltApp> {
+export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): Promise<BuiltApp> {
   ensureHome(config);
   const app = Fastify({
     logger:
@@ -47,13 +59,45 @@ export async function buildApp(config: DaemonConfig): Promise<BuiltApp> {
   const isOriginAllowed = originChecker(config.allowedOrigins);
   const gateway = new WsGateway(bus, { isOriginAllowed, version: config.version });
 
+  const settings = new SettingsService(dbHandle.db, bus, app.log);
+  const secrets = new SecretStore(dbHandle.db, config.home);
+  const workspaceRoot = () => settings.get().workspaceRoot ?? join(config.home, 'workspaces');
+  const github = new GithubService(dbHandle.db, secrets, bus, opts.github);
+  const fs = new FsService({
+    agentforgeHome: config.home,
+    workspaceRoot,
+    projectAtPath: (p) =>
+      dbHandle.db
+        .select({ id: projectsTable.id, localPath: projectsTable.localPath })
+        .from(projectsTable)
+        .where(eq(projectsTable.localPath, p))
+        .get() ?? null,
+    allProjectPaths: () =>
+      dbHandle.db
+        .select({ id: projectsTable.id, localPath: projectsTable.localPath })
+        .from(projectsTable)
+        .all(),
+  });
+  const projects = new ProjectService({
+    db: dbHandle.db,
+    bus,
+    fs,
+    github,
+    workspaceRoot,
+    log: app.log,
+  });
+
   const ctx: AppContext = {
     config,
     db: dbHandle.db,
     bus,
     gateway,
-    settings: new SettingsService(dbHandle.db, bus, app.log),
-    projects: new ProjectService(dbHandle.db),
+    settings,
+    secrets,
+    fs,
+    github,
+    projects,
+    workspaceRoot,
     startedAt: Date.now(),
   };
 
@@ -71,7 +115,14 @@ export async function buildApp(config: DaemonConfig): Promise<BuiltApp> {
   registerSystemRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
   registerProjectRoutes(app, ctx);
+  registerFsRoutes(app, ctx);
+  registerGithubRoutes(app, ctx);
 
-  app.addHook('onClose', async () => dbHandle.close());
+  app.addHook('onReady', async () => projects.resumeInterruptedOnboarding());
+
+  app.addHook('onClose', async () => {
+    await projects.drain();
+    dbHandle.close();
+  });
   return { app, ctx, dbHandle };
 }

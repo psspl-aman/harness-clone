@@ -4,6 +4,7 @@ import type { ProjectSummary } from '@agentforge/shared';
 import { AlertTriangle, FolderGit2, HardDrive } from 'lucide-react';
 import { GithubIcon } from '@/components/icons';
 import { motion } from 'motion/react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -24,14 +25,21 @@ export function ProjectCard({ project, index }: { project: ProjectSummary; index
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.04, 0.3) }}
-      className="group bg-card hover:border-primary/30 flex flex-col gap-4 rounded-xl border p-5 shadow-xs transition-all hover:shadow-md"
+      className="group bg-card hover:border-primary/30 focus-within:ring-ring/50 relative flex flex-col gap-4 rounded-xl border p-5 shadow-xs transition-all focus-within:ring-[3px] hover:shadow-md"
     >
       <div className="flex items-start gap-3">
         <div className="bg-accent text-accent-foreground grid size-10 shrink-0 place-items-center rounded-lg">
           <FolderGit2 className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold tracking-tight">{project.name}</h3>
+          <h3 className="truncate font-semibold tracking-tight">
+            <Link
+              href={`/projects/${project.id}`}
+              className="outline-none after:absolute after:inset-0 after:content-['']"
+            >
+              {project.name}
+            </Link>
+          </h3>
           <p className="text-muted-foreground flex items-center gap-1.5 truncate text-xs">
             {project.source === 'github' ? (
               <GithubIcon className="size-3" />

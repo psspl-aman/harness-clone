@@ -33,3 +33,36 @@
   - visual review of light and dark themes, project cards and the command palette
   - the daemon-offline banner appears when the daemon is killed
   - after a restart the app reconnects and refetches with no user action
+
+## Phase 2: what was verified
+
+- **Unit and integration (Vitest, 65 tests in total):**
+  - Onboarding analyzer fixtures:
+    - pnpm Next.js monorepo, where frameworks are found in the workspace packages
+    - the npm placeholder test script is ignored
+    - Django via Poetry, Go with Gin, an empty folder, and a git repo whose remote credentials get redacted
+    - `.env` values never appear in the report
+  - Directory browser and path safety: refuses `/`, your home folder, system folders, AgentForge's own data folder, non-empty folders for scratch projects, and duplicate projects.
+  - Project lifecycle:
+    - scratch projects get `git init`, a secret-safe `.gitignore` and an initial commit
+    - attaching a non-git folder initialises git without committing `.env`, `.env.production` or `*.pem`
+    - detected commands, stack and memory entries are stored
+    - commands the user edited survive a re-analysis
+    - removing a project leaves its files on disk
+  - Secrets: values round-trip, ciphertext never contains the plaintext, the key file is mode 0600, and tampering or moving a value to another name is detected.
+  - GitHub, against a fake API with real `git clone` from local bare repos:
+    - connect, status and disconnect, with the token absent from both the DB and API responses
+    - bad token rejected; import from the `gh` CLI
+    - repo and owner listing
+    - creating an org repo and cloning it; attaching an existing repo, cloned beside an occupied folder
+    - clean 404 and 422 errors
+- **E2E (Playwright, 9 tests in total):**
+  - the scratch wizard end to end, including the folder picker
+  - attaching a non-git folder, confirming and editing commands, then removing the project
+  - the wizard blocking invalid locations
+  - the Integrations page
+- **Manual checks:**
+  - attached this repository read-only; the analyzer found the pnpm monorepo, Next.js, Fastify, Drizzle and React, plus all five commands
+  - screenshots of the wizard, folder picker and project page in light and dark themes
+  - the production daemon bundle (`node dist/main.js`) boots and applies migrations
+- **Not covered:** a live GitHub round-trip. The `gh` CLI on this machine isn't logged in, so GitHub is covered by the fake-API tests only.

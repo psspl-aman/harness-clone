@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { FolderGit2, Laptop, Moon, PanelLeft, Sun } from 'lucide-react';
+import { FolderGit2, FolderOpen, Laptop, Moon, PanelLeft, Plus, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
@@ -89,6 +89,20 @@ export function CommandPalette() {
               <CommandShortcut>G {n.shortcut.toUpperCase()}</CommandShortcut>
             </CommandItem>
           ))}
+        </CommandGroup>
+        <CommandGroup heading="Create">
+          <CommandItem
+            value="new project from scratch"
+            onSelect={() => run(() => router.push('/projects/new?mode=scratch'))}
+          >
+            <Plus /> New project from scratch
+          </CommandItem>
+          <CommandItem
+            value="attach existing project"
+            onSelect={() => run(() => router.push('/projects/new?mode=existing'))}
+          >
+            <FolderOpen /> Attach existing project
+          </CommandItem>
         </CommandGroup>
         {projects.data && projects.data.length > 0 && (
           <CommandGroup heading="Projects">

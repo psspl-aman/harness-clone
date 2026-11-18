@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phase 1 (Foundation) is complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–2 (Foundation, Projects) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -29,6 +29,30 @@ pnpm dev:web        # Next.js dev server
 ```
 
 The daemon creates its data directory on first start. It applies database migrations automatically.
+
+## Projects and GitHub
+
+- **New project from scratch.** Choose a local folder (AgentForge creates it and runs `git init`) or a GitHub repository (create a new one or pick an existing one). Then add stack preferences, per-role agent engines and an initial requirement.
+- **Attach an existing project.** Choose a local folder or a GitHub repository to clone.
+  - If a local folder isn't a git repository yet, AgentForge can initialise one. Its initial commit never includes `.env*`, `*.pem` or `*.key` files.
+  - Attaching never deletes or rewrites your files. Removing a project from AgentForge leaves the folder untouched.
+- **Onboarding analysis** runs automatically on every new project. It detects:
+  - languages, frameworks, package manager and monorepo layout
+  - install, run, build, test and lint commands
+  - folder structure
+  - conventions
+  - env files (by name only; their values are never read)
+  - git state
+
+  You can confirm or edit the detected commands on the project page. The results are also saved to project memory.
+
+- **GitHub** is connected under _Integrations_, in one of two ways:
+  - Paste a personal access token with the `repo` scope (add `read:org` for organisations).
+  - Reuse the login of an installed and logged-in `gh` CLI with one click.
+
+  The token is stored encrypted (AES-256-GCM) under `AGENTFORGE_HOME`. When cloning, it is passed to git through environment variables, so it never appears in `.git/config` or in process arguments.
+
+Clones go to `<workspace folder>/<owner>/<repo>`. The workspace folder defaults to `~/.agentforge/workspaces` and can be changed in Settings.
 
 ## Configuration
 
@@ -69,4 +93,4 @@ e2e/         Playwright specs
 docs/        Architecture and phase tracker
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together and [docs/API.md](docs/API.md) for the daemon's REST API.

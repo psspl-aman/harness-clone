@@ -1,7 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { FolderPlus } from 'lucide-react';
+import { FolderOpen, FolderPlus, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { ProjectCard } from '@/components/projects/project-card';
 import { PageHeader } from '@/components/shell/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +20,20 @@ export default function ProjectsPage() {
           projects.data
             ? `${projects.data.length} project${projects.data.length === 1 ? '' : 's'}`
             : 'Your workspaces'
+        }
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/projects/new?mode=existing">
+                <FolderOpen /> Attach existing
+              </Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href="/projects/new?mode=scratch">
+                <Plus /> New project
+              </Link>
+            </Button>
+          </>
         }
       />
       {projects.isPending ? (
