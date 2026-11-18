@@ -1,0 +1,35 @@
+{
+  "name": "@agentforge/daemon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "build": "tsup",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@agentforge/shared": "workspace:*",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/websocket": "^11.2.0",
+    "better-sqlite3": "^12.4.0",
+    "drizzle-orm": "^0.45.0",
+    "fastify": "^5.6.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.18.0",
+    "@types/ws": "^8.18.0",
+    "drizzle-kit": "^0.31.5",
+    "pino-pretty": "^13.1.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.0",
+    "ws": "^8.18.0"
+  }
+}

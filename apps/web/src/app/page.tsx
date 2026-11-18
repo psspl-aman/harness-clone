@@ -1,0 +1,53 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import { FolderPlus } from 'lucide-react';
+import { ProjectCard } from '@/components/projects/project-card';
+import { PageHeader } from '@/components/shell/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
+import { api, qk } from '@/lib/api';
+
+export default function ProjectsPage() {
+  const projects = useQuery({ queryKey: qk.projects, queryFn: api.projects.list });
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
+      <PageHeader
+        title="Projects"
+        description={
+          projects.data
+            ? `${projects.data.length} project${projects.data.length === 1 ? '' : 's'}`
+            : 'Your workspaces'
+        }
+      />
+      {projects.isPending ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Skeleton key={i} className="h-48 rounded-xl" />
+          ))}
+        </div>
+      ) : projects.data && projects.data.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {projects.data.map((p, i) => (
+            <ProjectCard key={p.id} project={p} index={i} />
+          ))}
+        </div>
+      ) : projects.isError ? (
+        <p className="text-muted-foreground text-sm">
+          Projects will appear once the daemon is reachable.
+        </p>
+      ) : (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-20 text-center">
+          <div className="bg-accent text-accent-foreground mb-4 grid size-12 place-items-center rounded-xl">
+            <FolderPlus className="size-6" />
+          </div>
+          <h2 className="font-semibold">No projects yet</h2>
+          <p className="text-muted-foreground mt-1 max-w-sm text-sm">
+            Projects you create from scratch or attach from an existing folder or GitHub repo show
+            up here with live progress, run status and errors.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
