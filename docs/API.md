@@ -60,3 +60,37 @@ The daemon listens on `http://127.0.0.1:4317` by default.
 { "mode": "existing", "location": { "kind": "local", "path": "/home/me/app", "initGit": true } }
 //                 or { "kind": "github", "fullName": "me/app" }
 ```
+
+## Engines
+
+The built-in engine ids are `claude-code`, `codex`, `gemini-cli` and `antigravity`. Custom engines use `custom:<slug>`.
+
+| Method | Path                       | Description                                                                                                                                              |
+| ------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/engines`             | `EngineInfo[]`: install, version, path, auth status, account, models, usage windows and capabilities                                                     |
+| POST   | `/api/engines/refresh`     | Re-checks every enabled engine                                                                                                                           |
+| GET    | `/api/engines/:id`         | One engine                                                                                                                                               |
+| PATCH  | `/api/engines/:id`         | `{ enabled?, binaryPath?, defaultModel? }`                                                                                                               |
+| POST   | `/api/engines/:id/refresh` | Re-checks one engine                                                                                                                                     |
+| PUT    | `/api/engines/:id/api-key` | Body `{ apiKey }`. Stored encrypted; never returned                                                                                                      |
+| DELETE | `/api/engines/:id/api-key` | Removes the stored key                                                                                                                                   |
+| POST   | `/api/engines/:id/login`   | Starts the CLI's login in a PTY. Returns `{ terminal, hint }`                                                                                            |
+| POST   | `/api/engines/:id/logout`  | Logs out (409 when the CLI has no logout command)                                                                                                        |
+| POST   | `/api/engines/:id/test`    | `{ prompt?, model? }`. Starts a read-only test run and returns `{ runId }` (202). Events arrive as `run.event` and `run.finished` on topic `run:<runId>` |
+| POST   | `/api/runs/:runId/cancel`  | Cancels a test run                                                                                                                                       |
+| POST   | `/api/engines/custom`      | `{ slug, displayName, config: CustomEngineConfig }`                                                                                                      |
+| PUT    | `/api/engines/:id/custom`  | `{ displayName, config }`                                                                                                                                |
+| DELETE | `/api/engines/:id`         | Removes a custom engine (built-in engines can only be disabled)                                                                                          |
+
+## Terminals
+
+| Method | Path                              | Description                                  |
+| ------ | --------------------------------- | -------------------------------------------- |
+| GET    | `/api/terminals?projectId=&kind=` | Terminals currently open                     |
+| GET    | `/api/terminals/:id`              | `TerminalInfo` plus `scrollback`             |
+| POST   | `/api/terminals/:id/input`        | Body `{ data }`. Writes raw input to the PTY |
+| POST   | `/api/terminals/:id/resize`       | Body `{ cols, rows }`                        |
+| POST   | `/api/terminals/:id/kill`         | Sends SIGHUP to the process                  |
+| DELETE | `/api/terminals/:id`              | Kills the terminal and forgets it            |
+
+Live output arrives as transient `terminal.output` events (`{ terminalId, data }`) on topic `terminal:<id>`, followed by `terminal.exit`.

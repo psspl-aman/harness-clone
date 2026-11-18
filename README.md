@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–2 (Foundation, Projects) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–3 (Foundation, Projects, Engines) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -53,6 +53,25 @@ The daemon creates its data directory on first start. It applies database migrat
   The token is stored encrypted (AES-256-GCM) under `AGENTFORGE_HOME`. When cloning, it is passed to git through environment variables, so it never appears in `.git/config` or in process arguments.
 
 Clones go to `<workspace folder>/<owner>/<repo>`. The workspace folder defaults to `~/.agentforge/workspaces` and can be changed in Settings.
+
+## Agent engines
+
+Open **Agents & Accounts** to see each supported agent CLI: whether it's installed, its version, and whether you're signed in. That page is also where you log in, test an engine, and configure it.
+
+| Engine       | Detected as                                                                                 | Headless mode used                                                  | Sign-in check                              |
+| ------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
+| Claude Code  | `claude` on PATH, `~/.claude/local/claude`, or the newest VS Code / Cursor extension binary | `claude -p --output-format stream-json --verbose` (prompt on stdin) | `claude auth status --json`                |
+| OpenAI Codex | `codex`                                                                                     | `codex exec --json … -` (prompt on stdin)                           | `codex login status`                       |
+| Gemini CLI   | `gemini`                                                                                    | `gemini -o stream-json --approval-mode … -p`                        | API key, or a cached Google sign-in        |
+| Antigravity  | `agy` (not the `antigravity` IDE launcher)                                                  | `agy -p … --output-format stream-json --mode …`                     | `agy models` (also lists available models) |
+| Custom CLI   | any executable                                                                              | argument template + text or JSON-lines parser, configured in the UI | optional auth-check command                |
+
+- **Login** runs the CLI's own login command in an embedded terminal (xterm.js + node-pty). AgentForge never sees your credentials; they stay with the CLI.
+- **API keys** are an alternative for Claude Code, Codex, Gemini and custom CLIs. They're stored encrypted and passed to the CLI only through its environment (`ANTHROPIC_API_KEY`, `CODEX_API_KEY`, `GEMINI_API_KEY`, or the variable you configure).
+- **Health checks** run every _Settings → Engine health check interval_. Status changes stream to the UI live. When an engine your default roles depend on has expired or hit its usage limit, a banner appears with a Re-login link or a reset countdown.
+- **Usage windows** come from Claude Code's rate-limit events: how much of the 5-hour and 7-day windows you've used, and when each resets.
+- **Test** sends one read-only prompt ("Reply with exactly: OK") in a scratch folder and streams the result. It uses a small amount of usage.
+- **Permission profiles** decide what an agent run may do. Runs use `readonly` (read and inspect git only), `edit` (file edits), or `full` (edits plus shell commands). Each profile is mapped onto each CLI's own permission flags.
 
 ## Configuration
 

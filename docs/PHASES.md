@@ -3,9 +3,9 @@
 | #   | Phase                                                                                                                            | Status  |
 | --- | -------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 1   | **Foundation**: monorepo, DB schema and migrations, event bus, WebSocket, UI shell, settings                                     | ✅ Done |
-| 2   | **Projects**: scratch (local and GitHub) and attaching existing projects, onboarding analysis, directory browser                 | ⏳ Next |
-| 3   | **Engines**: adapter interface; Claude Code, Codex, Gemini/Antigravity and custom adapters; install detection; login PTY; status | —       |
-| 4   | **Requirement Chat + Planner**: plan and task generation (Zod-validated JSON with retry), editing, approval gate                 | —       |
+| 2   | **Projects**: scratch (local and GitHub) and attaching existing projects, onboarding analysis, directory browser                 | ✅ Done |
+| 3   | **Engines**: adapter interface; Claude Code, Codex, Gemini/Antigravity and custom adapters; install detection; login PTY; status | ✅ Done |
+| 4   | **Requirement Chat + Planner**: plan and task generation (Zod-validated JSON with retry), editing, approval gate                 | ⏳ Next |
 | 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | —       |
 | 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | —       |
 | 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | —       |
@@ -66,3 +66,42 @@
   - screenshots of the wizard, folder picker and project page in light and dark themes
   - the production daemon bundle (`node dist/main.js`) boots and applies migrations
 - **Not covered:** a live GitHub round-trip. The `gh` CLI on this machine isn't logged in, so GitHub is covered by the fake-API tests only.
+
+## Phase 3: what was verified
+
+- **Unit and integration (Vitest, 116 tests in total):**
+  - Error classification and reset-time parsing, including epoch suffixes, ISO timestamps, relative durations and clock times. Bare numbers aren't mistaken for times.
+  - Every adapter driven through a real subprocess (a fake CLI replaying fixtures). The tests check:
+    - exact argv, with prompts going through stdin or argv as designed
+    - permission-profile mapping and resume flags
+    - parsed events, session id, final text, and usage and cost
+    - classified failures with `resetAt`
+    - auth probes: active, expired, logged out and unknown
+    - API keys passed through the environment
+    - version detection
+    - cancellation, timeout, a missing binary, and stderr classification
+  - Registry over HTTP:
+    - status history and events, settings validation
+    - API keys encrypted and never returned
+    - a test run streaming over the bus and recording usage
+    - quota exhaustion persisting until reset
+    - the per-engine concurrency limit
+    - custom engine create, edit and delete, and protection of built-ins
+    - login in a real PTY with scrollback and a refresh on exit
+    - logout, both supported and unsupported
+  - Terminals: interactive input, resize, scrollback, kill and remove, transient output, and a rejected bad cwd.
+- **E2E (Playwright, 14 tests in total):**
+  - engine status cards
+  - a test run streaming into the dialog, with usage windows
+  - login through the embedded xterm
+  - the global banner for an expired session, then Re-login, then recovery
+  - adding a custom CLI engine and choosing it as a default role engine in Settings
+- **Against the real CLIs on the development machine:**
+  - Claude Code 2.1.327 was detected inside the VS Code extension, with the right account, plan and session expiry.
+  - Antigravity 1.5.11 was detected and listed 6 models.
+  - Codex and Gemini CLI correctly show _Not installed_.
+  - Real test prompts succeeded through Claude Code (about $0.0045 each) and Antigravity, with sessions, usage and Claude's 5-hour and 7-day windows captured.
+  - The production bundle boots, detects engines and runs PTYs.
+- **Not yet verified against real binaries:** Codex and Gemini CLI. Their adapters follow the published contracts (Codex `exec_events.rs` and gemini-cli `output/types.ts`). Re-record those fixtures once the CLIs are installed. Specific unknowns:
+  - Codex: whether `resume` works with exec-level flags placed before it, and the `sandbox_workspace_write.network_access` override used by the `full` profile.
+  - Gemini CLI: the cached-OAuth file path.

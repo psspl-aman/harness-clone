@@ -59,9 +59,21 @@ export default function ProjectsPage() {
           </div>
           <h2 className="font-semibold">No projects yet</h2>
           <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-            Projects you create from scratch or attach from an existing folder or GitHub repo show
-            up here with live progress, run status and errors.
+            Start a new project from a requirement, or attach an existing folder or GitHub repo.
+            Agents plan, build, review and test it here.
           </p>
+          <div className="mt-5 flex gap-2">
+            <Button asChild variant="outline">
+              <Link href="/projects/new?mode=existing">
+                <FolderOpen /> Attach existing
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/projects/new?mode=scratch">
+                <Plus /> New project
+              </Link>
+            </Button>
+          </div>
         </div>
       )}
     </div>

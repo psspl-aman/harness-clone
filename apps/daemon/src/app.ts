@@ -11,6 +11,10 @@ import { EventBus } from './events/bus';
 import { registerErrorHandler } from './http/errors';
 import { originChecker, registerLocalOnlyGuard } from './http/security';
 import { registerFsRoutes } from './routes/fs';
+import { registerEngineRoutes } from './routes/engines';
+import { registerTerminalRoutes } from './routes/terminals';
+import { EngineRegistry } from './engines/registry';
+import { TerminalService } from './services/terminals';
 import { registerGithubRoutes } from './routes/github';
 import { registerProjectRoutes } from './routes/projects';
 import { registerSettingsRoutes } from './routes/settings';
@@ -24,6 +28,7 @@ import { WsGateway } from './ws/gateway';
 
 export interface BuildOptions {
   github?: GithubServiceOptions;
+  engines?: { autoRefresh?: boolean; extraPath?: string[] };
 }
 
 export interface BuiltApp {
@@ -87,6 +92,23 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     log: app.log,
   });
 
+  const terminals = new TerminalService(dbHandle.db, bus);
+  const engineRegistry = new EngineRegistry({
+    db: dbHandle.db,
+    bus,
+    secrets,
+    settings,
+    terminals,
+    home: config.home,
+    log: app.log,
+    autoRefresh: opts.engines?.autoRefresh ?? process.env.NODE_ENV !== 'test',
+    extraPath: opts.engines?.extraPath,
+  });
+  engineRegistry.init();
+  bus.subscribe((e) => {
+    if (e.type === 'settings.updated') engineRegistry.reschedule();
+  });
+
   const ctx: AppContext = {
     config,
     db: dbHandle.db,
@@ -97,6 +119,8 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     fs,
     github,
     projects,
+    engines: engineRegistry,
+    terminals,
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -117,10 +141,14 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerProjectRoutes(app, ctx);
   registerFsRoutes(app, ctx);
   registerGithubRoutes(app, ctx);
+  registerEngineRoutes(app, ctx);
+  registerTerminalRoutes(app, ctx);
 
   app.addHook('onReady', async () => projects.resumeInterruptedOnboarding());
 
   app.addHook('onClose', async () => {
+    await engineRegistry.stop();
+    terminals.closeAll();
     await projects.drain();
     dbHandle.close();
   });

@@ -93,6 +93,9 @@ export class LiveClient {
         this.attempt = 0;
         this.handlers.onStatus('open');
         if (restarted) this.handlers.onResync('daemon restarted');
+        // Data fetched before the socket was subscribed may have missed events
+        // emitted in between: refetch once on the first connection.
+        if (!reconnect) this.handlers.onResync('initial connection');
         const topics = [...this.topics.keys()];
         if (topics.length) {
           this.send({

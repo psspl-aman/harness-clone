@@ -18,6 +18,9 @@ test('shell loads, connects live and shows the empty dashboard', async ({ page }
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByRole('status', { name: 'Daemon connection: Live' })).toBeVisible();
   await expect(page.getByText('No projects yet')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', { name: 'Attach existing' })).toHaveCount(
+    2,
+  ); // header + empty state
 });
 
 test('command palette navigates and keyboard shortcuts work', async ({ page }) => {

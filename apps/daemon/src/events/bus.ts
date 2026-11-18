@@ -43,14 +43,21 @@ export class EventBus {
     return this.seq;
   }
 
+  /**
+   * Emit an event. `transient` events (terminal output, agent stream chunks)
+   * skip schema validation and the replay buffer: they are high-volume and
+   * their history is served from scrollback / run records instead.
+   */
   emit<T extends EventType>(
     type: T,
     payload: EventPayload<T>,
     topics: string[] = [Topics.global],
+    opts: { transient?: boolean } = {},
   ): AppEvent<T> {
-    const checked = this.validate
-      ? (EventPayloads[type].parse(payload) as EventPayload<T>)
-      : payload;
+    const checked =
+      this.validate && !opts.transient
+        ? (EventPayloads[type].parse(payload) as EventPayload<T>)
+        : payload;
     const event: AppEvent<T> = {
       seq: ++this.seq,
       epoch: this.epoch,
@@ -59,7 +66,7 @@ export class EventBus {
       ts: Date.now(),
       payload: checked,
     };
-    this.push(event as unknown as AnyAppEvent);
+    if (!opts.transient) this.push(event as unknown as AnyAppEvent);
     for (const l of this.listeners) {
       try {
         l(event as unknown as AnyAppEvent);

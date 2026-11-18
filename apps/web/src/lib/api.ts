@@ -14,6 +14,10 @@ import type {
   RequirementDto,
   SystemInfo,
   UpdateProjectInput,
+  CustomEngineConfig,
+  EngineInfo,
+  TerminalInfo,
+  UpdateEngineInput,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -97,6 +101,36 @@ export const api = {
     check: (path: string, mode: PathCheckMode) =>
       request<PathCheckResult>('GET', `/api/fs/check?${new URLSearchParams({ path, mode })}`),
   },
+  engines: {
+    list: () => request<EngineInfo[]>('GET', '/api/engines'),
+    refreshAll: () => request<EngineInfo[]>('POST', '/api/engines/refresh'),
+    refresh: (id: string) => request<EngineInfo>('POST', `/api/engines/${id}/refresh`),
+    update: (id: string, input: UpdateEngineInput) =>
+      request<EngineInfo>('PATCH', `/api/engines/${id}`, input),
+    setApiKey: (id: string, apiKey: string) =>
+      request<EngineInfo>('PUT', `/api/engines/${id}/api-key`, { apiKey }),
+    clearApiKey: (id: string) => request<EngineInfo>('DELETE', `/api/engines/${id}/api-key`),
+    login: (id: string) =>
+      request<{ terminal: TerminalInfo; hint: string }>('POST', `/api/engines/${id}/login`),
+    logout: (id: string) => request<EngineInfo>('POST', `/api/engines/${id}/logout`),
+    test: (id: string, body: { prompt?: string; model?: string }) =>
+      request<{ runId: string }>('POST', `/api/engines/${id}/test`, body),
+    cancelRun: (runId: string) => request<{ ok: true }>('POST', `/api/runs/${runId}/cancel`),
+    createCustom: (input: { slug: string; displayName: string; config: CustomEngineConfig }) =>
+      request<EngineInfo>('POST', '/api/engines/custom', input),
+    updateCustom: (id: string, input: { displayName: string; config: CustomEngineConfig }) =>
+      request<EngineInfo>('PUT', `/api/engines/${id}/custom`, input),
+    removeCustom: (id: string) => request<void>('DELETE', `/api/engines/${id}`),
+  },
+  terminals: {
+    get: (id: string) =>
+      request<TerminalInfo & { scrollback: string }>('GET', `/api/terminals/${id}`),
+    input: (id: string, data: string) =>
+      request<void>('POST', `/api/terminals/${id}/input`, { data }),
+    resize: (id: string, cols: number, rows: number) =>
+      request<void>('POST', `/api/terminals/${id}/resize`, { cols, rows }),
+    kill: (id: string) => request<void>('POST', `/api/terminals/${id}/kill`),
+  },
   github: {
     status: () => request<GithubStatus>('GET', '/api/github/status'),
     connect: (token: string) => request<GithubStatus>('POST', '/api/github/connect', { token }),
@@ -119,6 +153,7 @@ export const qk = {
     ['fs', 'browse', path ?? '~', hidden] as const,
   fsCheck: (path: string, mode: PathCheckMode) => ['fs', 'check', mode, path] as const,
   github: ['github', 'status'] as const,
+  engines: ['engines'] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,
 };

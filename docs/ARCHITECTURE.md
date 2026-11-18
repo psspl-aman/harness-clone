@@ -88,6 +88,39 @@ Migrations live in `apps/daemon/drizzle/` and run at startup.
   - Analyses interrupted by a daemon restart resume on boot.
   - Shutdown waits for any analysis still running before closing the database.
 
+## Engines (Phase 3)
+
+```
+EngineRegistry ── AgentEngineAdapter (interface from the spec)
+   │                 └─ CliAdapter (shared run loop)
+   │                      ├─ ClaudeCodeAdapter   ├─ CodexAdapter
+   │                      ├─ GeminiCliAdapter    ├─ AntigravityAdapter
+   │                      └─ CustomCliAdapter (UI-configured template + parser)
+   ├─ health loop (settings.health.engineCheckIntervalSec) → engine.updated / engine.status_changed
+   ├─ per-engine FIFO concurrency gate (settings.concurrency.maxRunsPerEngine)
+   └─ TerminalService (node-pty) for login flows
+```
+
+- **`engines/types.ts`:** the `AgentEngineAdapter` contract from the spec:
+  - `detectInstalled`, `getAuthStatus`, `startLogin`, `logout`
+  - `run(input, onEvent)`, `parseUsage`, `classifyError`
+- **`engines/cli-adapter.ts`:** the run loop shared by every CLI adapter.
+  - Spawns without a shell, using `execa`, and parses stdout line by line into normalised `AgentEvent`s: `session`, `text`, `thinking`, `tool_call`, `tool_result`, `usage`, `rate_limit`, `error` and `log`.
+  - Keeps a tail of stderr and supports cancellation (`AbortSignal`) and timeouts.
+  - Turns the outcome into an `AgentRunResult`, with a classified `EngineError` when the run fails.
+- **`engines/errors.ts`:** classifies failures as `AUTH_EXPIRED`, `QUOTA_EXPIRED`, `RATE_LIMIT`, `NETWORK`, `TOOL_ERROR` or `UNKNOWN`. `parseResetAt` extracts reset times from text: epoch suffixes, ISO timestamps, relative durations ("in 2h 5m") and clock times ("resets 3pm").
+- **Run outcomes update engine status.** A quota or rate-limit failure marks the engine `QUOTA_EXHAUSTED` with `resetAt`, and auth probes don't clear that state until `resetAt` has passed. An auth failure marks it `EXPIRED`. Every status change is also written to `engine_sessions`. Phase 6 builds automatic pause and resume on top of this.
+- **Status for the UI:** each engine's latest state is kept in the `engines` row (status, account, models, usage windows). `toInfo` adds the adapter's static metadata to make `EngineInfo`.
+- **`services/terminals.ts`:** node-pty sessions.
+  - Output is batched every 16 ms and sent as _transient_ `terminal.output` bus events, which skip the replay buffer.
+  - Each session keeps 256 KB of scrollback, which late viewers load from `GET /api/terminals/:id`.
+  - Input and resize arrive over REST.
+  - Terminals are killed on daemon shutdown.
+- **Fixtures** live in `apps/daemon/test/fixtures/engines`:
+  - Claude Code and Antigravity streams were recorded from real runs and sanitized.
+  - Codex and Gemini streams were built from their published event contracts, because those CLIs aren't installed on the development machine.
+  - Tests drive real subprocesses through a fake CLI (`test/fake-cli.ts`) that replays a fixture and records argv, stdin, cwd and env.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.
@@ -100,5 +133,13 @@ Migrations live in `apps/daemon/drizzle/` and run at startup.
   - New-project wizard (`/projects/new`): one flow for starting from scratch and one for attaching an existing project. It has a side stepper, validates each step, checks paths live, and lets you connect GitHub without leaving the wizard.
   - Project page (`/projects/[id]`): live onboarding status, editable commands showing where each was detected, stack, conventions, structure, git state, env file names, requirements, per-role engine overrides, and removal with a typed confirmation.
   - Integrations: connect GitHub.
+  - Agents & Accounts (`/agents`): one card per engine.
+    - Status pill (with a reset countdown when a limit is hit), version and account.
+    - Usage-window bars.
+    - Install command and guide when the engine isn't installed.
+    - Login dialog with an embedded xterm, and a test-run dialog that streams live events.
+    - Configuration: enabled, default model, executable override, API key, logout.
+    - Custom CLI engine editor.
+  - A global engine banner for expired sessions or exhausted usage on engines that default roles use.
   - Projects dashboard: cards show source, stack, task progress, run status, an error badge and last activity.
   - Settings: a draft-and-diff form that sends only changed fields, validates client-side with the shared schema, and picks up changes made elsewhere live.

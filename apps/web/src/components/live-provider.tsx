@@ -1,6 +1,6 @@
 'use client';
 
-import type { AnyAppEvent } from '@agentforge/shared';
+import type { AnyAppEvent, EngineInfo } from '@agentforge/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -49,6 +49,36 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           case 'project.onboarding':
             void queryClient.invalidateQueries({ queryKey: qk.project(e.payload.projectId) });
             break;
+          case 'engine.updated':
+            queryClient.setQueryData<EngineInfo[]>(qk.engines, (list) =>
+              list?.some((x) => x.id === e.payload.engine.id)
+                ? list.map((x) => (x.id === e.payload.engine.id ? e.payload.engine : x))
+                : undefined,
+            );
+            if (!queryClient.getQueryData(qk.engines))
+              void queryClient.invalidateQueries({ queryKey: qk.engines });
+            break;
+          case 'engine.removed':
+            void queryClient.invalidateQueries({ queryKey: qk.engines });
+            break;
+          case 'engine.status_changed': {
+            const name =
+              queryClient
+                .getQueryData<EngineInfo[]>(qk.engines)
+                ?.find((x) => x.id === e.payload.engineId)?.displayName ?? e.payload.engineId;
+            if (e.payload.status === 'EXPIRED')
+              toast.error(`${name} session expired`, {
+                description: 'Log in again from Agents & Accounts.',
+              });
+            if (e.payload.status === 'QUOTA_EXHAUSTED') {
+              toast.warning(`${name} usage limit reached`, {
+                description: e.payload.resetAt
+                  ? `Resets at ${new Date(e.payload.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : undefined,
+              });
+            }
+            break;
+          }
           case 'github.status_changed':
             queryClient.setQueryData(qk.github, e.payload.status);
             void queryClient.invalidateQueries({ queryKey: ['github', 'repos'] });

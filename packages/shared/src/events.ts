@@ -3,6 +3,7 @@ import { AUTH_STATUSES, TASK_STATUSES } from './enums';
 import { AppSettingsSchema } from './settings';
 import { ProjectSummarySchema } from './entities';
 import type { GithubStatus } from './projects';
+import type { AgentEvent, AgentRunResultDto, EngineInfo, TerminalInfo } from './engines';
 
 /**
  * Every event that flows over the EventBus/WebSocket. Add new events here;
@@ -26,6 +27,15 @@ export const EventPayloads = {
     error: z.string().nullable(),
   }),
   'github.status_changed': z.object({ status: z.custom<GithubStatus>() }),
+  'engine.updated': z.object({ engine: z.custom<EngineInfo>() }),
+  'engine.removed': z.object({ engineId: z.string() }),
+  /** High-volume, transient: not kept in the replay buffer. */
+  'run.event': z.object({ runId: z.string(), event: z.custom<AgentEvent>() }),
+  'run.finished': z.object({ runId: z.string(), result: z.custom<AgentRunResultDto>() }),
+  /** High-volume, transient: replay comes from the terminal's scrollback. */
+  'terminal.output': z.object({ terminalId: z.string(), data: z.string() }),
+  'terminal.exit': z.object({ terminalId: z.string(), exitCode: z.number().int().nullable() }),
+  'terminal.created': z.object({ terminal: z.custom<TerminalInfo>() }),
   'task.status_changed': z.object({
     projectId: z.string(),
     taskId: z.string(),

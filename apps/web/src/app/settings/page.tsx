@@ -3,8 +3,6 @@
 import {
   AGENT_ROLES,
   AppSettingsSchema,
-  BUILTIN_ENGINE_IDS,
-  ENGINE_LABELS,
   ROLE_LABELS,
   type AppSettings,
   type DeepPartial,
@@ -13,7 +11,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RotateCcw, Save } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { NumberField, SelectField, SwitchField, TextField } from '@/components/settings/fields';
+import {
+  EngineField,
+  NumberField,
+  SelectField,
+  SwitchField,
+  TextField,
+} from '@/components/settings/fields';
 import { PageHeader } from '@/components/shell/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,11 +45,6 @@ function Section({
     </Card>
   );
 }
-
-const ENGINE_OPTIONS = BUILTIN_ENGINE_IDS.map((id) => ({
-  value: id as string,
-  label: ENGINE_LABELS[id],
-}));
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -115,20 +114,14 @@ export default function SettingsPage() {
             description="Which agent engine runs each role unless a project or task overrides it."
           >
             {AGENT_ROLES.map((role) => (
-              <SelectField
+              <EngineField
                 key={role}
                 id={`engine-${role}`}
                 label={ROLE_LABELS[role]}
                 value={draft.defaultEngines[role]}
-                options={
-                  ENGINE_OPTIONS.some((o) => o.value === draft.defaultEngines[role])
-                    ? ENGINE_OPTIONS
-                    : [
-                        ...ENGINE_OPTIONS,
-                        { value: draft.defaultEngines[role], label: draft.defaultEngines[role] },
-                      ]
+                onChange={(v) =>
+                  set('defaultEngines', { [role]: v as AppSettings['defaultEngines'][typeof role] })
                 }
-                onChange={(v) => set('defaultEngines', { [role]: v })}
               />
             ))}
           </Section>

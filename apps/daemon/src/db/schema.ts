@@ -13,6 +13,8 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import type {
+  CustomEngineConfig,
+  UsageWindow,
   OnboardingReport,
   AgentRole,
   AppSettings,
@@ -476,19 +478,6 @@ export const errors = sqliteTable(
 
 // ─── Engines, sessions & usage ───────────────────────────────────────────────
 
-export interface CustomEngineConfig {
-  command: string;
-  /** Args template; `{{prompt}}`, `{{cwd}}`, `{{model}}` are substituted. */
-  args: string[];
-  promptVia: 'arg' | 'stdin';
-  outputFormat: 'text' | 'jsonl';
-  /** JSON path (dot notation) to the text in each JSONL line. */
-  textPath?: string;
-  usage?: { inputTokensPath?: string; outputTokensPath?: string; regex?: string };
-  versionArgs?: string[];
-  loginCommand?: string;
-}
-
 export const engines = sqliteTable('engines', {
   id: text('id').primaryKey(),
   kind: text('kind').$type<'builtin' | 'custom'>().notNull(),
@@ -501,6 +490,16 @@ export const engines = sqliteTable('engines', {
   version: text('version'),
   detectedPath: text('detected_path'),
   /** Known usage limit for the current window (tokens), if the user set one. */
+  authStatus: text('auth_status').$type<AuthStatus>().notNull().default('UNKNOWN'),
+  authDetail: text('auth_detail'),
+  accountLabel: text('account_label'),
+  resetAt: integer('reset_at'),
+  models: json<{ id: string; label: string }[]>('models')
+    .notNull()
+    .default(sql`'[]'`),
+  usageWindows: json<UsageWindow[]>('usage_windows')
+    .notNull()
+    .default(sql`'[]'`),
   windowTokenLimit: integer('window_token_limit'),
   windowHours: real('window_hours'),
   lastCheckedAt: integer('last_checked_at'),

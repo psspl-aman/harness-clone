@@ -7,6 +7,8 @@ import type { ProjectService } from './services/projects';
 import type { SecretStore } from './services/secrets';
 import type { SettingsService } from './services/settings';
 import type { WsGateway } from './ws/gateway';
+import type { EngineRegistry } from './engines/registry';
+import type { TerminalService } from './services/terminals';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -19,6 +21,8 @@ export interface AppContext {
   fs: FsService;
   github: GithubService;
   projects: ProjectService;
+  engines: EngineRegistry;
+  terminals: TerminalService;
   workspaceRoot: () => string;
   startedAt: number;
 }

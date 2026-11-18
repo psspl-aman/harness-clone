@@ -1,0 +1,2 @@
+{"type": "init", "timestamp": "2026-11-18T10:00:00.000Z", "session_id": "c2a7e3f1-5b1d-4c0e-9a51-0e7c2f8a1d44", "model": "gemini-2.5-pro"}
+{"type": "result", "timestamp": "2026-11-18T10:00:00.000Z", "status": "error", "error": {"type": "ApiError", "message": "[API Error: Quota exceeded for quota metric. Please retry in 41s. (Status: 429)]"}, "stats": {"total_tokens": 0, "input_tokens": 0, "output_tokens": 0, "cached": 0, "input": 0, "duration_ms": 300, "tool_calls": 0, "models": {}}}

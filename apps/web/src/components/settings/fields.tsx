@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { EngineSelectItems } from '@/components/engines/engine-select-items';
 
 function Row({
   id,
@@ -125,6 +126,28 @@ export function TextField(props: {
         onChange={(e) => props.onChange(e.target.value)}
         className="h-8 w-72 font-mono text-xs"
       />
+    </Row>
+  );
+}
+
+/** Engine picker backed by the live engine list (custom engines + status included). */
+export function EngineField(props: {
+  id: string;
+  label: string;
+  hint?: ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Row id={props.id} label={props.label} hint={props.hint}>
+      <Select value={props.value} onValueChange={props.onChange}>
+        <SelectTrigger id={props.id} size="sm" className="w-52">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <EngineSelectItems extra={props.value} />
+        </SelectContent>
+      </Select>
     </Row>
   );
 }

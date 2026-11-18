@@ -2,7 +2,6 @@
 
 import {
   AGENT_ROLES,
-  BUILTIN_ENGINE_IDS,
   ENGINE_LABELS,
   ROLE_LABELS,
   type AgentRole,
@@ -16,10 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { EngineSelectItems, useEngineOptions } from '@/components/engines/engine-select-items';
 import { api, qk } from '@/lib/api';
 
 const DEFAULT = '__default';
-const label = (id: string) => ENGINE_LABELS[id as keyof typeof ENGINE_LABELS] ?? id;
 
 /** Per-role engine overrides; "Default" falls back to the global setting. */
 export function EngineRoles({
@@ -30,6 +29,11 @@ export function EngineRoles({
   onChange: (v: Partial<RoleEngines>) => void;
 }) {
   const settings = useQuery({ queryKey: qk.settings, queryFn: api.settings.get });
+  const options = useEngineOptions();
+  const label = (id: string) =>
+    options.find((o) => o.id === id)?.label ??
+    ENGINE_LABELS[id as keyof typeof ENGINE_LABELS] ??
+    id;
   const set = (role: AgentRole, engine: string) => {
     const next = { ...value };
     if (engine === DEFAULT) delete next[role];
@@ -51,11 +55,7 @@ export function EngineRoles({
               <SelectItem value={DEFAULT}>
                 Default{settings.data ? ` · ${label(settings.data.defaultEngines[role])}` : ''}
               </SelectItem>
-              {BUILTIN_ENGINE_IDS.map((id) => (
-                <SelectItem key={id} value={id}>
-                  {ENGINE_LABELS[id]}
-                </SelectItem>
-              ))}
+              <EngineSelectItems extra={value[role]} />
             </SelectContent>
           </Select>
         </div>

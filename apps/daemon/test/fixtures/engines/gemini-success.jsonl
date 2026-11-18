@@ -1,0 +1,7 @@
+{"type": "init", "timestamp": "2026-11-18T10:00:00.000Z", "session_id": "c2a7e3f1-5b1d-4c0e-9a51-0e7c2f8a1d44", "model": "gemini-2.5-pro"}
+{"type": "message", "timestamp": "2026-11-18T10:00:00.000Z", "role": "user", "content": "Create hello.txt"}
+{"type": "tool_use", "timestamp": "2026-11-18T10:00:00.000Z", "tool_name": "write_file", "tool_id": "write_file-1", "parameters": {"file_path": "hello.txt", "content": "hi"}}
+{"type": "tool_result", "timestamp": "2026-11-18T10:00:00.000Z", "tool_id": "write_file-1", "status": "success", "output": "Successfully created hello.txt"}
+{"type": "message", "timestamp": "2026-11-18T10:00:00.000Z", "role": "assistant", "content": "DO", "delta": true}
+{"type": "message", "timestamp": "2026-11-18T10:00:00.000Z", "role": "assistant", "content": "NE", "delta": true}
+{"type": "result", "timestamp": "2026-11-18T10:00:00.000Z", "status": "success", "stats": {"total_tokens": 9120, "input_tokens": 9000, "output_tokens": 120, "cached": 6000, "input": 3000, "duration_ms": 4100, "tool_calls": 1, "models": {"gemini-2.5-pro": {"total_tokens": 9120, "input_tokens": 9000, "output_tokens": 120, "cached": 6000, "input": 3000}}}}

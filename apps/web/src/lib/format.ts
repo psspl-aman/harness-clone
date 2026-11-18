@@ -20,3 +20,16 @@ export function formatDuration(sec: number): string {
   if (m) return `${m}m`;
   return `${sec}s`;
 }
+
+/** "2h 05m" / "4m 10s" until `ts` (or "now"). */
+export function countdown(ts: number, now = Date.now()): string {
+  const s = Math.max(0, Math.round((ts - now) / 1000));
+  if (s === 0) return 'now';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h) return `${h}h ${String(m).padStart(2, '0')}m`;
+  return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+}
+
+export const clockTime = (ts: number) =>
+  new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
