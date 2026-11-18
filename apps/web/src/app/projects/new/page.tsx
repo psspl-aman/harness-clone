@@ -630,7 +630,7 @@ function Wizard({ mode }: { mode: Mode }) {
       <Field
         label="What should we build?"
         htmlFor="req"
-        hint="Optional. You’ll review and edit the generated plan and tasks before anything is built."
+        hint="Optional. The Planner starts drafting a plan as soon as the project is created — you review and edit it before anything is built."
       >
         <Textarea
           id="req"

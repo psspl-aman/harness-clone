@@ -18,6 +18,19 @@ import type {
   EngineInfo,
   TerminalInfo,
   UpdateEngineInput,
+  AttachmentDto,
+  ChatMessageDto,
+  CreateTaskInput,
+  PlanBoardDto,
+  PlanDto,
+  PlannerState,
+  ReferenceSuggestions,
+  SendMessageInput,
+  TaskDto,
+  TaskStatusChangeDto,
+  UpdatePlanInput,
+  UpdateTaskInput,
+  AgentEvent,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -122,6 +135,91 @@ export const api = {
       request<EngineInfo>('PUT', `/api/engines/${id}/custom`, input),
     removeCustom: (id: string) => request<void>('DELETE', `/api/engines/${id}`),
   },
+  chat: {
+    list: (projectId: string) =>
+      request<ChatMessageDto[]>('GET', `/api/projects/${projectId}/chat`),
+    send: (projectId: string, input: SendMessageInput) =>
+      request<ChatMessageDto>('POST', `/api/projects/${projectId}/chat`, input),
+    planner: (projectId: string) =>
+      request<PlannerState>('GET', `/api/projects/${projectId}/planner`),
+    cancel: (projectId: string) =>
+      request<{ ok: true }>('POST', `/api/projects/${projectId}/planner/cancel`),
+    references: (projectId: string, q: string) =>
+      request<ReferenceSuggestions>(
+        'GET',
+        `/api/projects/${projectId}/references?${new URLSearchParams({ q })}`,
+      ),
+    upload: async (projectId: string, files: File[]): Promise<AttachmentDto[]> => {
+      const form = new FormData();
+      for (const f of files) form.append('file', f, f.name);
+      let res: Response;
+      try {
+        res = await fetch(`${DAEMON_URL}/api/projects/${projectId}/attachments`, {
+          method: 'POST',
+          body: form,
+        });
+      } catch {
+        throw new ApiClientError(
+          0,
+          'DAEMON_UNREACHABLE',
+          `Cannot reach the AgentForge daemon at ${DAEMON_URL}`,
+        );
+      }
+      const data = (await res.json()) as unknown;
+      if (!res.ok) {
+        const err = (data as ApiError).error;
+        throw new ApiClientError(
+          res.status,
+          err?.code ?? 'HTTP_ERROR',
+          err?.message ?? res.statusText,
+        );
+      }
+      return data as AttachmentDto[];
+    },
+  },
+  board: {
+    get: (projectId: string) => request<PlanBoardDto>('GET', `/api/projects/${projectId}/board`),
+    reorder: (projectId: string, taskIds: string[]) =>
+      request<TaskDto[]>('POST', `/api/projects/${projectId}/tasks/reorder`, { taskIds }),
+  },
+  plans: {
+    update: (planId: string, input: UpdatePlanInput) =>
+      request<PlanDto>('PATCH', `/api/plans/${planId}`, input),
+    approve: (planId: string, taskIds?: string[]) =>
+      request<PlanBoardDto>('POST', `/api/plans/${planId}/approve`, { taskIds }),
+    regenerate: (planId: string, instructions: string) =>
+      request<PlannerState>('POST', `/api/plans/${planId}/regenerate`, { instructions }),
+    addTask: (planId: string, input: CreateTaskInput) =>
+      request<TaskDto>('POST', `/api/plans/${planId}/tasks`, input),
+  },
+  tasks: {
+    update: (id: string, input: UpdateTaskInput) =>
+      request<TaskDto>('PATCH', `/api/tasks/${id}`, input),
+    remove: (id: string) => request<void>('DELETE', `/api/tasks/${id}`),
+    history: (id: string) => request<TaskStatusChangeDto[]>('GET', `/api/tasks/${id}/history`),
+    setDependencies: (id: string, dependsOn: string[]) =>
+      request<TaskDto>('PUT', `/api/tasks/${id}/dependencies`, { dependsOn }),
+    split: (id: string, parts: { title: string; description?: string }[]) =>
+      request<TaskDto[]>('POST', `/api/tasks/${id}/split`, { parts }),
+    merge: (taskIds: string[], title?: string) =>
+      request<TaskDto>('POST', '/api/tasks/merge', { taskIds, title }),
+    approve: (id: string) => request<TaskDto>('POST', `/api/tasks/${id}/approve`),
+    unapprove: (id: string) => request<TaskDto>('POST', `/api/tasks/${id}/unapprove`),
+    regenerate: (id: string, instructions: string) =>
+      request<PlannerState>('POST', `/api/tasks/${id}/regenerate`, { instructions }),
+    addSubtask: (id: string, title: string) =>
+      request<TaskDto>('POST', `/api/tasks/${id}/subtasks`, { title }),
+    updateSubtask: (id: string, input: { title?: string; done?: boolean }) =>
+      request<TaskDto>('PATCH', `/api/subtasks/${id}`, input),
+    removeSubtask: (id: string) => request<TaskDto>('DELETE', `/api/subtasks/${id}`),
+  },
+  runs: {
+    get: (id: string) =>
+      request<{
+        run: { id: string; status: string; engineId: string };
+        events: { seq: number; event: AgentEvent }[];
+      }>('GET', `/api/runs/${id}`),
+  },
   terminals: {
     get: (id: string) =>
       request<TerminalInfo & { scrollback: string }>('GET', `/api/terminals/${id}`),
@@ -154,6 +252,11 @@ export const qk = {
   fsCheck: (path: string, mode: PathCheckMode) => ['fs', 'check', mode, path] as const,
   github: ['github', 'status'] as const,
   engines: ['engines'] as const,
+  chat: (projectId: string) => ['chat', projectId] as const,
+  planner: (projectId: string) => ['planner', projectId] as const,
+  board: (projectId: string) => ['board', projectId] as const,
+  taskHistory: (taskId: string) => ['task-history', taskId] as const,
+  references: (projectId: string, q: string) => ['references', projectId, q] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,
 };

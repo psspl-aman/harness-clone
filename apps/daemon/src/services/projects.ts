@@ -103,21 +103,24 @@ export class ProjectService {
 
   listRequirements(projectId: string): RequirementDto[] {
     this.assertExists(projectId);
-    return this.db
-      .select()
-      .from(requirements)
-      .where(eq(requirements.projectId, projectId))
-      .orderBy(asc(requirements.createdAt))
-      .all()
-      .map((r) => ({
-        id: r.id,
-        projectId: r.projectId,
-        author: r.author,
-        content: r.content,
-        intent: r.intent,
-        version: r.version,
-        createdAt: r.createdAt,
-      }));
+    return (
+      this.db
+        .select()
+        .from(requirements)
+        // User requirements only; the full conversation is served by the chat endpoint.
+        .where(and(eq(requirements.projectId, projectId), eq(requirements.author, 'user')))
+        .orderBy(asc(requirements.createdAt))
+        .all()
+        .map((r) => ({
+          id: r.id,
+          projectId: r.projectId,
+          author: r.author,
+          content: r.content,
+          intent: r.intent,
+          version: r.version,
+          createdAt: r.createdAt,
+        }))
+    );
   }
 
   // ─── Create ────────────────────────────────────────────────────────────────

@@ -1,471 +1,55 @@
 'use client';
 
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  COMMAND_KEYS,
-  type ProjectCommandsDto,
-  type ProjectDetail,
-  type RoleEngines,
-} from '@agentforge/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  AlertTriangle,
   Copy,
-  FileLock2,
   GitBranch,
-  GitCommitHorizontal,
   HardDrive,
   Loader2,
-  MessageSquareText,
-  RefreshCw,
-  Save,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   ScanSearch,
   Trash2,
-  Wand2,
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useParams } from 'next/navigation';
+import { useState } from 'react';
 import { toast } from 'sonner';
+import { ChatPanel } from '@/components/chat/chat-panel';
 import { GithubIcon } from '@/components/icons';
 import { useLiveTopic } from '@/components/live-provider';
-import { EngineRoles } from '@/components/projects/engine-roles';
+import { PlanTab } from '@/components/plan/plan-tab';
+import { ProjectOverview, RemoveDialog } from '@/components/projects/overview';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiClientError, qk } from '@/lib/api';
-import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-const COMMAND_LABELS: Record<(typeof COMMAND_KEYS)[number], string> = {
-  install: 'Install',
-  run: 'Run (dev server)',
-  build: 'Build',
-  test: 'Test',
-  lint: 'Lint / check',
-};
+type Tab = 'plan' | 'overview' | 'chat';
 
-const errMsg = (e: unknown) => (e instanceof ApiClientError ? e.message : String(e));
-
-function Section({
-  title,
-  description,
-  icon,
-  action,
-  children,
-  className,
-}: {
-  title: string;
-  description?: string;
-  icon?: ReactNode;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <Card className={cn('gap-4 shadow-xs', className)}>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
-        <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {icon}
-            {title}
-          </CardTitle>
-          {description && <CardDescription>{description}</CardDescription>}
-        </div>
-        {action}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
-
-function OnboardingBanner({ project, onRetry }: { project: ProjectDetail; onRetry: () => void }) {
-  if (project.onboardingStatus === 'running' || project.onboardingStatus === 'pending') {
-    return (
-      <div
-        role="status"
-        className="bg-accent/60 text-accent-foreground flex items-center gap-3 rounded-xl border px-4 py-3 text-sm"
-      >
-        <Loader2 className="size-4 animate-spin" /> Analysing the project — detecting stack,
-        commands and conventions…
-      </div>
-    );
-  }
-  if (project.onboardingStatus === 'failed') {
-    return (
-      <div
-        role="alert"
-        className="bg-destructive/10 text-destructive border-destructive/20 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm"
-      >
-        <AlertTriangle className="size-4" />
-        <span className="flex-1">Analysis failed: {project.onboardingError}</span>
-        <Button size="sm" variant="outline" onClick={onRetry}>
-          <RefreshCw /> Retry
-        </Button>
-      </div>
-    );
-  }
-  return null;
-}
-
-function CommandsCard({ project }: { project: ProjectDetail }) {
-  const queryClient = useQueryClient();
-  const [edits, setEdits] = useState<ProjectCommandsDto | null>(null);
-  const values = edits ?? project.commands;
-  const detected = project.onboardingReport?.commands ?? {};
-  const dirty =
-    edits !== null && COMMAND_KEYS.some((k) => (edits[k] ?? '') !== (project.commands[k] ?? ''));
-  const save = useMutation({
-    mutationFn: () =>
-      api.projects.update(project.id, {
-        commands: Object.fromEntries(COMMAND_KEYS.map((k) => [k, values[k] ?? null])),
-      }),
-    onSuccess: (p) => {
-      queryClient.setQueryData(qk.project(p.id), p);
-      setEdits(null);
-      toast.success('Commands saved');
-    },
-    onError: (e) => toast.error('Could not save commands', { description: errMsg(e) }),
-  });
-  return (
-    <Section
-      title="Commands"
-      description="Used to install, run, build and test the project. Confirm or edit what was detected."
-      icon={<Wand2 className="text-primary size-4" />}
-      action={
-        dirty && (
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setEdits(null)}>
-              Discard
-            </Button>
-            <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-              {save.isPending ? <Loader2 className="animate-spin" /> : <Save />} Save
-            </Button>
-          </div>
-        )
-      }
-    >
-      <div className="space-y-3">
-        {COMMAND_KEYS.map((k) => {
-          const d = detected[k];
-          const differs = d && d.command !== (values[k] ?? '');
-          return (
-            <div key={k} className="grid items-center gap-1.5 sm:grid-cols-[150px_1fr]">
-              <label htmlFor={`cmd-${k}`} className="text-sm font-medium">
-                {COMMAND_LABELS[k]}
-              </label>
-              <div>
-                <Input
-                  id={`cmd-${k}`}
-                  value={values[k] ?? ''}
-                  placeholder="Not set"
-                  onChange={(e) => setEdits({ ...values, [k]: e.target.value })}
-                  className="h-8 font-mono text-xs"
-                />
-                {d && (
-                  <p className="text-muted-foreground mt-1 text-[11px]">
-                    Detected from {d.source}
-                    {differs && (
-                      <>
-                        {' · '}
-                        <button
-                          className="text-primary hover:underline"
-                          onClick={() => setEdits({ ...values, [k]: d.command })}
-                        >
-                          use <code>{d.command}</code>
-                        </button>
-                      </>
-                    )}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Section>
-  );
-}
-
-function EnginesCard({ project }: { project: ProjectDetail }) {
-  const queryClient = useQueryClient();
-  const [edits, setEdits] = useState<Partial<RoleEngines> | null>(null);
-  const value = edits ?? project.roleEngines;
-  const dirty = edits !== null && JSON.stringify(edits) !== JSON.stringify(project.roleEngines);
-  const save = useMutation({
-    mutationFn: () => api.projects.update(project.id, { roleEngines: value }),
-    onSuccess: (p) => {
-      queryClient.setQueryData(qk.project(p.id), p);
-      setEdits(null);
-      toast.success('Agent engines saved');
-    },
-    onError: (e) => toast.error('Could not save', { description: errMsg(e) }),
-  });
-  return (
-    <Section
-      title="Agent engines"
-      description="Per-role overrides for this project."
-      action={
-        dirty && (
-          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? <Loader2 className="animate-spin" /> : <Save />} Save
-          </Button>
-        )
-      }
-    >
-      <EngineRoles value={value} onChange={setEdits} />
-    </Section>
-  );
-}
-
-function AnalysisCards({ project }: { project: ProjectDetail }) {
-  const r = project.onboardingReport;
-  if (!r) return null;
-  const colors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5'];
-  return (
-    <>
-      <Section
-        title="Stack"
-        description={`${r.stats.files.toLocaleString()} files · ${r.stats.dirs.toLocaleString()} folders · analysed ${timeAgo(r.analyzedAt)}`}
-      >
-        <div className="space-y-4">
-          {r.languages.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex h-2 overflow-hidden rounded-full" aria-hidden>
-                {r.languages.map((l, i) => (
-                  <div
-                    key={l.name}
-                    className={colors[i % colors.length]}
-                    style={{ width: `${l.share}%` }}
-                  />
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                {r.languages.map((l, i) => (
-                  <span key={l.name} className="flex items-center gap-1.5">
-                    <span className={cn('size-2 rounded-full', colors[i % colors.length])} />
-                    {l.name} <span className="text-muted-foreground">{l.share}%</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {r.frameworks.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {r.frameworks.map((f) => (
-                <Badge key={f} variant="secondary">
-                  {f}
-                </Badge>
-              ))}
-            </div>
-          )}
-          <dl className="grid grid-cols-[140px_1fr] gap-y-1.5 text-sm">
-            <dt className="text-muted-foreground">Package manager</dt>
-            <dd>{r.packageManagers.join(', ') || '—'}</dd>
-            {r.monorepo && (
-              <>
-                <dt className="text-muted-foreground">Monorepo</dt>
-                <dd>
-                  {r.monorepo.tool}
-                  {r.monorepo.packages.length > 0 && (
-                    <span className="text-muted-foreground font-mono text-xs">
-                      {' '}
-                      · {r.monorepo.packages.join(', ')}
-                    </span>
-                  )}
-                </dd>
-              </>
-            )}
-          </dl>
-          {r.notes.length > 0 && (
-            <ul className="text-muted-foreground space-y-1 text-xs">
-              {r.notes.map((n) => (
-                <li key={n}>• {n}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Section>
-
-      <Section
-        title="Conventions"
-        description="Detected from config files; saved to project memory for every agent."
-      >
-        {r.conventions.length ? (
-          <ul className="space-y-1.5 text-sm">
-            {r.conventions.map((c) => (
-              <li key={c} className="flex gap-2">
-                <span className="text-primary">✓</span>
-                {c}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-muted-foreground text-sm">No conventions detected yet.</p>
-        )}
-      </Section>
-
-      <Section title="Structure">
-        {r.structure ? (
-          <pre className="bg-muted/50 max-h-80 overflow-auto rounded-lg p-3 font-mono text-xs leading-relaxed">
-            {r.structure}
-          </pre>
-        ) : (
-          <p className="text-muted-foreground text-sm">The folder is empty.</p>
-        )}
-      </Section>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Section title="Git" icon={<GitBranch className="size-4" />}>
-          {r.git.isRepo ? (
-            <dl className="grid grid-cols-[90px_1fr] gap-y-1.5 text-sm">
-              <dt className="text-muted-foreground">Branch</dt>
-              <dd className="font-mono text-xs">{r.git.branch ?? '—'}</dd>
-              <dt className="text-muted-foreground">Remote</dt>
-              <dd className="truncate font-mono text-xs">{r.git.remote ?? 'none'}</dd>
-              <dt className="text-muted-foreground">Working tree</dt>
-              <dd>{r.git.dirty === null ? '—' : r.git.dirty ? 'Uncommitted changes' : 'Clean'}</dd>
-              {r.git.lastCommit && (
-                <>
-                  <dt className="text-muted-foreground">Last commit</dt>
-                  <dd className="flex min-w-0 items-center gap-1.5 text-xs">
-                    <GitCommitHorizontal className="size-3.5 shrink-0" />
-                    <code>{r.git.lastCommit.hash.slice(0, 7)}</code>
-                    <span className="truncate">{r.git.lastCommit.message}</span>
-                  </dd>
-                </>
-              )}
-            </dl>
-          ) : (
-            <p className="text-muted-foreground text-sm">Not a git repository.</p>
-          )}
-        </Section>
-        <Section
-          title="Environment files"
-          icon={<FileLock2 className="size-4" />}
-          description="Names only — AgentForge never reads their values."
-        >
-          {r.envFiles.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {r.envFiles.map((f) => (
-                <Badge key={f} variant="outline" className="font-mono">
-                  {f}
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-sm">None found.</p>
-          )}
-        </Section>
-      </div>
-    </>
-  );
-}
-
-function RequirementsCard({ projectId }: { projectId: string }) {
-  const reqs = useQuery({
-    queryKey: qk.requirements(projectId),
-    queryFn: () => api.projects.requirements(projectId),
-  });
-  if (!reqs.data?.length) return null;
-  return (
-    <Section
-      title="Requirements"
-      icon={<MessageSquareText className="size-4" />}
-      description="Planning turns these into a reviewable plan and tasks."
-    >
-      <div className="space-y-3">
-        {reqs.data.map((r) => (
-          <div key={r.id} className="bg-muted/40 rounded-lg border p-3">
-            <p className="text-muted-foreground mb-1 text-xs">
-              {r.author === 'user' ? 'You' : r.author} · {timeAgo(r.createdAt)}
-            </p>
-            <p className="text-sm whitespace-pre-wrap">{r.content}</p>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-function RemoveDialog({
-  project,
-  open,
-  onOpenChange,
-}: {
-  project: ProjectDetail;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-}) {
-  const router = useRouter();
-  const [confirm, setConfirm] = useState('');
-  const remove = useMutation({
-    mutationFn: () => api.projects.remove(project.id),
-    onSuccess: () => {
-      toast.success(`Removed ${project.name}`, { description: 'Files on disk were not touched.' });
-      router.push('/');
-    },
-    onError: (e) => toast.error('Could not remove project', { description: errMsg(e) }),
-  });
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Remove {project.name} from AgentForge?</DialogTitle>
-          <DialogDescription>
-            Its plans, tasks, run history and memory are deleted from AgentForge. The folder{' '}
-            <code className="font-mono">{project.localPath}</code> and its git history stay exactly
-            as they are.
-          </DialogDescription>
-        </DialogHeader>
-        <Input
-          placeholder={`Type ${project.name} to confirm`}
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          aria-label="Confirm project name"
-        />
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={confirm !== project.name || remove.isPending}
-            onClick={() => remove.mutate()}
-          >
-            {remove.isPending && <Loader2 className="animate-spin" />} Remove project
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export default function ProjectPage() {
+export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   useLiveTopic(`project:${id}`);
   const project = useQuery({ queryKey: qk.project(id), queryFn: () => api.projects.get(id) });
+  const [tab, setTab] = useState<Tab>('plan');
+  const [chatOpen, setChatOpen] = useState(true);
+  const [openTask, setOpenTask] = useState<string | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
   const analyze = useMutation({
     mutationFn: () => api.projects.analyze(id),
-    onError: (e) => toast.error('Could not start analysis', { description: errMsg(e) }),
+    onError: (e) =>
+      toast.error('Could not start analysis', {
+        description: e instanceof ApiClientError ? e.message : String(e),
+      }),
   });
 
   if (project.isPending) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-8 md:px-8">
+      <div className="space-y-4 p-6">
         <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-60 rounded-xl" />
+        <Skeleton className="h-96 rounded-xl" />
       </div>
     );
   }
@@ -485,31 +69,42 @@ export default function ProjectPage() {
   const p = project.data;
   const analysing =
     p.onboardingStatus === 'running' || p.onboardingStatus === 'pending' || analyze.isPending;
+  const openTaskInPlan = (taskId: string) => {
+    setTab('plan');
+    setOpenTask(taskId);
+  };
+
+  const tabs: { id: Tab; label: string; mobileOnly?: boolean }[] = [
+    { id: 'chat', label: 'Chat', mobileOnly: true },
+    { id: 'plan', label: 'Plan & Tasks' },
+    { id: 'overview', label: 'Overview' },
+  ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="mx-auto max-w-5xl space-y-6 px-4 py-8 md:px-8"
-    >
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1.5">
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 md:px-6">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{p.name}</h1>
+            <h1 className="truncate text-lg font-semibold tracking-tight">{p.name}</h1>
             <Badge variant="secondary">
               {p.origin === 'scratch' ? 'From scratch' : 'Existing'}
             </Badge>
+            {p.stack.slice(0, 4).map((s) => (
+              <Badge key={s} variant="outline" className="hidden font-normal lg:inline-flex">
+                {s}
+              </Badge>
+            ))}
           </div>
-          {p.description && <p className="text-muted-foreground text-sm">{p.description}</p>}
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-4 text-xs">
             <button
-              className="hover:text-foreground flex items-center gap-1.5 font-mono"
+              className="hover:text-foreground flex min-w-0 items-center gap-1.5 font-mono"
               title="Copy path"
               onClick={() =>
                 navigator.clipboard.writeText(p.localPath).then(() => toast.success('Path copied'))
               }
             >
-              <HardDrive className="size-3.5" /> {p.localPath} <Copy className="size-3" />
+              <HardDrive className="size-3.5 shrink-0" />{' '}
+              <span className="truncate">{p.localPath}</span> <Copy className="size-3 shrink-0" />
             </button>
             {p.githubRepo && (
               <a
@@ -527,15 +122,6 @@ export default function ProjectPage() {
               </span>
             )}
           </div>
-          {p.stack.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {p.stack.map((s) => (
-                <Badge key={s} variant="outline" className="font-normal">
-                  {s}
-                </Badge>
-              ))}
-            </div>
-          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => analyze.mutate()} disabled={analysing}>
@@ -552,17 +138,94 @@ export default function ProjectPage() {
         </div>
       </header>
 
-      <OnboardingBanner project={p} onRetry={() => analyze.mutate()} />
-      {p.stackPreferences && (
-        <Section title="Stack preferences">
-          <p className="text-sm whitespace-pre-wrap">{p.stackPreferences}</p>
-        </Section>
-      )}
-      <RequirementsCard projectId={p.id} />
-      <CommandsCard key={`cmd-${p.onboardedAt}`} project={p} />
-      <AnalysisCards project={p} />
-      <EnginesCard project={p} />
+      <div className="flex min-h-0 flex-1">
+        <aside
+          aria-label="Requirement chat"
+          className={cn(
+            'bg-sidebar/40 hidden min-h-0 shrink-0 flex-col border-r md:flex',
+            chatOpen ? 'w-[400px]' : 'w-0 border-r-0',
+          )}
+        >
+          {chatOpen && (
+            <>
+              <div className="flex items-center gap-2 border-b px-4 py-2.5">
+                <MessageSquare className="text-primary size-4" />
+                <h2 className="text-sm font-semibold">Requirements</h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto size-7"
+                  aria-label="Hide chat"
+                  onClick={() => setChatOpen(false)}
+                >
+                  <PanelLeftClose className="size-4" />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <ChatPanel
+                  projectId={id}
+                  onOpenPlan={() => setTab('plan')}
+                  onOpenTask={openTaskInPlan}
+                />
+              </div>
+            </>
+          )}
+        </aside>
+
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            role="tablist"
+            aria-label="Workspace"
+            className="flex items-center gap-1 border-b px-2 md:px-4"
+          >
+            {!chatOpen && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mr-1 hidden size-7 md:inline-flex"
+                aria-label="Show chat"
+                onClick={() => setChatOpen(true)}
+              >
+                <PanelLeftOpen className="size-4" />
+              </Button>
+            )}
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={tab === t.id}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  'relative px-3 py-2.5 text-sm font-medium transition-colors',
+                  t.mobileOnly && 'md:hidden',
+                  tab === t.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t.label}
+                {tab === t.id && (
+                  <span className="bg-primary absolute inset-x-2 -bottom-px h-0.5 rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {tab === 'chat' && (
+              <div className="h-full md:hidden">
+                <ChatPanel
+                  projectId={id}
+                  onOpenPlan={() => setTab('plan')}
+                  onOpenTask={openTaskInPlan}
+                />
+              </div>
+            )}
+            {tab === 'plan' && (
+              <PlanTab projectId={id} openTaskId={openTask} onOpenTask={setOpenTask} />
+            )}
+            {tab === 'overview' && <ProjectOverview project={p} />}
+          </div>
+        </section>
+      </div>
       <RemoveDialog project={p} open={removeOpen} onOpenChange={setRemoveOpen} />
-    </motion.div>
+    </div>
   );
 }

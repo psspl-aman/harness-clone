@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–3 (Foundation, Projects, Engines) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–4 (Foundation, Projects, Engines, Requirement Chat & Planner) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -72,6 +72,27 @@ Open **Agents & Accounts** to see each supported agent CLI: whether it's install
 - **Usage windows** come from Claude Code's rate-limit events: how much of the 5-hour and 7-day windows you've used, and when each resets.
 - **Test** sends one read-only prompt ("Reply with exactly: OK") in a scratch folder and streams the result. It uses a small amount of usage.
 - **Permission profiles** decide what an agent run may do. Runs use `readonly` (read and inspect git only), `edit` (file edits), or `full` (edits plus shell commands). Each profile is mapped onto each CLI's own permission flags.
+
+## Requirement chat and planning
+
+Each project opens as a workspace: the **requirement chat** is on the left, and the **Plan & Tasks** and **Overview** tabs are on the right.
+
+- **Writing a message.** Choose **Plan** (draft a new plan), **Add tasks** (extend the current plan) or **Discuss** (talk, without creating tasks).
+  - Type `@` to reference files and `#` to reference tasks.
+  - Attach files by picking, pasting or dragging them in.
+  - Attachments are stored in `<project>/.agentforge/attachments/`. That folder is kept out of git through `.git/info/exclude`, so none of your tracked files change.
+- **The Planner** runs read-only on the planner engine (Settings → Default engines → Planner).
+  - It sees the project, the analysed codebase, project memory, the current plan, the recent conversation and your references.
+  - It may ask clarifying questions first. Click a suggested answer, or tick **No questions** to make it plan with stated assumptions.
+  - It must return strict JSON. The output is validated with Zod and the task graph is checked for unknown dependencies and cycles. If anything is wrong, the exact errors go back to the model, in the same CLI session where the engine supports resuming, for up to 3 attempts.
+  - The requirement from the new-project wizard is planned automatically once the project has been analysed.
+- **The approval gate.** Plans and tasks arrive as **Draft**. In the task drawer you can edit any field: title, description, type, priority, complexity, acceptance criteria, affected areas, dependencies, subtasks and per-role engines. You can also:
+  - reorder tasks by dragging (list view), approve or unapprove them by dragging (board view), and see dependencies in the graph view
+  - split a task, or merge several (multi-select)
+  - regenerate a task, or the whole draft plan, with extra instructions
+  - approve tasks one by one or with **Approve all**
+
+  Every status change is recorded, and every task links back to the requirement version that produced it.
 
 ## Configuration
 

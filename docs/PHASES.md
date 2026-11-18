@@ -5,8 +5,8 @@
 | 1   | **Foundation**: monorepo, DB schema and migrations, event bus, WebSocket, UI shell, settings                                     | ✅ Done |
 | 2   | **Projects**: scratch (local and GitHub) and attaching existing projects, onboarding analysis, directory browser                 | ✅ Done |
 | 3   | **Engines**: adapter interface; Claude Code, Codex, Gemini/Antigravity and custom adapters; install detection; login PTY; status | ✅ Done |
-| 4   | **Requirement Chat + Planner**: plan and task generation (Zod-validated JSON with retry), editing, approval gate                 | ⏳ Next |
-| 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | —       |
+| 4   | **Requirement Chat + Planner**: plan and task generation (Zod-validated JSON with retry), editing, approval gate                 | ✅ Done |
+| 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | ⏳ Next |
 | 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | —       |
 | 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | —       |
 | 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | —       |
@@ -16,7 +16,7 @@
 ## Phase 1: what was verified
 
 - **Unit and integration (Vitest, 36 tests):**
-  - task state machine transitions and progress
+  ⏳ Next
   - settings schema, deep merge and validation
   - event bus sequencing, validation, listener isolation, and ring-buffer replay and truncation
   - REST API: health, system, settings GET/PATCH, validation errors, JSON 404s
@@ -105,3 +105,26 @@
 - **Not yet verified against real binaries:** Codex and Gemini CLI. Their adapters follow the published contracts (Codex `exec_events.rs` and gemini-cli `output/types.ts`). Re-record those fixtures once the CLIs are installed. Specific unknowns:
   - Codex: whether `resume` works with exec-level flags placed before it, and the `sandbox_workspace_write.network_access` override used by the `full` profile.
   - Gemini CLI: the cached-OAuth file path.
+
+## Phase 4: what was verified
+
+- **Unit and integration (Vitest, 145 tests in total):**
+  - **JSON extraction:** bare JSON, fenced blocks, JSON wrapped in prose, braces inside strings, and the last fenced block taking priority.
+  - **Planner output validation:** enum normalisation and defaults, schema errors reported with their paths, unknown, self and duplicate dependencies, cycles, and output types not allowed for the request.
+  - **Task service:** keys, resolution of refs and existing keys, edits and validation, dependency cycles, split and merge, approve and unapprove with plan status and history, supersession of draft plans, manual tasks, reorder, subtasks, and locking while an agent is working.
+  - **Planner end to end, through a fake Claude CLI:**
+    - plan creation with traceability, prompt contents and read-only permissions, and run and usage recording
+    - a retry in the same session with the error fed back, and giving up after 3 invalid answers
+    - questions, then a plan without questions
+    - discussing, and adding to a plan with dependencies on existing keys
+    - regenerating a task or the plan
+    - a usage-limit failure, one run per project, cancellation, and a missing engine
+    - `@file` and `#task` references, an attachment upload that stays out of git, and requirement versioning
+    - automatic planning of the wizard's requirement after onboarding
+- **E2E (Playwright, 18 tests in total):**
+  - chat → a live working bubble → a clarifying question → an answer with "No questions" → a plan
+  - editing a task in the drawer (priority, criteria, dependency, subtask), approving one task, then Approve all
+  - the board and graph views, including opening a task from the graph
+  - discuss mode and `@file` autocomplete
+  - the earlier specs, updated for the workspace tabs
+- **Real planner run:** Claude Code with haiku planned "a tiny Celsius/Fahrenheit CLI with unit tests" on the first attempt. It produced 5 well-sized tasks (scaffold → core → parser → entry point → README) with a correct dependency chain and 4–7 verifiable criteria each. It took 56s and cost $0.015.

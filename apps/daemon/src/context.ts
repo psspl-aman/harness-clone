@@ -9,6 +9,9 @@ import type { SettingsService } from './services/settings';
 import type { WsGateway } from './ws/gateway';
 import type { EngineRegistry } from './engines/registry';
 import type { TerminalService } from './services/terminals';
+import type { PlannerService } from './services/planner/service';
+import type { RunRecorder } from './services/runs';
+import type { TaskService } from './services/tasks';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -23,6 +26,9 @@ export interface AppContext {
   projects: ProjectService;
   engines: EngineRegistry;
   terminals: TerminalService;
+  tasks: TaskService;
+  planner: PlannerService;
+  runs: RunRecorder;
   workspaceRoot: () => string;
   startedAt: number;
 }

@@ -1,4 +1,9 @@
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import { registerPlanningRoutes } from './routes/planning';
+import { PlannerService } from './services/planner/service';
+import { RunRecorder } from './services/runs';
+import { TaskService } from './services/tasks';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
@@ -109,6 +114,34 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     if (e.type === 'settings.updated') engineRegistry.reschedule();
   });
 
+  const runs = new RunRecorder(dbHandle.db, bus);
+  const taskService = new TaskService(dbHandle.db, bus);
+  const planner = new PlannerService({
+    db: dbHandle.db,
+    bus,
+    tasks: taskService,
+    engines: engineRegistry,
+    runs,
+    settings,
+    log: app.log,
+  });
+  // Work interrupted by a restart can't be resumed mid-stream: mark it failed.
+  runs.failOrphans();
+  planner.failOrphans();
+  // The wizard's initial requirement is planned as soon as onboarding has analysed the folder.
+  bus.subscribe((e) => {
+    if (
+      e.type === 'project.onboarding' &&
+      (e.payload.status === 'done' || e.payload.status === 'failed')
+    ) {
+      try {
+        planner.planInitialRequirement(e.payload.projectId);
+      } catch (err) {
+        app.log.warn({ err, projectId: e.payload.projectId }, 'could not start initial planning');
+      }
+    }
+  });
+
   const ctx: AppContext = {
     config,
     db: dbHandle.db,
@@ -121,6 +154,9 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     projects,
     engines: engineRegistry,
     terminals,
+    tasks: taskService,
+    planner,
+    runs,
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -131,6 +167,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
   await app.register(websocket, { options: { maxPayload: 1024 * 1024 } });
+  await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024, files: 10 } });
   // Must come after the websocket plugin: its onRequest hook marks upgrade
   // requests so rejected upgrades get their raw socket destroyed.
   registerLocalOnlyGuard(app, { bindHost: config.host, isOriginAllowed });
@@ -143,10 +180,12 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerGithubRoutes(app, ctx);
   registerEngineRoutes(app, ctx);
   registerTerminalRoutes(app, ctx);
+  registerPlanningRoutes(app, ctx);
 
   app.addHook('onReady', async () => projects.resumeInterruptedOnboarding());
 
   app.addHook('onClose', async () => {
+    await planner.stop();
     await engineRegistry.stop();
     terminals.closeAll();
     await projects.drain();

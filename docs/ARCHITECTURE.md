@@ -121,6 +121,39 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - Codex and Gemini streams were built from their published event contracts, because those CLIs aren't installed on the development machine.
   - Tests drive real subprocesses through a fake CLI (`test/fake-cli.ts`) that replays a fixture and records argv, stdin, cwd and env.
 
+## Requirement chat and Planner (Phase 4)
+
+- **`services/planner/service.ts`, `PlannerService`:**
+  - Stores chat messages in `requirements`: kind `message`, `questions`, `plan` or `error`, and status `running`, `done`, `failed` or `cancelled`.
+  - Editing a message creates a new version linked through `supersedesId`.
+  - Allows at most one planner run per project, with cancellation.
+  - Resolves the planner engine from the project's role engines, falling back to the global default.
+  - Extracts `@file` and `#TASK-KEY` references, checking them against `git ls-files` and the existing task keys.
+  - Plans the wizard's requirement automatically when onboarding reports done or failed.
+- **`services/planner/prompt.ts`:** builds the prompt from the project, the onboarding summary, project memory (pinned first, within `memory.maxPromptChars`), the current plan and tasks, the last 12 messages, references and attachments, the engines it may suggest, the planning rules and a strict JSON output contract per mode:
+  - `generate_plan`: plan or questions
+  - `add_to_plan`: tasks or questions
+  - `discuss`: reply
+  - `regenerate_plan`: plan
+  - `regenerate_task`: task
+- **`services/planner/parse.ts`:**
+  - Pulls the JSON out of the reply (prefers the last fenced block, otherwise the first balanced object, aware of strings).
+  - Validates it with `PlannerOutputSchema` (in `@agentforge/shared`; enums tolerate case).
+  - Checks the dependency graph (`validatePlannerGraph`): duplicate refs, unknown refs or keys, self-dependencies and cycles.
+  - Returns readable errors, which become the retry prompt.
+- **`services/tasks.ts`, `TaskService`:** owns plans and tasks.
+  - **Keys** come from the project slug (`todo-app` gives `TA-1`).
+  - **Planner output** is created with refs resolved to task ids. A dependency may also name an existing task key.
+  - **Status changes** go through `assertTransition`, and each one is written to `task_status_history`.
+  - **Dependencies** are cycle-checked.
+  - **Split:** dependents wait for every part.
+  - **Merge:** content is combined and dependents are re-pointed.
+  - **Reorder** and subtasks.
+  - **Plan status:** a plan is `APPROVED` once it has no draft tasks left.
+  - **New plans:** a new plan version supersedes the previous _draft_ plan and drops its draft tasks. Approved plans and tasks are kept.
+- **`services/runs.ts`, `RunRecorder`:** every agent run gets a row in `agent_runs` (prompt, engine, session, tokens, cost, result). Its events go to `run_events`, with streamed text deltas coalesced and inserts batched, and its usage to `usage_records`. Live `run.event` and `run.finished` events go to `run:<id>` and `project:<id>`. The Phase 5 pipeline reuses it.
+- **Restarts:** runs and planner messages left running by a restart are marked failed when the daemon boots.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.
@@ -141,5 +174,8 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
     - Configuration: enabled, default model, executable override, API key, logout.
     - Custom CLI engine editor.
   - A global engine banner for expired sessions or exhausted usage on engines that default roles use.
+  - Project workspace (`/projects/[id]`): the requirement chat on the left (collapsible; a tab on narrow screens), with **Plan & Tasks** and **Overview** tabs.
+    - The chat shows markdown messages, clarifying-question cards with clickable answers, plan cards, error cards with Try again, a live "Planner is working" bubble streaming tool steps, and a composer with intent, `@`/`#` autocomplete, attachments and editing.
+    - Plan & Tasks shows the plan summary and List, Board and Graph views, with multi-select approve and merge, plus a task drawer that autosaves edits and handles dependencies, subtasks, engines, traceability, history, split, regenerate and delete.
   - Projects dashboard: cards show source, stack, task progress, run status, an error badge and last activity.
   - Settings: a draft-and-diff form that sends only changed fields, validates client-side with the shared schema, and picks up changes made elsewhere live.

@@ -94,3 +94,35 @@ The built-in engine ids are `claude-code`, `codex`, `gemini-cli` and `antigravit
 | DELETE | `/api/terminals/:id`              | Kills the terminal and forgets it            |
 
 Live output arrives as transient `terminal.output` events (`{ terminalId, data }`) on topic `terminal:<id>`, followed by `terminal.exit`.
+
+## Requirement chat and Planner
+
+| Method | Path                               | Description                                                                                                                                                                                        |
+| ------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/projects/:id/chat`           | `ChatMessageDto[]`: your messages, the Planner's replies, questions, plans and errors, plus system notes                                                                                           |
+| POST   | `/api/projects/:id/chat`           | Body `{ content, intent: generate_plan\|add_to_plan\|discuss, attachmentIds?, skipQuestions?, supersedesId? }`. Stores the message and starts the Planner. Returns 409 while it is already running |
+| GET    | `/api/projects/:id/planner`        | `PlannerState`: `{ running, runId, messageId, engineId, startedAt }`                                                                                                                               |
+| POST   | `/api/projects/:id/planner/cancel` | Cancels the running planner                                                                                                                                                                        |
+| GET    | `/api/projects/:id/references?q=`  | Suggestions for `@file` and `#task`                                                                                                                                                                |
+| POST   | `/api/projects/:id/attachments`    | Multipart upload (up to 20 MB per file). Returns `AttachmentDto[]`                                                                                                                                 |
+| GET    | `/api/runs/:id`                    | The run record plus its persisted events                                                                                                                                                           |
+
+## Plans and tasks
+
+| Method               | Path                                      | Description                                                                                                                                              |
+| -------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET                  | `/api/projects/:id/board`                 | `{ plans, tasks }` (superseded plans are omitted)                                                                                                        |
+| POST                 | `/api/projects/:id/tasks/reorder`         | Body `{ taskIds }`                                                                                                                                       |
+| PATCH                | `/api/plans/:id`                          | `{ goal?, scope?, outOfScope?, architectureNotes?, risks?, assumptions? }`                                                                               |
+| POST                 | `/api/plans/:id/approve`                  | `{ taskIds? }`. Approves every draft task, or the given subset                                                                                           |
+| POST                 | `/api/plans/:id/regenerate`               | `{ instructions }`. Planner re-drafts the plan (drafts only)                                                                                             |
+| POST                 | `/api/plans/:id/tasks`                    | Adds a task manually: `{ title, description?, type?, priority?, complexity?, acceptanceCriteria?, affectedAreas?, roleEngines?, dependsOn?, subtasks? }` |
+| GET / PATCH / DELETE | `/api/tasks/:id`                          | Reads, edits or deletes a task. Editing is refused (409) while an agent is working on it                                                                 |
+| GET                  | `/api/tasks/:id/history`                  | Status history                                                                                                                                           |
+| PUT                  | `/api/tasks/:id/dependencies`             | `{ dependsOn }`. Cycle-checked                                                                                                                           |
+| POST                 | `/api/tasks/:id/split`                    | `{ parts: [{ title, description? }] }` (2 to 8 parts)                                                                                                    |
+| POST                 | `/api/tasks/merge`                        | `{ taskIds, title? }`. Merges into the first task                                                                                                        |
+| POST                 | `/api/tasks/:id/approve` and `/unapprove` | Moves the task Draft → Approved, or Approved → Draft                                                                                                     |
+| POST                 | `/api/tasks/:id/regenerate`               | `{ instructions }`. Planner rewrites the task in place                                                                                                   |
+| POST                 | `/api/tasks/:id/subtasks`                 | `{ title }`                                                                                                                                              |
+| PATCH / DELETE       | `/api/subtasks/:id`                       | `{ title?, done?, orderIndex? }`                                                                                                                         |

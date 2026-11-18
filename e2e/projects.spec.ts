@@ -45,6 +45,7 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   await expect(page).toHaveURL(/\/projects\/prj_/);
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
   await expect(page.getByText('A meal planner with a shopping list.')).toBeVisible();
+  await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(
     page.getByText('The folder is empty — agents will scaffold it from your requirements.'),
   ).toBeVisible();
@@ -85,6 +86,7 @@ test('attach an existing folder, confirm commands, then remove it', async ({ pag
   await page.getByRole('button', { name: 'Attach project' }).click();
 
   await expect(page).toHaveURL(/\/projects\/prj_/);
+  await page.getByRole('tab', { name: 'Overview' }).click();
   const run = page.getByLabel('Run (dev server)');
   await expect(run).toHaveValue('npm run dev');
   await expect(page.getByText('Detected from package.json scripts.dev')).toBeVisible();
@@ -97,6 +99,7 @@ test('attach an existing folder, confirm commands, then remove it', async ({ pag
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Commands saved')).toBeVisible();
   await page.reload();
+  await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByLabel('Run (dev server)')).toHaveValue('npm run dev -- --port 5999');
   await expect(page.getByRole('button', { name: /use npm run dev/ })).toBeVisible();
 

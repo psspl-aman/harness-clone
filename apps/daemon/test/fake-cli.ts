@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface FakeResponse {
@@ -9,6 +9,8 @@ export interface FakeResponse {
   stderr?: string;
   exitCode?: number;
   sleepMs?: number;
+  /** Use this response at most once (lets tests script a sequence of runs). */
+  once?: boolean;
 }
 
 export interface FakeCli {
@@ -45,7 +47,11 @@ const env = {};
 for (const k of ['ANTHROPIC_API_KEY', 'CODEX_API_KEY', 'GEMINI_API_KEY', 'MY_CLI_KEY', 'NO_COLOR']) env[k] = process.env[k];
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, stdin, cwd: process.cwd(), env }) + '\\n');
 const key = args.join(' ');
-const r = cfg.find((x) => key.startsWith(x.match)) || { exitCode: 99, stderr: 'fake: no response for ' + key };
+const usedPath = ${JSON.stringify(cfg)} + '.used';
+const used = fs.existsSync(usedPath) ? JSON.parse(fs.readFileSync(usedPath, 'utf8')) : [];
+const idx = cfg.findIndex((x, i) => key.startsWith(x.match) && !(x.once && used.includes(i)));
+const r = idx >= 0 ? cfg[idx] : { exitCode: 99, stderr: 'fake: no response for ' + key };
+if (idx >= 0 && r.once) fs.writeFileSync(usedPath, JSON.stringify([...used, idx]));
 (async () => {
   if (r.stdoutFile) process.stdout.write(fs.readFileSync(r.stdoutFile));
   if (r.stdout) process.stdout.write(r.stdout);
@@ -59,7 +65,10 @@ const r = cfg.find((x) => key.startsWith(x.match)) || { exitCode: 99, stderr: 'f
   writeFileSync(cfg, '[]');
   return {
     path,
-    setResponses: (r) => writeFileSync(cfg, JSON.stringify(r)),
+    setResponses: (r) => {
+      writeFileSync(cfg, JSON.stringify(r));
+      rmSync(`${cfg}.used`, { force: true });
+    },
     calls: () =>
       existsSync(log)
         ? readFileSync(log, 'utf8')
@@ -69,4 +78,43 @@ const r = cfg.find((x) => key.startsWith(x.match)) || { exitCode: 99, stderr: 'f
             .map((l) => JSON.parse(l))
         : [],
   };
+}
+
+/** A Claude Code stream-json transcript whose final answer is `text`. */
+export function claudeStream(
+  text: string,
+  sessionId = '11111111-2222-3333-4444-555555555555',
+): string {
+  const lines = [
+    { type: 'system', subtype: 'init', session_id: sessionId, model: 'claude-haiku-5-5' },
+    {
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+      session_id: sessionId,
+    },
+    {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: text,
+      session_id: sessionId,
+      total_cost_usd: 0.01,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 20,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+      modelUsage: {
+        'claude-haiku-5-5': {
+          inputTokens: 1000,
+          outputTokens: 200,
+          cacheReadInputTokens: 500,
+          cacheCreationInputTokens: 0,
+          costUSD: 0.01,
+        },
+      },
+    },
+  ];
+  return lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
 }

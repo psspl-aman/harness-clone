@@ -13,6 +13,8 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import type {
+  MessageKind,
+  PlannerQuestion,
   CustomEngineConfig,
   UsageWindow,
   OnboardingReport,
@@ -145,6 +147,15 @@ export const requirements = sqliteTable(
     references: json<{ files: string[]; tasks: string[] }>('references')
       .notNull()
       .default(sql`'{"files":[],"tasks":[]}'`),
+    kind: text('kind').$type<MessageKind>().notNull().default('message'),
+    status: text('status')
+      .$type<'done' | 'running' | 'failed' | 'cancelled'>()
+      .notNull()
+      .default('done'),
+    questions: json<PlannerQuestion[]>('questions'),
+    /** Plan this message created (planner "plan" messages). */
+    planId: text('plan_id'),
+    runId: text('run_id'),
     /** Previous version of this requirement when edited. */
     supersedesId: text('supersedes_id'),
     version: integer('version').notNull().default(1),

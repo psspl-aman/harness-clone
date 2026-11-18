@@ -14,6 +14,7 @@
   "dependencies": {
     "@agentforge/shared": "workspace:*",
     "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^9.4.0",
     "@fastify/websocket": "^11.2.0",
     "@octokit/rest": "^22.0.1",
     "better-sqlite3": "^12.4.0",

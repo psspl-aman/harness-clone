@@ -1,6 +1,6 @@
 'use client';
 
-import type { AnyAppEvent, EngineInfo } from '@agentforge/shared';
+import type { AnyAppEvent, ChatMessageDto, EngineInfo, PlanBoardDto } from '@agentforge/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -57,6 +57,55 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             );
             if (!queryClient.getQueryData(qk.engines))
               void queryClient.invalidateQueries({ queryKey: qk.engines });
+            break;
+          case 'chat.message':
+            queryClient.setQueryData<ChatMessageDto[]>(qk.chat(e.payload.projectId), (list) => {
+              if (!list) return list;
+              const m = e.payload.message;
+              const i = list.findIndex((x) => x.id === m.id);
+              const next = i >= 0 ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m];
+              // An edit marks the original as superseded.
+              return m.supersedesId
+                ? next.map((x) => (x.id === m.supersedesId ? { ...x, supersededBy: m.id } : x))
+                : next;
+            });
+            break;
+          case 'planner.state':
+            queryClient.setQueryData(qk.planner(e.payload.state.projectId), e.payload.state);
+            break;
+          case 'plan.updated':
+            queryClient.setQueryData<PlanBoardDto>(qk.board(e.payload.projectId), (b) => {
+              if (!b) return b;
+              const p = e.payload.plan;
+              const plans =
+                p.status === 'SUPERSEDED'
+                  ? b.plans.filter((x) => x.id !== p.id)
+                  : b.plans.some((x) => x.id === p.id)
+                    ? b.plans.map((x) => (x.id === p.id ? p : x))
+                    : [p, ...b.plans];
+              return { ...b, plans: plans.sort((a, c) => c.version - a.version) };
+            });
+            break;
+          case 'task.updated':
+            queryClient.setQueryData<PlanBoardDto>(qk.board(e.payload.projectId), (b) => {
+              if (!b) return b;
+              const t = e.payload.task;
+              const tasks = b.tasks.some((x) => x.id === t.id)
+                ? b.tasks.map((x) => (x.id === t.id ? t : x))
+                : [...b.tasks, t];
+              return {
+                ...b,
+                tasks: tasks.sort(
+                  (a, c) => a.orderIndex - c.orderIndex || a.createdAt - c.createdAt,
+                ),
+              };
+            });
+            void queryClient.invalidateQueries({ queryKey: qk.taskHistory(e.payload.task.id) });
+            break;
+          case 'task.deleted':
+            queryClient.setQueryData<PlanBoardDto>(qk.board(e.payload.projectId), (b) =>
+              b ? { ...b, tasks: b.tasks.filter((x) => x.id !== e.payload.taskId) } : b,
+            );
             break;
           case 'engine.removed':
             void queryClient.invalidateQueries({ queryKey: qk.engines });
