@@ -13,6 +13,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import type {
+  PipelineState,
   MessageKind,
   PlannerQuestion,
   CustomEngineConfig,
@@ -114,6 +115,8 @@ export const projectSettings = sqliteTable('project_settings', {
     .notNull()
     .default(sql`'{}'`),
   fallbackEnabled: bool('fallback_enabled').notNull().default(false),
+  /** Stop starting new tasks (running ones finish their current step). */
+  pipelinePaused: bool('pipeline_paused').notNull().default(false),
   memoryFileEnabled: bool('memory_file_enabled').notNull().default(true),
   memoryFileGitignored: bool('memory_file_gitignored').notNull().default(true),
   updatedAt: updatedAt(),
@@ -230,6 +233,9 @@ export const tasks = sqliteTable(
       .default(sql`'{}'`),
     orderIndex: real('order_index').notNull().default(0),
     fixLoopCount: integer('fix_loop_count').notNull().default(0),
+    pipelineState: json<PipelineState>('pipeline_state')
+      .notNull()
+      .default(sql`'{}'`),
     branchName: text('branch_name'),
     worktreePath: text('worktree_path'),
     baseBranch: text('base_branch'),

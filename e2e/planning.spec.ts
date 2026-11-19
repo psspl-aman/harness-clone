@@ -128,6 +128,8 @@ async function setup(request: APIRequestContext) {
   expect(p.ok()).toBe(true);
   const project = await p.json();
   writeFileSync(join(project.localPath, 'README.md'), '# Notes');
+  // This spec is about planning: keep the orchestrator from building approved tasks.
+  await request.post(`${E2E.daemonUrl}/api/projects/${project.id}/pipeline/pause`);
   return project.id as string;
 }
 
@@ -163,7 +165,8 @@ test('chat → clarifying question → plan', async ({ page }) => {
 test('review and edit tasks before approving', async ({ page }) => {
   await page.goto(`/projects/${projectId}`);
   await page.getByRole('button', { name: /Add the CLI commands/ }).click();
-  const drawer = page.getByRole('dialog');
+  // Name the drawer: the dependency popover is a dialog too.
+  const drawer = page.getByRole('dialog', { name: 'Add the CLI commands' });
   await expect(drawer.getByText('NC-3', { exact: true }).first()).toBeVisible();
 
   await drawer.getByLabel('Priority').click();
@@ -176,11 +179,13 @@ test('review and edit tasks before approving', async ({ page }) => {
 
   await drawer.getByRole('button', { name: 'Edit' }).click();
   await page.getByRole('checkbox', { name: /NC-1/ }).click();
+  await expect(page.getByRole('checkbox', { name: /NC-1/ })).toBeChecked();
   await page.keyboard.press('Escape');
+  await expect(page.getByText('NC-3 can start after…')).toBeHidden();
   await expect(drawer.getByText('Scaffold the project')).toBeVisible();
 
   await drawer.getByLabel('New subtask').fill('Handle empty notes file');
-  await page.keyboard.press('Enter');
+  await drawer.getByLabel('New subtask').press('Enter');
   await expect(drawer.getByText('Handle empty notes file')).toBeVisible();
   await expect(drawer.getByText('Draft', { exact: true }).first()).toBeVisible();
   await page.keyboard.press('Escape');

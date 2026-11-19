@@ -31,6 +31,12 @@ import type {
   UpdatePlanInput,
   UpdateTaskInput,
   AgentEvent,
+  PipelineStatusDto,
+  ReviewDto,
+  RunSummaryDto,
+  TaskDiffDto,
+  TaskReportDto,
+  TestResultDto,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -213,6 +219,25 @@ export const api = {
       request<TaskDto>('PATCH', `/api/subtasks/${id}`, input),
     removeSubtask: (id: string) => request<TaskDto>('DELETE', `/api/subtasks/${id}`),
   },
+  pipeline: {
+    status: (projectId: string) =>
+      request<PipelineStatusDto>('GET', `/api/projects/${projectId}/pipeline`),
+    pause: (projectId: string) =>
+      request<PipelineStatusDto>('POST', `/api/projects/${projectId}/pipeline/pause`),
+    resume: (projectId: string) =>
+      request<PipelineStatusDto>('POST', `/api/projects/${projectId}/pipeline/resume`),
+    task: (id: string, action: 'pause' | 'resume' | 'cancel' | 'retry' | 'approve-merge') =>
+      request<TaskDto>('POST', `/api/tasks/${id}/${action}`),
+    steer: (id: string, message: string) =>
+      request<TaskDto>('POST', `/api/tasks/${id}/steer`, { message }),
+    requestChanges: (id: string, comments: string) =>
+      request<TaskDto>('POST', `/api/tasks/${id}/request-changes`, { comments }),
+    runs: (id: string) => request<RunSummaryDto[]>('GET', `/api/tasks/${id}/runs`),
+    reviews: (id: string) => request<ReviewDto[]>('GET', `/api/tasks/${id}/reviews`),
+    tests: (id: string) => request<TestResultDto[]>('GET', `/api/tasks/${id}/tests`),
+    diff: (id: string) => request<TaskDiffDto>('GET', `/api/tasks/${id}/diff`),
+    report: (id: string) => request<TaskReportDto | null>('GET', `/api/tasks/${id}/report`),
+  },
   runs: {
     get: (id: string) =>
       request<{
@@ -256,6 +281,10 @@ export const qk = {
   planner: (projectId: string) => ['planner', projectId] as const,
   board: (projectId: string) => ['board', projectId] as const,
   taskHistory: (taskId: string) => ['task-history', taskId] as const,
+  pipeline: (projectId: string) => ['pipeline', projectId] as const,
+  taskDetail: (taskId: string, part: 'runs' | 'reviews' | 'tests' | 'diff' | 'report') =>
+    ['task-detail', taskId, part] as const,
+  run: (runId: string) => ['run', runId] as const,
   references: (projectId: string, q: string) => ['references', projectId, q] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,

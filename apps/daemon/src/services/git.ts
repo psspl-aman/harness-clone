@@ -23,7 +23,7 @@ const HEAVY_DIRS = [
   'dist',
   'build',
 ];
-const SECRET_FILE_RE = /(^|\/)(\.env(\..+)?|.+\.(pem|key|p12)|\.npmrc)$/;
+export const SECRET_FILE_RE = /(^|\/)(\.env(\..+)?|.+\.(pem|key|p12)|\.npmrc)$/;
 
 const FALLBACK_IDENTITY = ['user.name=AgentForge', 'user.email=agentforge@localhost'];
 
@@ -43,7 +43,7 @@ export async function isRepoRoot(dir: string): Promise<boolean> {
 }
 
 /** Use the user's git identity when configured; otherwise a neutral fallback for AgentForge's own commits. */
-async function identityConfig(dir: string): Promise<string[]> {
+export async function identityConfig(dir: string): Promise<string[]> {
   try {
     const email = await git(dir).raw(['config', '--get', 'user.email']);
     if (email.trim()) return [];

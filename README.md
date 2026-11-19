@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–4 (Foundation, Projects, Engines, Requirement Chat & Planner) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–5 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -93,6 +93,42 @@ Each project opens as a workspace: the **requirement chat** is on the left, and 
   - approve tasks one by one or with **Approve all**
 
   Every status change is recorded, and every task links back to the requirement version that produced it.
+
+## Building: the agent pipeline
+
+Approved tasks are built automatically. Each one goes through these steps:
+
+**Develop → Review → Test → (Fix ↺) → Document → Merge**
+
+- **Isolation.**
+  - Every task gets its own git worktree on a branch (`af/<key>-<title>`), created from your working branch under `~/.agentforge/worktrees/`. Your checkout isn't touched until the merge.
+  - Agents don't commit. AgentForge commits after each step and never commits secret-looking files (`.env*`, `*.pem`, `*.key`, `*.p12`, `.npmrc`).
+- **Roles.**
+  - The Developer and Fixer can edit files and run commands. The Tester can too, but it is told to change tests only.
+  - The Reviewer is read-only and must return a structured verdict with line comments.
+  - The Documenter edits docs and writes the task report.
+  - Each role uses its engine from the task, the project, or the global defaults.
+- **Verification.** After the Tester reports, AgentForge runs the project's own **install**, **build** and **test** commands in the worktree (Overview → Commands). A failure there sends the task to the Fixer even if the Tester said everything passed.
+- **Fix loop.** Requested changes go back to review after the fix, and failing tests go back to testing. After _Max fix loops_ attempts (Settings → Pipeline) the task stops in **Needs you** with a summary; **Retry this step** gives it another round.
+- **Merge.**
+  - **Into your branch:** if the working branch is checked out it must be clean, and the merge is a normal `--no-ff` merge there. If it isn't checked out, the merge is done without touching any checkout. If your checkout has uncommitted changes, AgentForge waits for you.
+  - **Conflicts:** a follow-up **conflict-resolution task** is created automatically. It merges the working branch into the task branch and resolves the conflicts.
+  - **Pull requests:** with **Open a GitHub PR** (Settings → Pipeline) on a GitHub project, the branch is pushed and a PR is opened instead. Dependent tasks build on top of unmerged dependency branches.
+- **Scheduling.**
+  - Tasks start once their dependencies are done, in priority order.
+  - The number running at once is capped per project (_Parallel tasks per project_) and per engine.
+  - **Pause building** stops new tasks from starting in a project.
+  - After a daemon restart, every running task resumes at its current step.
+- **Your controls** (task drawer):
+  - pause, resume, cancel, or retry a failed step
+  - switch a role's engine at any time
+  - **message the agent** (it restarts its current step with your note, resuming its session where the engine supports that)
+  - with _Require my review before merge_ on, **Approve & merge** or **Request changes**
+- **Failures.**
+  - An engine usage limit pauses the task (_Paused · quota_) with the reset time.
+  - An expired login pauses it (_Paused · login_).
+  - Other failures are retried once, then the task is marked _Failed_.
+- **Records.** Every task keeps its runs (prompt, streamed events, tokens, cost), diff, reviews, test runs with logs, and a generated **report**. The Documenter also adds facts to project memory.
 
 ## Configuration
 

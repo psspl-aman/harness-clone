@@ -1,6 +1,7 @@
 'use client';
 
-import type { AgentEvent, ChatMessageDto, TaskDto } from '@agentforge/shared';
+import type { ChatMessageDto, TaskDto } from '@agentforge/shared';
+import { describeEvent } from '@/lib/agent-events';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -42,22 +43,6 @@ function PlannerAvatar() {
   );
 }
 
-function describe(e: AgentEvent): string | null {
-  switch (e.kind) {
-    case 'tool_call': {
-      const input = (e.input ?? {}) as Record<string, unknown>;
-      const target = input.file_path ?? input.path ?? input.pattern ?? input.command ?? input.Path;
-      return `${e.name}${typeof target === 'string' ? ` · ${target.length > 60 ? `…${target.slice(-60)}` : target}` : ''}`;
-    }
-    case 'thinking':
-      return 'Thinking…';
-    case 'text':
-      return e.text.trim() ? 'Writing the answer…' : null;
-    default:
-      return null;
-  }
-}
-
 /** Live view of the running planner: elapsed time, recent steps, cancel. */
 function PlannerThinking({
   projectId,
@@ -73,7 +58,7 @@ function PlannerThinking({
   useLiveTopic(runId ? `run:${runId}` : null);
   useLiveEvent((e) => {
     if (e.type === 'run.event' && e.payload.runId === runId) {
-      const d = describe(e.payload.event);
+      const d = describeEvent(e.payload.event);
       if (d) setSteps((s) => (s.at(-1) === d ? s : [...s.slice(-5), d]));
     }
   });

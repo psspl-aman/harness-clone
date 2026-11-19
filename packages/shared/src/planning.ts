@@ -16,6 +16,7 @@ import {
   type TaskType,
 } from './enums';
 import { EngineIdSchema, type RoleEngines } from './settings';
+import type { TaskPipelineDto } from './pipeline';
 
 // ─── Planner output contract (what the Planner agent must return) ────────────
 
@@ -182,6 +183,7 @@ export interface TaskDto {
   dependsOn: string[];
   subtasks: SubtaskDto[];
   origin: string;
+  pipeline: TaskPipelineDto;
   createdAt: number;
   updatedAt: number;
 }

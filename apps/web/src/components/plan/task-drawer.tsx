@@ -49,6 +49,8 @@ import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { TaskStatusBadge, statusLabel } from './badges';
 import { InstructionsDialog, SplitDialog } from './dialogs';
+import { PipelineControls, PipelinePanel, PipelineTabs, type PipelineTab } from './task-pipeline';
+import { cn } from '@/lib/utils';
 
 const EDITABLE: TaskStatus[] = [
   'DRAFT',
@@ -263,6 +265,7 @@ export function TaskDrawer({
   const [newSub, setNewSub] = useState('');
   const [splitOpen, setSplitOpen] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
+  const [tab, setTab] = useState<PipelineTab>('details');
 
   const update = useMutation({
     mutationFn: (input: UpdateTaskInput) => api.tasks.update(taskId!, input),
@@ -275,6 +278,7 @@ export function TaskDrawer({
   });
 
   const editable = !!task && EDITABLE.includes(task.status);
+  const inPipeline = !!task && task.status !== 'DRAFT' && task.status !== 'APPROVED';
   const disabled = !editable;
   const requirement = task?.requirementId
     ? chat.data?.find((m) => m.id === task.requirementId)
@@ -282,7 +286,7 @@ export function TaskDrawer({
 
   return (
     <Sheet open={!!taskId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
+      <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-2xl">
         {!task ? (
           <SheetHeader>
             <SheetTitle>Task not found</SheetTitle>
@@ -360,15 +364,31 @@ export function TaskDrawer({
                   </Button>
                 )}
               </div>
-              {!editable && (
+              {!editable && task.status !== 'DONE' && (
                 <p className="text-muted-foreground text-xs">
                   An agent is working on this task — editing is locked until it finishes or is
                   paused.
                 </p>
               )}
+              {inPipeline && (
+                <>
+                  <PipelineControls task={task} />
+                  <PipelineTabs tab={tab} onTab={setTab} />
+                </>
+              )}
             </SheetHeader>
 
-            <div className="space-y-6 p-5">
+            {inPipeline && tab !== 'details' && (
+              <div className="p-5">
+                <PipelinePanel
+                  task={task}
+                  tab={tab}
+                  history={(history.data ?? []).map((h) => h.to)}
+                />
+              </div>
+            )}
+
+            <div className={cn('space-y-6 p-5', inPipeline && tab !== 'details' && 'hidden')}>
               <div className="grid grid-cols-3 gap-3">
                 {(
                   [

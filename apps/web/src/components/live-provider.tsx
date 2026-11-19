@@ -101,6 +101,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               };
             });
             void queryClient.invalidateQueries({ queryKey: qk.taskHistory(e.payload.task.id) });
+            void queryClient.invalidateQueries({ queryKey: ['task-detail', e.payload.task.id] });
+            break;
+          case 'pipeline.updated':
+            queryClient.setQueryData(qk.pipeline(e.payload.status.projectId), e.payload.status);
             break;
           case 'task.deleted':
             queryClient.setQueryData<PlanBoardDto>(qk.board(e.payload.projectId), (b) =>

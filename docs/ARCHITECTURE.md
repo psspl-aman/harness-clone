@@ -154,6 +154,38 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
 - **`services/runs.ts`, `RunRecorder`:** every agent run gets a row in `agent_runs` (prompt, engine, session, tokens, cost, result). Its events go to `run_events`, with streamed text deltas coalesced and inserts batched, and its usage to `usage_records`. Live `run.event` and `run.finished` events go to `run:<id>` and `project:<id>`. The Phase 5 pipeline reuses it.
 - **Restarts:** runs and planner messages left running by a restart are marked failed when the daemon boots.
 
+## Orchestrator (Phase 5)
+
+- **`services/orchestrator/orchestrator.ts`, `Orchestrator`:**
+  - **Scheduler.** `tick()` runs on task and settings events (debounced) and every 3 s. It re-enters safely. Each tick, per project:
+    1. `promote`: APPROVED or BLOCKED tasks go to QUEUED once every dependency is DONE. Otherwise they become BLOCKED with "Waiting for …" or "Dependency … failed". Skipped while the project is paused.
+    2. `recover`: active tasks with no driver (after a restart) resume at their current step.
+    3. `startQueued`: starts tasks by priority, then order, up to the project limit (`project_settings.max_concurrent_tasks`, or `concurrency.maxTasksPerProject`).
+  - **Drivers.** One per running task, looping on the task's status:
+    - `develop`: creates the worktree (merging unmerged dependency branches in PR mode), runs the developer, and commits.
+    - `review`: the reviewer returns `ReviewOutputSchema` JSON; the verdict and comments are saved.
+    - `test`: the tester returns `TestOutputSchema` JSON, then `runProjectChecks` runs install, build and test; a test result is saved.
+    - `fix`: guarded by `maxFixLoops`. Sources are review, tests or human.
+    - `document`: the documenter returns `DocOutputSchema` JSON, and the report and memory are written.
+    - `finalize`: merges or opens the PR, serialised per project.
+  - **`runRole`.** Records each run through `RunRecorder`. It:
+    - commits after code-writing roles (secret files dropped) and stores per-run files and diff
+    - validates JSON outputs, retrying with error feedback (in the same session when supported)
+    - retries transient failures once
+    - pauses on QUOTA_EXPIRED or RATE_LIMIT (`resumeAt` comes from the engine error) and on AUTH_EXPIRED
+    - delivers steering messages by aborting the current run and resuming the session with your note
+  - **State.** Pipeline state lives in `tasks.pipeline_state`: base commit, fix source, active role/engine/run, sessions per role, notes, last review/test ids, awaiting-merge-review flag, conflict links and merge commit. All of it is in the database, so a restart loses nothing but the in-flight run, and that step is re-run.
+- **`services/orchestrator/git-ops.ts`:**
+  - `ensureWorktree` (reused if it already exists), `mergeBranchesInto`, `commitAll` (never secrets), and `diff` (numstat, name-status and patch).
+  - `mergeIntoWorking`: a normal merge in the checkout if the working branch is checked out and clean. Uncommitted changes give `dirty`. Otherwise `merge-tree --write-tree`, then `commit-tree`, then `update-ref`. A conflict reports the paths.
+- **`services/orchestrator/verify.ts`:** runs the project's install, build and test commands through a shell in the worktree (15-minute timeout each, tail of the output kept).
+- **`services/orchestrator/prompts.ts`:** one prompt builder per role. Each has a `# Role: …` header, a shared context block (project, memory, task, completed dependencies, your messages), worktree rules, and a strict JSON contract for the reviewer, tester and documenter.
+- **State-machine additions:**
+  - DOCUMENTING or NEEDS_HUMAN → BLOCKED (merge conflict handed off)
+  - BLOCKED → DONE (merged through the conflict-resolution task)
+  - NEEDS_HUMAN → DONE (merge approved)
+  - FAILED or NEEDS_HUMAN → the step being retried
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.
@@ -177,5 +209,9 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - Project workspace (`/projects/[id]`): the requirement chat on the left (collapsible; a tab on narrow screens), with **Plan & Tasks** and **Overview** tabs.
     - The chat shows markdown messages, clarifying-question cards with clickable answers, plan cards, error cards with Try again, a live "Planner is working" bubble streaming tool steps, and a composer with intent, `@`/`#` autocomplete, attachments and editing.
     - Plan & Tasks shows the plan summary and List, Board and Graph views, with multi-select approve and merge, plus a task drawer that autosaves edits and handles dependencies, subtasks, engines, traceability, history, split, regenerate and delete.
+    - **Pipeline UI:**
+      - a build bar with run counts and Pause / Resume building, plus live agent activity
+      - a progress bar on each task row and card: active role, cost, fix loops, pause countdown, blocked reason, PR link
+      - in the task drawer: a step tracker, context-sensitive controls (pause, resume, cancel, retry, approve-merge, request changes, message the agent), and Activity (runs with streamed logs), Changes (diff viewer), Review & tests and Report tabs
   - Projects dashboard: cards show source, stack, task progress, run status, an error badge and last activity.
   - Settings: a draft-and-diff form that sends only changed fields, validates client-side with the shared schema, and picks up changes made elsewhere live.

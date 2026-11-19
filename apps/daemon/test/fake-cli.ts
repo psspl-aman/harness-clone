@@ -11,6 +11,12 @@ export interface FakeResponse {
   sleepMs?: number;
   /** Use this response at most once (lets tests script a sequence of runs). */
   once?: boolean;
+  /** Only match when the prompt on stdin contains this text (all of them, for a list). */
+  stdinIncludes?: string | string[];
+  /** Side effects in the working directory, like a real agent editing files. */
+  writeFiles?: Record<string, string>;
+  /** Shell command run in the working directory before replying. */
+  shell?: string;
 }
 
 export interface FakeCli {
@@ -49,10 +55,16 @@ fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, stdin, cwd: pro
 const key = args.join(' ');
 const usedPath = ${JSON.stringify(cfg)} + '.used';
 const used = fs.existsSync(usedPath) ? JSON.parse(fs.readFileSync(usedPath, 'utf8')) : [];
-const idx = cfg.findIndex((x, i) => key.startsWith(x.match) && !(x.once && used.includes(i)));
+const idx = cfg.findIndex((x, i) => key.startsWith(x.match) && [].concat(x.stdinIncludes || []).every((needle) => stdin.includes(needle)) && !(x.once && used.includes(i)));
 const r = idx >= 0 ? cfg[idx] : { exitCode: 99, stderr: 'fake: no response for ' + key };
 if (idx >= 0 && r.once) fs.writeFileSync(usedPath, JSON.stringify([...used, idx]));
 (async () => {
+  const path = require('node:path');
+  for (const [f, c] of Object.entries(r.writeFiles || {})) {
+    fs.mkdirSync(path.dirname(path.join(process.cwd(), f)), { recursive: true });
+    fs.writeFileSync(path.join(process.cwd(), f), c);
+  }
+  if (r.shell) require('node:child_process').execSync(r.shell, { cwd: process.cwd(), stdio: 'ignore' });
   if (r.stdoutFile) process.stdout.write(fs.readFileSync(r.stdoutFile));
   if (r.stdout) process.stdout.write(r.stdout);
   if (r.stderr) process.stderr.write(r.stderr);

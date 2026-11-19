@@ -261,6 +261,54 @@ export class GithubService {
     }
   }
 
+  /** Push a branch to the repo on GitHub (token via env, like clone). */
+  async push(repoDir: string, fullName: string, branch: string): Promise<void> {
+    const url = this.opts.cloneUrlFor?.(fullName) ?? `https://github.com/${fullName}.git`;
+    const token = this.secrets.get(TOKEN_SECRET);
+    const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0', ...this.authEnv(url, token) };
+    try {
+      await execa('git', ['push', '--force-with-lease', url, `${branch}:refs/heads/${branch}`], {
+        cwd: repoDir,
+        env,
+        timeout: 10 * 60_000,
+      });
+    } catch (err) {
+      const stderr = String((err as { stderr?: string }).stderr ?? '');
+      throw new AppError(
+        502,
+        'PUSH_FAILED',
+        `git push failed: ${(token ? stderr.split(token).join('***') : stderr).split('\n').filter(Boolean).slice(-2).join(' ')}`,
+      );
+    }
+  }
+
+  async createPullRequest(
+    fullName: string,
+    pr: { head: string; base: string; title: string; body: string },
+  ): Promise<{ url: string; number: number }> {
+    const [owner, repo] = fullName.split('/') as [string, string];
+    try {
+      const res = await this.client().request('POST /repos/{owner}/{repo}/pulls', {
+        owner,
+        repo,
+        ...pr,
+      });
+      return { url: res.data.html_url, number: res.data.number };
+    } catch (err) {
+      throw ghError(err, `open a pull request on ${fullName}`);
+    }
+  }
+
+  private authEnv(url: string, token: string | null): Record<string, string> {
+    if (!token || !url.startsWith('https://')) return {};
+    const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+    return {
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: `http.${new URL(url).origin}/.extraheader`,
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+    };
+  }
+
   private async emitStatus(): Promise<GithubStatus> {
     const status = await this.status();
     this.bus.emit('github.status_changed', { status });

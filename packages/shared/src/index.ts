@@ -7,3 +7,4 @@ export * from './ws';
 export * from './projects';
 export * from './engines';
 export * from './planning';
+export * from './pipeline';

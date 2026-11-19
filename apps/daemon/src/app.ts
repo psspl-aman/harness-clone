@@ -1,6 +1,8 @@
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { registerPlanningRoutes } from './routes/planning';
+import { registerPipelineRoutes } from './routes/pipeline';
+import { Orchestrator } from './services/orchestrator/orchestrator';
 import { PlannerService } from './services/planner/service';
 import { RunRecorder } from './services/runs';
 import { TaskService } from './services/tasks';
@@ -34,6 +36,7 @@ import { WsGateway } from './ws/gateway';
 export interface BuildOptions {
   github?: GithubServiceOptions;
   engines?: { autoRefresh?: boolean; extraPath?: string[] };
+  orchestrator?: { autoStart?: boolean };
 }
 
 export interface BuiltApp {
@@ -125,6 +128,18 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     settings,
     log: app.log,
   });
+  const orchestrator = new Orchestrator({
+    db: dbHandle.db,
+    bus,
+    tasks: taskService,
+    engines: engineRegistry,
+    runs,
+    settings,
+    github,
+    home: config.home,
+    log: app.log,
+    autoStart: opts.orchestrator?.autoStart ?? process.env.NODE_ENV !== 'test',
+  });
   // Work interrupted by a restart can't be resumed mid-stream: mark it failed.
   runs.failOrphans();
   planner.failOrphans();
@@ -157,6 +172,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     tasks: taskService,
     planner,
     runs,
+    orchestrator,
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -181,10 +197,15 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerEngineRoutes(app, ctx);
   registerTerminalRoutes(app, ctx);
   registerPlanningRoutes(app, ctx);
+  registerPipelineRoutes(app, ctx);
 
-  app.addHook('onReady', async () => projects.resumeInterruptedOnboarding());
+  app.addHook('onReady', async () => {
+    projects.resumeInterruptedOnboarding();
+    orchestrator.start();
+  });
 
   app.addHook('onClose', async () => {
+    await orchestrator.stop();
     await planner.stop();
     await engineRegistry.stop();
     terminals.closeAll();

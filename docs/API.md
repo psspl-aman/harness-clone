@@ -126,3 +126,21 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 | POST                 | `/api/tasks/:id/regenerate`               | `{ instructions }`. Planner rewrites the task in place                                                                                                   |
 | POST                 | `/api/tasks/:id/subtasks`                 | `{ title }`                                                                                                                                              |
 | PATCH / DELETE       | `/api/subtasks/:id`                       | `{ title?, done?, orderIndex? }`                                                                                                                         |
+
+## Pipeline
+
+| Method | Path                                                   | Description                                                                                               |
+| ------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/projects/:id/pipeline`                           | `{ paused, running: [{ taskId, key, role, engineId, runId }], queued, limit }`                            |
+| POST   | `/api/projects/:id/pipeline/pause` and `/resume`       | Pauses or resumes starting new tasks in the project                                                       |
+| POST   | `/api/tasks/:id/pause`, `/resume`, `/cancel`, `/retry` | Task controls. Each returns the updated `TaskDto`                                                         |
+| POST   | `/api/tasks/:id/steer`                                 | `{ message }`. Delivered to the running agent (restarts its step), or to the next run                     |
+| POST   | `/api/tasks/:id/approve-merge`                         | Merges a task waiting for your review (also retries a merge that was blocked by uncommitted changes)      |
+| POST   | `/api/tasks/:id/request-changes`                       | `{ comments }`. Sends the task back to the Fixer with your comments                                       |
+| GET    | `/api/tasks/:id/runs`                                  | Run summaries: role, engine, model, status, tokens, cost, files changed, timing                           |
+| GET    | `/api/tasks/:id/reviews`                               | Agent and human reviews, with comments                                                                    |
+| GET    | `/api/tasks/:id/tests`                                 | Test results, including AgentForge's own check logs                                                       |
+| GET    | `/api/tasks/:id/diff`                                  | `{ files: [{ path, status, additions, deletions }], patch }`. For merged tasks, the merge commit's change |
+| GET    | `/api/tasks/:id/report`                                | The task report (markdown)                                                                                |
+
+`TaskDto.pipeline` carries `branch`, `fixLoops`, `activeRole`, `activeEngine`, `activeRunId`, `awaitingMergeReview`, `blockedReason`, `pullRequestUrl`, `resumeAt`, `tokens`, `costUsd` and `lastError`.

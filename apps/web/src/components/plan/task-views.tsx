@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { PriorityLabel, TaskStatusBadge, TaskTypeIcon } from './badges';
+import { TaskProgress } from './pipeline-bits';
 
 export interface ViewProps {
   tasks: TaskDto[];
@@ -96,6 +97,7 @@ function Row({
           </span>
         </span>
       </button>
+      <TaskProgress task={task} />
       <TaskStatusBadge status={task.status} />
       {task.status === 'DRAFT' && (
         <Button
@@ -217,6 +219,7 @@ export function TaskBoard({
                   {col.statuses.length > 1 && (
                     <TaskStatusBadge status={t.status} className="mt-1.5" />
                   )}
+                  <TaskProgress task={t} compact />
                 </button>
               ))}
             </div>

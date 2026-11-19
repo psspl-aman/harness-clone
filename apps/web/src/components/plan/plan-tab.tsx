@@ -24,6 +24,7 @@ import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { AddTaskDialog, EditPlanDialog, InstructionsDialog } from './dialogs';
 import { TaskDrawer } from './task-drawer';
+import { PipelineBar } from './pipeline-bits';
 import { TaskBoard, TaskGraph, TaskList } from './task-views';
 
 type View = 'list' | 'board' | 'graph';
@@ -196,6 +197,8 @@ export function PlanTab({
           </div>
         )}
       </div>
+
+      <PipelineBar projectId={projectId} tasks={tasks} />
 
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Task view" className="bg-muted flex rounded-lg p-0.5">

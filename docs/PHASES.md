@@ -6,8 +6,8 @@
 | 2   | **Projects**: scratch (local and GitHub) and attaching existing projects, onboarding analysis, directory browser                 | ✅ Done |
 | 3   | **Engines**: adapter interface; Claude Code, Codex, Gemini/Antigravity and custom adapters; install detection; login PTY; status | ✅ Done |
 | 4   | **Requirement Chat + Planner**: plan and task generation (Zod-validated JSON with retry), editing, approval gate                 | ✅ Done |
-| 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | ⏳ Next |
-| 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | —       |
+| 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | ✅ Done |
+| 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | ⏳ Next |
 | 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | —       |
 | 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | —       |
 | 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | —       |
@@ -128,3 +128,29 @@
   - discuss mode and `@file` autocomplete
   - the earlier specs, updated for the workspace tabs
 - **Real planner run:** Claude Code with haiku planned "a tiny Celsius/Fahrenheit CLI with unit tests" on the first attempt. It produced 5 well-sized tasks (scaffold → core → parser → entry point → README) with a correct dependency chain and 4–7 verifiable criteria each. It took 56s and cost $0.015.
+
+## Phase 5: what was verified
+
+- **Unit and integration (Vitest, 164 tests in total).** The orchestrator suites use real git repos, worktrees and merges, real project commands, and a fake agent CLI that edits files:
+  - Dependent tasks are built and merged with no-ff merges. Dependents see completed work, the checkout stays clean, and branches and worktrees are removed. The run, review, test, report and memory records are checked.
+  - Secret files the agent creates are never committed.
+  - Review feedback reaches the Fixer and the change is re-reviewed. When the Tester claims a pass but the project's own test command fails, the task goes to the Fixer.
+  - The fix-loop limit leads to Needs you; retry grants another round.
+  - A usage limit pauses the task with the reset time; resume continues the same step. A crashed step is retried once, then fails, and retry continues at that step.
+  - Pause, resume and cancel. A steering message resumes the agent's session with your note.
+  - The per-project concurrency limit, pause building, and switching an engine mid-run.
+  - Merge conflicts produce a conflict-resolution task, which resolves them, merges, and completes the original.
+  - Review before merge: request changes, then approve the merge.
+  - Uncommitted changes in your checkout block the merge until cleaned. When the working branch isn't checked out, the merge doesn't touch your files.
+  - A daemon restart mid-review resumes at the review step.
+  - Pull-request mode, against a fake GitHub API and a real bare remote: a push and a PR per task, the report as the PR body, and dependent work stacked on the unmerged branch.
+- **E2E (Playwright, 20 tests in total):**
+  - plan, approve, then watch live building to Done and the merge into the repo
+  - the drawer's Activity, Changes, Review & tests and Report tabs
+  - review before merge: request changes, then approve and merge
+- **Real pipeline run.** Claude Code with haiku built "greet.js with node:test tests" from an approved one-task plan in about 1 minute, for $0.033 across 4 role runs (each ran once with no retries).
+  - The Developer wrote the module, the tests and `package.json`.
+  - The Reviewer approved, with 2 comments.
+  - The Tester added coverage for untested criteria (11 tests). AgentForge's own `node --test` passed.
+  - The Documenter wrote a README.
+  - The work merged with `--no-ff` into `main`. The checkout is clean and the tests pass in the repo.

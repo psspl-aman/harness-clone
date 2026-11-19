@@ -8,17 +8,20 @@ const PIPELINE: Record<TaskStatus, readonly TaskStatus[]> = {
   DRAFT: ['APPROVED', 'CANCELLED'],
   APPROVED: ['QUEUED', 'DRAFT', 'BLOCKED', 'CANCELLED'],
   QUEUED: ['IN_DEVELOPMENT', 'BLOCKED', 'APPROVED'],
-  BLOCKED: ['QUEUED', 'APPROVED'],
+  // DONE: work merged through a follow-up conflict-resolution task.
+  BLOCKED: ['QUEUED', 'APPROVED', 'DONE', 'CANCELLED'],
   IN_DEVELOPMENT: ['IN_REVIEW'],
   IN_REVIEW: ['IN_TESTING', 'FIXING'],
   IN_TESTING: ['DOCUMENTING', 'FIXING'],
   FIXING: ['IN_REVIEW', 'IN_TESTING'],
-  DOCUMENTING: ['DONE'],
+  // BLOCKED: merge conflict handed to a conflict-resolution task.
+  DOCUMENTING: ['DONE', 'BLOCKED'],
   DONE: [],
   PAUSED_QUOTA: [],
   PAUSED_AUTH: [],
   PAUSED_MANUAL: [],
-  NEEDS_HUMAN: ['QUEUED', 'FIXING', 'CANCELLED'],
+  // DONE: you approved the merge ("require my review before merge").
+  NEEDS_HUMAN: ['QUEUED', 'FIXING', 'CANCELLED', 'DONE', 'BLOCKED'],
   FAILED: ['QUEUED', 'CANCELLED'],
   CANCELLED: ['DRAFT'],
 };
@@ -60,6 +63,14 @@ export function canTransition(from: TaskStatus, to: TaskStatus, resumeTo?: TaskS
     if (isPaused(to)) return true; // e.g. quota pause becomes manual pause
     return resumeTo !== undefined && to === resumeTo;
   }
+  // Retry: a failed or escalated task may go back to the step it stopped at.
+  if (
+    (from === 'FAILED' || from === 'NEEDS_HUMAN') &&
+    resumeTo !== undefined &&
+    to === resumeTo &&
+    isActive(to)
+  )
+    return true;
   if (isActive(from) || from === 'QUEUED') {
     if (isPaused(to) || to === 'FAILED' || to === 'NEEDS_HUMAN' || to === 'CANCELLED') return true;
   }

@@ -21,6 +21,7 @@ import {
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
+  agentRuns,
   plans,
   projects,
   subtasks,
@@ -341,7 +342,10 @@ export class TaskService {
 
   update(taskId: string, raw: unknown): TaskDto {
     const input = UpdateTaskInputSchema.parse(raw);
-    const row = this.editableRow(taskId);
+    // Reassigning engines is allowed at any time (it applies from the next step);
+    // the task definition is locked while an agent works on it.
+    const onlyEngines = Object.keys(input).every((k) => k === 'roleEngines');
+    const row = onlyEngines ? this.row(taskId) : this.editableRow(taskId);
     if (Object.keys(input).length)
       this.db.update(tasks).set(input).where(eq(tasks.id, row.id)).run();
     const dto = this.get(taskId);
@@ -647,6 +651,56 @@ export class TaskService {
     return dto;
   }
 
+  // ─── Orchestrator support ──────────────────────────────────────────────────
+
+  /** Re-broadcast a task after the orchestrator changed pipeline fields directly. */
+  touch(taskId: string): TaskDto {
+    const dto = this.get(taskId);
+    this.emitTask(dto);
+    return dto;
+  }
+
+  /** System-created follow-up task (e.g. conflict resolution), already approved. */
+  createFollowUp(
+    projectId: string,
+    planId: string | null,
+    v: {
+      title: string;
+      description: string;
+      type: TaskDto['type'];
+      priority: TaskDto['priority'];
+      acceptanceCriteria: string[];
+      roleEngines: TaskDto['roleEngines'];
+      origin: 'conflict' | 'error';
+      pipelineState: typeof tasks.$inferInsert.pipelineState;
+      branchName?: string;
+    },
+  ): TaskDto {
+    let id = '';
+    this.db.transaction((tx) => {
+      id = this.insertTask(tx as unknown as Db, projectId, {
+        planId,
+        requirementId: null,
+        title: v.title,
+        description: v.description,
+        type: v.type,
+        priority: v.priority,
+        complexity: 's',
+        acceptanceCriteria: v.acceptanceCriteria,
+        affectedAreas: [],
+        roleEngines: v.roleEngines,
+        orderIndex: this.maxOrder(projectId) + 1,
+        origin: v.origin,
+        status: 'APPROVED',
+        pipelineState: v.pipelineState,
+        branchName: v.branchName ?? null,
+      });
+    });
+    const dto = this.get(id);
+    this.emitTask(dto);
+    return dto;
+  }
+
   // ─── Internals ─────────────────────────────────────────────────────────────
 
   private insertTask(
@@ -674,8 +728,20 @@ export class TaskService {
         taskId: id,
         fromStatus: null,
         toStatus: status,
-        reason: v.origin === 'planner' ? 'Proposed by the Planner' : 'Created by you',
-        actor: v.origin === 'planner' ? 'planner' : 'user',
+        reason:
+          v.origin === 'planner'
+            ? 'Proposed by the Planner'
+            : v.origin === 'conflict'
+              ? 'Created to resolve merge conflicts'
+              : v.origin === 'error'
+                ? 'Created to fix a detected error'
+                : 'Created by you',
+        actor:
+          v.origin === 'planner'
+            ? 'planner'
+            : v.origin === 'conflict' || v.origin === 'error'
+              ? 'orchestrator'
+              : 'user',
       })
       .run();
     return id;
@@ -777,6 +843,27 @@ export class TaskService {
   private toDtos(rows: TaskRow[]): TaskDto[] {
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
+    const usage = new Map(
+      this.db
+        .select({
+          taskId: agentRuns.taskId,
+          tokens: sql<number>`sum(${agentRuns.inputTokens} + ${agentRuns.outputTokens} + ${agentRuns.cacheReadTokens} + ${agentRuns.cacheWriteTokens})`,
+          cost: sql<number>`sum(${agentRuns.costUsd})`,
+        })
+        .from(agentRuns)
+        .where(inArray(agentRuns.taskId, ids))
+        .groupBy(agentRuns.taskId)
+        .all()
+        .map((u) => [u.taskId, u]),
+    );
+    const keys = new Map(
+      this.db
+        .select({ id: tasks.id, key: tasks.key })
+        .from(tasks)
+        .where(eq(tasks.projectId, rows[0]!.projectId))
+        .all()
+        .map((t) => [t.id, t.key]),
+    );
     const deps = this.db
       .select()
       .from(taskDependencies)
@@ -810,6 +897,25 @@ export class TaskService {
         .filter((s) => s.taskId === r.id)
         .map((s) => ({ id: s.id, title: s.title, done: s.done, orderIndex: s.orderIndex })),
       origin: r.origin,
+      pipeline: {
+        branch: r.branchName,
+        fixLoops: r.fixLoopCount,
+        activeRole: r.pipelineState.activeRole ?? null,
+        activeEngine: r.pipelineState.activeEngine ?? null,
+        activeRunId: r.pipelineState.activeRunId ?? null,
+        awaitingMergeReview: !!r.pipelineState.awaitingMergeReview,
+        blockedReason:
+          r.status === 'BLOCKED'
+            ? r.pipelineState.blockedBy
+              ? `Merge conflicts — being resolved in ${keys.get(r.pipelineState.blockedBy.taskId) ?? 'a follow-up task'}`
+              : r.statusReason
+            : null,
+        pullRequestUrl: r.pullRequestUrl,
+        resumeAt: r.resumeAt,
+        tokens: Number(usage.get(r.id)?.tokens ?? 0),
+        costUsd: Number(usage.get(r.id)?.cost ?? 0),
+        lastError: r.pipelineState.lastError?.message ?? null,
+      },
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));

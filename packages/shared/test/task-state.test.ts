@@ -72,6 +72,18 @@ describe('task state machine', () => {
     expect(canTransition('NEEDS_HUMAN', 'FIXING')).toBe(true);
   });
 
+  it('supports merge conflicts, merge review and retrying a failed step', () => {
+    expect(canTransition('DOCUMENTING', 'BLOCKED')).toBe(true);
+    expect(canTransition('BLOCKED', 'DONE')).toBe(true);
+    expect(canTransition('NEEDS_HUMAN', 'DONE')).toBe(true);
+    expect(canTransition('NEEDS_HUMAN', 'BLOCKED')).toBe(true); // approved merge hit conflicts
+    expect(canTransition('FAILED', 'IN_REVIEW', 'IN_REVIEW')).toBe(true);
+    expect(canTransition('NEEDS_HUMAN', 'IN_TESTING', 'IN_TESTING')).toBe(true);
+    expect(canTransition('FAILED', 'IN_REVIEW')).toBe(false);
+    expect(canTransition('FAILED', 'DONE', 'DONE')).toBe(false);
+    expect(canTransition('IN_REVIEW', 'BLOCKED')).toBe(false);
+  });
+
   it('computes step progress', () => {
     expect(statusProgress('DRAFT')).toBe(0);
     expect(statusProgress('DONE')).toBe(1);
