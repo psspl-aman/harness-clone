@@ -143,6 +143,8 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 | GET    | `/api/tasks/:id/diff`                                  | `{ files: [{ path, status, additions, deletions }], patch }`. For merged tasks, the merge commit's change |
 | GET    | `/api/tasks/:id/report`                                | The task report (markdown)                                                                                |
 
+`POST /api/tasks/:id/fix` sends a FAILED or NEEDS_HUMAN task that has a branch to the Fixer, with its failure as the brief, then through review and tests (409 otherwise). `TaskDto.openErrors` counts the open errors recorded against the task.
+
 `TaskDto.pipeline` carries `branch`, `fixLoops`, `activeRole`, `activeEngine`, `activeRunId`, `awaitingMergeReview`, `blockedReason`, `pullRequestUrl`, `resumeAt`, `tokens`, `costUsd` and `lastError`.
 
 ## Usage

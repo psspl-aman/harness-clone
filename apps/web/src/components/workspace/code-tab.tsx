@@ -5,6 +5,7 @@ import {
   ChevronRight,
   File,
   FileWarning,
+  GitCompare,
   Folder,
   FolderOpen,
   Loader2,
@@ -14,6 +15,8 @@ import {
 import { useTheme } from 'next-themes';
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DiffView } from '@/components/diff-view';
+import { TaskStatusBadge } from '@/components/plan/badges';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, ApiClientError, qk } from '@/lib/api';
@@ -130,18 +133,119 @@ function TreeNode({
   );
 }
 
-/** Read-only code browser: git-aware file tree + Monaco. Secret files are never served. */
-export function CodeTab({
-  projectId,
-  path,
-  line,
-  onSelect,
-}: {
+interface CodeTabProps {
   projectId: string;
   path: string | null;
   line?: number | null;
   onSelect: (path: string) => void;
-}) {
+}
+
+/** Code tab: browse files (Monaco, read-only) or review each task's changes as diffs. */
+export function CodeTab(props: CodeTabProps) {
+  // Opening a file (e.g. from the Errors panel) always shows the file view.
+  const [view, setView] = useState<{ mode: 'files' | 'changes'; forPath: string | null }>({
+    mode: 'files',
+    forPath: props.path,
+  });
+  const mode = view.forPath === props.path ? view.mode : 'files';
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div
+        className="flex items-center gap-1 border-b px-2 py-1.5"
+        role="tablist"
+        aria-label="Code view"
+      >
+        {(['files', 'changes'] as const).map((m) => (
+          <button
+            key={m}
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setView({ mode: m, forPath: props.path })}
+            className={cn(
+              'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium',
+              mode === m
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {m === 'files' ? <File className="size-3.5" /> : <GitCompare className="size-3.5" />}
+            {m === 'files' ? 'Files' : 'Changes'}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1">
+        {mode === 'files' ? <FilesView {...props} /> : <ChangesView projectId={props.projectId} />}
+      </div>
+    </div>
+  );
+}
+
+const NOT_STARTED = ['DRAFT', 'APPROVED', 'QUEUED', 'CANCELLED'];
+
+/** Each task's diff against the branch it started from (merged tasks show their merge). */
+function ChangesView({ projectId }: { projectId: string }) {
+  const board = useQuery({
+    queryKey: qk.board(projectId),
+    queryFn: () => api.board.get(projectId),
+  });
+  const tasks = (board.data?.tasks ?? [])
+    .filter((t) => !NOT_STARTED.includes(t.status) && (t.pipeline.branch || t.status === 'DONE'))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const [selected, setSelected] = useState<string | null>(null);
+  const current = selected ?? tasks[0]?.id ?? null;
+  const diff = useQuery({
+    queryKey: qk.taskDetail(current ?? '', 'diff'),
+    queryFn: () => api.pipeline.diff(current!),
+    enabled: !!current,
+    retry: false,
+  });
+  if (!tasks.length)
+    return (
+      <div className="text-muted-foreground flex h-full items-center justify-center p-8 text-sm">
+        Changes appear here once agents start working on tasks.
+      </div>
+    );
+  return (
+    <div className="flex h-full min-h-0">
+      <ul className="w-64 shrink-0 overflow-auto border-r p-1" aria-label="Tasks with changes">
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <button
+              onClick={() => setSelected(t.id)}
+              aria-current={current === t.id}
+              className={cn(
+                'hover:bg-accent/60 w-full rounded-md px-2 py-1.5 text-left',
+                current === t.id && 'bg-accent',
+              )}
+            >
+              <span className="flex items-center gap-1.5 text-xs">
+                <span className="font-mono font-medium">{t.key}</span>
+                <TaskStatusBadge status={t.status} className="ml-auto" />
+              </span>
+              <span className="block truncate text-[13px]">{t.title}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="min-w-0 flex-1 overflow-auto p-4" data-testid="code-changes">
+        {diff.isPending ? (
+          <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <Loader2 className="size-4 animate-spin" /> Loading diff…
+          </div>
+        ) : diff.isError ? (
+          <p className="text-destructive text-sm">
+            {diff.error instanceof ApiClientError ? diff.error.message : 'Could not load the diff.'}
+          </p>
+        ) : (
+          <DiffView diff={diff.data} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Read-only code browser: git-aware file tree + Monaco. Secret files are never served. */
+function FilesView({ projectId, path, line, onSelect }: CodeTabProps) {
   const { resolvedTheme } = useTheme();
   const tree = useQuery({
     queryKey: qk.files(projectId),

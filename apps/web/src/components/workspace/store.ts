@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PanelTab = 'terminals' | 'errors' | 'activity';
+export type PanelTab = 'agents' | 'terminals' | 'errors' | 'activity';
 
 interface WorkspaceUi {
   panelOpen: boolean;

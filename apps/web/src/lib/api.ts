@@ -251,7 +251,7 @@ export const api = {
       request<PipelineStatusDto>('POST', `/api/projects/${projectId}/pipeline/pause`),
     resume: (projectId: string) =>
       request<PipelineStatusDto>('POST', `/api/projects/${projectId}/pipeline/resume`),
-    task: (id: string, action: 'pause' | 'resume' | 'cancel' | 'retry' | 'approve-merge') =>
+    task: (id: string, action: 'pause' | 'resume' | 'cancel' | 'retry' | 'fix' | 'approve-merge') =>
       request<TaskDto>('POST', `/api/tasks/${id}/${action}`),
     steer: (id: string, message: string) =>
       request<TaskDto>('POST', `/api/tasks/${id}/steer`, { message }),

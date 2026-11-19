@@ -189,7 +189,7 @@ Approved tasks are built automatically. Each one goes through these steps:
 - **Failures.**
   - An engine usage limit pauses the task (_Paused · quota_) with the reset time.
   - An expired login pauses it (_Paused · login_).
-  - Other failures are retried once, then the task is marked _Failed_.
+  - Other failures are retried once, then the task is marked _Failed_. From a failed task, **Fix with agent** hands the error to the Fixer on the task's branch (then review and tests run again), or **Retry this step** reruns it.
 - **Records.** Every task keeps its runs (prompt, streamed events, tokens, cost), diff, reviews, test runs with logs, and a generated **report**. The Documenter also adds facts to project memory.
 
 ## Usage and quotas
@@ -215,6 +215,8 @@ Approved tasks are built automatically. Each one goes through these steps:
 - **Run.** The project header has **Run**, which starts the project's run command (Overview → Commands) in a terminal. While it runs you get **Stop** and **Restart**. The menu next to it runs **Build**, **Run tests** and **Install dependencies** once each.
 - **Preview.** The local URL your dev server prints is picked up and shown in the **Preview** tab. You can type another URL or open it in a new browser tab.
 - **Code.** A read-only browser of the project's files (respecting `.gitignore`) with syntax highlighting. Files that may contain secrets, such as `.env`, are never shown.
+- **Agents.** The bottom panel's **Agents** tab streams the live output of every agent working on the project.
+- **Changes.** **Code → Changes** shows the diff of each task agents have worked on.
 - **Terminals.** The bottom panel holds the run and build terminals and any shells you open (**New terminal**) in the project folder.
 - **Errors.** AgentForge watches terminal and run output and the pipeline for errors: TypeScript, JavaScript stack traces, Python tracebacks, Go, Rust, Java, failing tests, bundler errors and crashed processes. Repeats are grouped with a count. **Fix with agent** creates a bug task that goes Fix → Review → Test → Document and merges like any other; the error is marked resolved when it's done. You can also ignore, resolve or reopen errors, or jump to the file and line.
 - **Activity.** Every task status change in the project, newest first.

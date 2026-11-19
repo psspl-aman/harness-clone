@@ -180,6 +180,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   });
   const errorService = new ErrorService(dbHandle.db, bus, taskService, terminals);
   errorService.attach();
+  errorService.setTaskFixer((id) => orchestrator.fixFailed(id));
   const runner = new RunService(dbHandle.db, bus, terminals, projects, errorService);
   runner.attach();
   const mcp = new McpService(dbHandle.db, bus, secrets);

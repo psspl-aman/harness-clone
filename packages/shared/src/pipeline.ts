@@ -9,7 +9,9 @@ export interface PipelineState {
   /** Commit the task branch started from (diff base). */
   baseCommit?: string;
   /** What the next fix addresses and where it returns to. */
-  fixSource?: 'review' | 'tests' | 'human';
+  fixSource?: 'review' | 'tests' | 'human' | 'failure';
+  /** What failed, for a fix you requested on a failed task. */
+  failureNote?: string | null;
   /** Role currently running, if any (also tells the UI what is happening). */
   activeRole?: AgentRole | null;
   activeEngine?: string | null;

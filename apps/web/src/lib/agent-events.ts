@@ -25,3 +25,27 @@ export const ROLE_VERB: Record<string, string> = {
   fixer: 'Fixing',
   documenter: 'Documenting',
 };
+
+/** One log line for an agent event (null for events that aren't shown in logs). */
+export function eventLine(e: AgentEvent): { text: string; tone?: string } | null {
+  switch (e.kind) {
+    case 'text':
+      return { text: e.text };
+    case 'tool_call':
+      return {
+        text: `→ ${e.name} ${JSON.stringify(e.input ?? {}).slice(0, 160)}`,
+        tone: 'text-primary',
+      };
+    case 'tool_result':
+      return {
+        text: `  ${e.ok ? '✓' : '✗'} ${(e.output ?? '').slice(0, 300)}`,
+        tone: e.ok ? 'text-muted-foreground' : 'text-destructive',
+      };
+    case 'error':
+      return { text: e.message, tone: 'text-destructive' };
+    case 'log':
+      return e.stream === 'stderr' ? { text: e.line, tone: 'text-warning' } : null;
+    default:
+      return null;
+  }
+}

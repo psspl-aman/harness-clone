@@ -382,6 +382,51 @@ describe('pipeline: failures and pauses', () => {
     expect(task(id).status).toBe('DONE');
   });
 
+  it('"Fix with agent" on a failed task sends it to the Fixer, then review and tests', async () => {
+    script(
+      developer('SA-1', { 'src/a.txt': 'a' }),
+      role('Reviewer', '', { stdout: '', stderr: 'segfault', exitCode: 1 }),
+    );
+    const { planId, tasks } = plan(pt('T1', 'Feature A'));
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+    const id = tasks[0]!.id;
+    expect(task(id)).toMatchObject({ status: 'FAILED', openErrors: 1 });
+
+    // The failure shows up in the Errors panel; fixing it fixes the task in place.
+    const err = (await t.app.inject({ url: `/api/projects/${projectId}/errors` })).json()[0];
+    expect(err).toMatchObject({ source: 'task', taskId: id });
+    script(
+      role('Fixer', 'Fixed the crash.', {
+        stdinIncludes: ['# Role: Fixer', 'The pipeline failed on this task', 'segfault'],
+        writeFiles: { 'src/a.txt': 'a fixed' },
+      }),
+      reviewer(),
+      tester(),
+      documenter(),
+    );
+    const fixed = await t.app.inject({ method: 'POST', url: `/api/errors/${err.id}/fix` });
+    expect(fixed.json()).toMatchObject({ status: 'fixing', fixTaskId: id });
+    expect(task(id).status).toBe('FIXING');
+    await t.ctx.orchestrator.idle();
+    expect(task(id)).toMatchObject({ status: 'DONE', openErrors: 0 });
+    expect(statuses(id).slice(-6)).toEqual([
+      'FAILED',
+      'FIXING',
+      'IN_REVIEW',
+      'IN_TESTING',
+      'DOCUMENTING',
+      'DONE',
+    ]);
+    expect(
+      (await t.app.inject({ url: `/api/projects/${projectId}/errors` })).json()[0].status,
+    ).toBe('resolved');
+    // Not available for tasks that haven't failed.
+    expect((await t.app.inject({ method: 'POST', url: `/api/tasks/${id}/fix` })).statusCode).toBe(
+      409,
+    );
+  });
+
   it('retries a crashed step once, then fails; retry resumes at that step', async () => {
     script(
       developer('SA-1', { 'src/a.txt': 'a' }),

@@ -215,3 +215,18 @@
 - **Real CLI check:** Claude Code 2.1.328 (haiku, about $0.007) with the guard. `rm -rf ../…` was blocked before it ran and the agent reported the reason; `cat .env` waited for approval and ran once approved.
 - **Production build:** `node apps/daemon/dist/main.js` and `next start` were served from a throwaway home: health OK, web 200, Monaco served locally, guard hook installed.
 - **E2E (Playwright, 27 tests in total):** an agent's risky command shows an approval card, _Allow once_ lets it run, the following catastrophic command is blocked with a toast, and answering the approval API directly is refused.
+
+## Spec follow-ups (after Phase 10)
+
+A re-check of the master spec against the build closed these gaps:
+
+- **Failed tasks: "Fix with agent" (§12).**
+  - A failed or stuck task can go back to the **Fixer** on its own branch with what went wrong, then through review and tests again.
+  - It works from the task's banner (next to _Retry this step_ and _Logs_) and from the pipeline-failure error in the Errors panel.
+  - The state machine now allows FAILED → FIXING.
+- **Task cards (§15).** They show the engine each role will use (task override → project → global default) and a badge for open errors.
+- **Live agent activity (§15).** A new **Agents** tab in the bottom panel streams the output of every running agent (and the Planner), one virtualized log per run.
+- **Code tab diffs (§15).** **Code → Changes** lists the tasks agents have worked on and shows each one's diff.
+- **Dashboard errors badge (§4.3)** now updates live.
+
+Verified with Vitest (216 tests: fail → errors badge → Fix with agent from the Errors panel → Fixer → review → tests → done, with the error resolved) and Playwright (27 tests: the pipeline spec now also checks the Agents tab, the engines chip and Code → Changes).

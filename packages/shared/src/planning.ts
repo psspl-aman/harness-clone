@@ -194,6 +194,8 @@ export interface TaskDto {
   origin: string;
   /** Set for tasks imported from a PMS. */
   external: TaskExternalDto | null;
+  /** Open errors recorded against this task (pipeline failures). */
+  openErrors: number;
   pipeline: TaskPipelineDto;
   createdAt: number;
   updatedAt: number;

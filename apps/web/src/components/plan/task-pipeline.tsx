@@ -18,6 +18,8 @@ import {
   RotateCcw,
   Send,
   XCircle,
+  ScrollText,
+  Wand2,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -27,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useNow } from '@/hooks/use-now';
-import { ROLE_VERB } from '@/lib/agent-events';
+import { eventLine, ROLE_VERB } from '@/lib/agent-events';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { clockTime, countdown, timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -122,7 +124,7 @@ function Banner({
   );
 }
 
-export function PipelineControls({ task }: { task: TaskDto }) {
+export function PipelineControls({ task, onShowLogs }: { task: TaskDto; onShowLogs?: () => void }) {
   const act = useMutation({
     mutationFn: (fn: () => Promise<unknown>) => fn(),
     onError: (e) => toast.error('Action failed', { description: errText(e) }),
@@ -186,14 +188,31 @@ export function PipelineControls({ task }: { task: TaskDto }) {
             <p className="text-muted-foreground text-xs break-words whitespace-pre-wrap">
               {task.statusReason ?? task.pipeline.lastError}
             </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => call('retry')}
-              disabled={act.isPending}
-            >
-              <RotateCcw /> Retry this step
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => call('retry')}
+                disabled={act.isPending}
+              >
+                <RotateCcw /> Retry this step
+              </Button>
+              {task.pipeline.branch && (
+                <Button
+                  size="sm"
+                  onClick={() => call('fix')}
+                  disabled={act.isPending}
+                  title="The Fixer gets this error, then the change goes through review and tests again"
+                >
+                  <Wand2 /> Fix with agent
+                </Button>
+              )}
+              {onShowLogs && (
+                <Button size="sm" variant="ghost" onClick={onShowLogs}>
+                  <ScrollText /> Logs
+                </Button>
+              )}
+            </div>
           </Banner>
         )
       )}
@@ -297,31 +316,9 @@ function RunLog({ runId }: { runId: string }) {
       setLive((l) => [...l, { seq: -(l.length + 1), event: e.payload.event }]);
   });
   if (run.isPending) return <Skeleton className="h-20" />;
-  const line = (e: AgentEvent): { text: string; tone?: string } | null => {
-    switch (e.kind) {
-      case 'text':
-        return { text: e.text };
-      case 'tool_call':
-        return {
-          text: `→ ${e.name} ${JSON.stringify(e.input ?? {}).slice(0, 160)}`,
-          tone: 'text-primary',
-        };
-      case 'tool_result':
-        return {
-          text: `  ${e.ok ? '✓' : '✗'} ${(e.output ?? '').slice(0, 300)}`,
-          tone: e.ok ? 'text-muted-foreground' : 'text-destructive',
-        };
-      case 'error':
-        return { text: e.message, tone: 'text-destructive' };
-      case 'log':
-        return e.stream === 'stderr' ? { text: e.line, tone: 'text-warning' } : null;
-      default:
-        return null;
-    }
-  };
   const lines: LogLine[] = [];
   for (const e of [...(run.data?.events ?? []), ...(running ? live : [])]) {
-    const l = line(e.event);
+    const l = eventLine(e.event);
     if (l) lines.push({ key: `${e.seq}`, ...l });
   }
   return <VirtualLog lines={lines} empty={running ? 'Waiting for output…' : 'No output.'} />;

@@ -22,7 +22,7 @@ const PIPELINE: Record<TaskStatus, readonly TaskStatus[]> = {
   PAUSED_MANUAL: [],
   // DONE: you approved the merge ("require my review before merge").
   NEEDS_HUMAN: ['QUEUED', 'FIXING', 'CANCELLED', 'DONE', 'BLOCKED'],
-  FAILED: ['QUEUED', 'CANCELLED'],
+  FAILED: ['QUEUED', 'CANCELLED', 'FIXING'],
   CANCELLED: ['DRAFT'],
 };
 

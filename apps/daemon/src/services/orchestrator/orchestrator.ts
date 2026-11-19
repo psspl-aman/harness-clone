@@ -808,6 +808,32 @@ export class Orchestrator {
     this.schedule();
   }
 
+  /** Send a failed (or stuck) task to the Fixer with what went wrong, then back through review and tests. */
+  fixFailed(taskId: string): void {
+    const t = this.row(taskId);
+    if (t.status !== 'FAILED' && t.status !== 'NEEDS_HUMAN')
+      throw conflict(`${t.key} can only be fixed when it has failed or is waiting for you`);
+    if (t.pipelineState.awaitingMergeReview)
+      throw conflict(`${t.key} is waiting for your merge review — approve it or request changes`);
+    if (!t.worktreePath || !existsSync(t.worktreePath))
+      throw conflict(`${t.key} has no code to fix yet — retry the step instead`);
+    const note = [t.statusReason, t.pipelineState.lastError?.message]
+      .filter((x, i, a): x is string => !!x && a.indexOf(x) === i)
+      .join('\n\n');
+    this.patchState(
+      taskId,
+      { fixSource: 'failure', failureNote: note || null, lastError: null },
+      false,
+    );
+    this.d.db
+      .update(tasks)
+      .set({ fixLoopCount: 0, resumeToStatus: null })
+      .where(eq(tasks.id, taskId))
+      .run();
+    this.d.tasks.transition(taskId, 'FIXING', 'Fix requested by you', 'user');
+    this.schedule();
+  }
+
   /** Message the agent: it's delivered by restarting the current step with the note (resuming the CLI session). */
   steer(taskId: string, raw: unknown): void {
     const { message } = SteerInputSchema.parse(raw);
@@ -1548,7 +1574,9 @@ export class Orchestrator {
     };
   }
 
-  private fixInput(task: TaskRow, source: 'review' | 'tests' | 'human'): FixInput {
+  private fixInput(task: TaskRow, source: 'review' | 'tests' | 'human' | 'failure'): FixInput {
+    if (source === 'failure')
+      return { source, failure: task.pipelineState.failureNote ?? undefined };
     if (source === 'tests') {
       const t = this.latestTests(task.id);
       return { source, testSummary: t?.summary, failures: t ? [t.summary] : [], checkLog: t?.log };

@@ -20,6 +20,7 @@ export function registerPipelineRoutes(app: FastifyInstance, ctx: AppContext): v
   action('resume', (t) => o.resume(t));
   action('cancel', (t) => o.cancel(t));
   action('retry', (t) => o.retry(t));
+  action('fix', (t) => o.fixFailed(t));
   action('steer', (t, b) => o.steer(t, b));
   action('approve-merge', (t) => o.approveMerge(t));
   action('request-changes', (t, b) => o.requestChanges(t, b));

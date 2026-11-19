@@ -132,11 +132,37 @@ export class ErrorService {
     return this.emit(id);
   }
 
-  /** Create a fix task (Fix → Review → Test → Document) for an error. */
+  private taskFixer: ((taskId: string) => void) | null = null;
+
+  /** How to send a failed task back to the Fixer (the orchestrator). */
+  setTaskFixer(fn: (taskId: string) => void): void {
+    this.taskFixer = fn;
+  }
+
+  /**
+   * Fix an error: a failed pipeline task goes back to its Fixer on its own
+   * branch; anything else becomes a fix task (Fix → Review → Test → Document).
+   */
   fix(errorId: string): ErrorDto {
     const e = this.row(errorId);
     if (e.status === 'fixing' && e.fixTaskId)
       throw conflict('A fix task is already working on this error');
+    if (e.source === 'task' && e.taskId && this.taskFixer) {
+      const t = this.db
+        .select({ status: tasks.status, worktree: tasks.worktreePath })
+        .from(tasks)
+        .where(eq(tasks.id, e.taskId))
+        .get();
+      if (t && (t.status === 'FAILED' || t.status === 'NEEDS_HUMAN') && t.worktree) {
+        this.taskFixer(e.taskId);
+        this.db
+          .update(errors)
+          .set({ status: 'fixing', fixTaskId: e.taskId })
+          .where(eq(errors.id, e.id))
+          .run();
+        return this.emit(e.id);
+      }
+    }
     const where = e.filePath
       ? `${e.filePath}${e.line ? `:${e.line}` : ''}${e.column ? `:${e.column}` : ''}`
       : 'unknown location';
@@ -247,6 +273,14 @@ export class ErrorService {
         { taskId },
       );
     }
+    // A fix that was cancelled leaves its errors open again.
+    if (to === 'CANCELLED')
+      for (const x of this.db
+        .select()
+        .from(errors)
+        .where(and(eq(errors.fixTaskId, taskId), eq(errors.status, 'fixing')))
+        .all())
+        if (x.id !== t.sourceErrorId) this.setStatus(x.id, 'open');
     if (t.origin === 'error' && t.sourceErrorId) {
       if (to === 'DONE') this.setStatus(t.sourceErrorId, 'resolved');
       if (to === 'CANCELLED') this.setStatus(t.sourceErrorId, 'open');
@@ -270,6 +304,13 @@ export class ErrorService {
 
   private emit(id: string): ErrorDto {
     const dto = toDto(this.row(id));
+    if (dto.taskId) {
+      try {
+        this.tasks.touch(dto.taskId);
+      } catch {
+        // The task may have been deleted.
+      }
+    }
     this.bus.emit('error.updated', { projectId: dto.projectId, error: dto }, [
       Topics.project(dto.projectId),
     ]);

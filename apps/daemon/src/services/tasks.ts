@@ -24,6 +24,7 @@ import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
   agentRuns,
+  errors,
   plans,
   pmsConnections,
   projects,
@@ -974,6 +975,15 @@ export class TaskService {
       .where(inArray(subtasks.taskId, ids))
       .orderBy(asc(subtasks.orderIndex))
       .all();
+    const errCounts = new Map(
+      this.db
+        .select({ taskId: errors.taskId, n: sql<number>`count(*)` })
+        .from(errors)
+        .where(and(inArray(errors.taskId, ids), eq(errors.status, 'open')))
+        .groupBy(errors.taskId)
+        .all()
+        .map((e) => [e.taskId, Number(e.n)]),
+    );
     const connIds = [
       ...new Set(rows.map((r) => r.pmsConnectionId).filter((x): x is string => !!x)),
     ];
@@ -1009,6 +1019,7 @@ export class TaskService {
         .filter((s) => s.taskId === r.id)
         .map((s) => ({ id: s.id, title: s.title, done: s.done, orderIndex: s.orderIndex })),
       origin: r.origin,
+      openErrors: errCounts.get(r.id) ?? 0,
       external:
         r.pmsConnectionId && r.externalId
           ? {

@@ -186,7 +186,11 @@ test('approve a plan and watch agents build and merge it', async ({ page, reques
   await expect(bar.getByLabel('Live agent activity')).toContainText(
     /Developing|Reviewing|Testing|Documenting/,
   );
+  // The bottom panel streams each running agent's output.
+  await page.getByRole('tab', { name: 'Agents' }).click();
+  await expect(page.getByTestId('agents-pane')).toContainText(/GRE-\d/, { timeout: 10_000 });
   const list = page.getByRole('list', { name: 'Tasks' });
+  await expect(list.getByLabel(/^Engines: Developer Claude Code/).first()).toBeVisible();
   await expect(list.getByText('Done')).toHaveCount(2, { timeout: 60_000 });
   await expect(page.getByText('GRE-1 done').first()).toBeVisible();
   await expect(list.getByRole('progressbar', { name: 'GRE-1 progress' })).toHaveAttribute(
@@ -220,6 +224,13 @@ test('approve a plan and watch agents build and merge it', async ({ page, reques
   await d.getByRole('tab', { name: 'Report' }).click();
   await expect(d.getByRole('heading', { name: 'GRE-1: Hello file' })).toBeVisible();
   await expect(d.getByText('Created the greeting file at the repo root.')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Code → Changes shows each task's diff.
+  await page.getByRole('tab', { name: 'Code', exact: true }).click();
+  await page.getByRole('tab', { name: 'Changes' }).click();
+  await page.getByRole('button', { name: /GRE-1/ }).click();
+  await expect(page.getByTestId('code-changes')).toContainText('gre-1.txt');
 });
 
 test('review before merge: request changes, then approve the merge', async ({ page, request }) => {

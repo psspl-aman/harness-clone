@@ -374,7 +374,7 @@ export function TaskDrawer({
               )}
               {inPipeline && (
                 <>
-                  <PipelineControls task={task} />
+                  <PipelineControls task={task} onShowLogs={() => setTab('activity')} />
                   <PipelineTabs tab={tab} onTab={setTab} />
                 </>
               )}

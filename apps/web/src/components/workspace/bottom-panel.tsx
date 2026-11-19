@@ -4,6 +4,7 @@ import type { ErrorDto, TerminalInfo } from '@agentforge/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
+  Bot,
   Bug,
   CheckCircle2,
   ChevronDown,
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { AgentsPane } from './agents-pane';
 import { useWorkspaceUi, type PanelTab } from './store';
 
 const fail = (title: string) => (e: unknown) =>
@@ -49,6 +51,7 @@ export function BottomPanel({
   const drag = useRef<{ y: number; h: number } | null>(null);
 
   const tabs: { id: PanelTab; label: string; icon: typeof Bug; count?: number }[] = [
+    { id: 'agents', label: 'Agents', icon: Bot },
     { id: 'terminals', label: 'Terminals', icon: SquareTerminal },
     { id: 'errors', label: 'Errors', icon: Bug, count: openErrors },
     { id: 'activity', label: 'Activity', icon: Activity },
@@ -120,6 +123,7 @@ export function BottomPanel({
       </div>
       {panelOpen && (
         <div className="min-h-0 flex-1 border-t">
+          {panelTab === 'agents' && <AgentsPane projectId={projectId} />}
           {panelTab === 'terminals' && <TerminalsPane projectId={projectId} />}
           {panelTab === 'errors' && (
             <ErrorsPane
