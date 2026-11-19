@@ -132,5 +132,5 @@ test('integrations page offers GitHub token connection', async ({ page }) => {
   await page.goto('/integrations');
   await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
   await expect(page.getByLabel('Personal access token')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Connect' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeDisabled();
 });

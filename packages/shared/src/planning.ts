@@ -1,3 +1,4 @@
+import type { TaskExternalDto } from './integrations';
 import { z } from 'zod';
 import {
   AGENT_ROLES,
@@ -191,6 +192,8 @@ export interface TaskDto {
   dependsOn: string[];
   subtasks: SubtaskDto[];
   origin: string;
+  /** Set for tasks imported from a PMS. */
+  external: TaskExternalDto | null;
   pipeline: TaskPipelineDto;
   createdAt: number;
   updatedAt: number;

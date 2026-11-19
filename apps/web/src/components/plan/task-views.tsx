@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { PriorityLabel, TaskStatusBadge, TaskTypeIcon } from './badges';
+import { TicketChip } from './external-ticket';
 import { TaskProgress } from './pipeline-bits';
 
 export interface ViewProps {
@@ -86,6 +87,7 @@ function Row({
           <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-[11px]">
             <PriorityLabel priority={task.priority} />
             <span>· {task.complexity.toUpperCase()}</span>
+            {task.external && <TicketChip task={task} />}
             {task.subtasks.length > 0 && (
               <span>
                 · {done}/{task.subtasks.length} subtasks
@@ -211,6 +213,7 @@ export function TaskBoard({
                   <div className="text-muted-foreground mb-1 flex items-center gap-1.5 text-[11px]">
                     <TaskTypeIcon type={t.type} className="size-3" />
                     <span className="font-mono">{t.key}</span>
+                    <TicketChip task={t} />
                     <span className="ml-auto">
                       <PriorityLabel priority={t.priority} />
                     </span>

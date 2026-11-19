@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const STATUS: Record<TaskStatus, { label: string; cls: string }> = {
+export const STATUS: Record<TaskStatus, { label: string; cls: string }> = {
   DRAFT: { label: 'Draft', cls: 'bg-muted text-muted-foreground' },
   APPROVED: { label: 'Approved', cls: 'bg-primary/12 text-primary border-primary/25' },
   QUEUED: {

@@ -5,7 +5,9 @@ import type {
   ChatMessageDto,
   EngineInfo,
   ErrorDto,
+  McpServerDto,
   PlanBoardDto,
+  PmsMappingDto,
 } from '@agentforge/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -134,6 +136,41 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               void queryClient.invalidateQueries({
                 queryKey: qk.terminals(e.payload.terminal.projectId),
               });
+            break;
+          case 'mcp.updated':
+            queryClient.setQueryData<McpServerDto[]>(qk.mcpServers, (l) => {
+              if (!l) return l;
+              const x = e.payload.server;
+              return l.some((y) => y.id === x.id)
+                ? l.map((y) => (y.id === x.id ? x : y))
+                : [...l, x].sort((a, b) => a.name.localeCompare(b.name));
+            });
+            break;
+          case 'mcp.removed':
+            queryClient.setQueryData<McpServerDto[]>(qk.mcpServers, (l) =>
+              l?.filter((y) => y.id !== e.payload.serverId),
+            );
+            break;
+          case 'pms.connections_changed':
+            void queryClient.invalidateQueries({ queryKey: qk.pmsConnections });
+            void queryClient.invalidateQueries({ queryKey: ['pms', 'mappings'] });
+            break;
+          case 'pms.mapping':
+            queryClient.setQueryData<PmsMappingDto[]>(
+              qk.pmsMappings(e.payload.mapping.projectId),
+              (l) => {
+                if (!l) return l;
+                const x = e.payload.mapping;
+                return l.some((y) => y.id === x.id)
+                  ? l.map((y) => (y.id === x.id ? x : y))
+                  : [...l, x];
+              },
+            );
+            break;
+          case 'pms.mapping_removed':
+            queryClient.setQueryData<PmsMappingDto[]>(qk.pmsMappings(e.payload.projectId), (l) =>
+              l?.filter((y) => y.id !== e.payload.mappingId),
+            );
             break;
           case 'terminal.exit':
             void queryClient.invalidateQueries({ queryKey: ['terminals'] });

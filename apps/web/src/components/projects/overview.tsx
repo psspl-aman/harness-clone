@@ -37,6 +37,7 @@ import { Input } from '@/components/ui/input';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { TrackerLinksCard } from './tracker-links';
 
 const COMMAND_LABELS: Record<(typeof COMMAND_KEYS)[number], string> = {
   install: 'Install',
@@ -434,6 +435,7 @@ export function ProjectOverview({ project: p }: { project: ProjectDetail }) {
       <AnalysisCards project={p} />
       <EnginesCard project={p} />
       <PipelineSettingsCard project={p} />
+      <TrackerLinksCard projectId={p.id} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–7 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota, Run & Terminal) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–8 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota, Run & Terminal, PMS via MCP) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -156,6 +156,17 @@ Approved tasks are built automatically. Each one goes through these steps:
 - **Terminals.** The bottom panel holds the run and build terminals and any shells you open (**New terminal**) in the project folder.
 - **Errors.** AgentForge watches terminal and run output and the pipeline for errors: TypeScript, JavaScript stack traces, Python tracebacks, Go, Rust, Java, failing tests, bundler errors and crashed processes. Repeats are grouped with a count. **Fix with agent** creates a bug task that goes Fix → Review → Test → Document and merges like any other; the error is marked resolved when it's done. You can also ignore, resolve or reopen errors, or jump to the file and line.
 - **Activity.** Every task status change in the project, newest first.
+
+## Issue trackers (via MCP)
+
+AgentForge reads and updates Jira, Linear, GitHub Issues, Asana, ClickUp, Azure DevOps, Trello or any tracker that has an MCP server.
+
+1. **Integrations → Issue trackers → Connect tracker.** Pick the tracker and an MCP server. **New server** is pre-filled with a suggested setup for that tracker; check it against the server's docs. Local servers run as a command (stdio); remote ones use HTTP or SSE. Tokens marked secret are encrypted and never shown again.
+2. **Tools.** Click **Auto-detect** to choose which of the server's tools list issues, change status and add comments, then adjust the argument templates if needed. **Preview** shows what would be imported.
+3. **Project → Overview → Issue tracker → Link.** Choose the tracker project, map its statuses to AgentForge's (for example To Do → Approved, In Progress → Developing, Done → Done), and add filters (assignee, sprint, labels, status) and polling if you like.
+4. **Sync now** (or wait for polling). Open tickets become **draft tasks** with a link back to the ticket. With _Planner adds criteria and subtasks_ on, the Planner fills in acceptance criteria, affected areas and subtasks for you to review. Nothing is built until you approve.
+5. **Write-back.** As a task moves through the pipeline, its ticket moves to the mapped status. When the task is done, AgentForge comments with a summary, the PR or branch, and the tokens, cost and time used.
+6. **Changes during work.** If a ticket is edited or closed after you approved its task, the task shows the change. **Apply** updates the task and tells the agent (or cancels the task if the ticket was closed), or keep the task as it is.
 
 ## Configuration
 

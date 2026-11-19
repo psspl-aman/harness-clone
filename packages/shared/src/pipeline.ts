@@ -1,3 +1,4 @@
+import type { PmsConflictDto } from './integrations';
 import { z } from 'zod';
 import type { AgentRole, EngineErrorKind, MemoryKind, RunStatus } from './enums';
 import { MEMORY_KINDS } from './enums';
@@ -34,6 +35,12 @@ export interface PipelineState {
   quotaProbe?: number;
   /** Set when resuming after a pause: continue the interrupted role's session. */
   resumeHint?: { role: AgentRole; sessionId: string | null; summary: string } | null;
+  /** The PMS ticket changed while the task was in progress. */
+  pmsConflict?: PmsConflictDto | null;
+  /** Hash of the ticket fields last accepted from the PMS (change detection). */
+  pmsSeen?: string;
+  /** Hash of the ticket as shown in `pmsConflict` (accepted when it's resolved). */
+  pmsPendingSeen?: string;
 }
 
 export interface TaskPipelineDto {

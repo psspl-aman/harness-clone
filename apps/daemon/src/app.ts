@@ -7,6 +7,9 @@ import { registerRuntimeRoutes } from './routes/runtime';
 import { ErrorService } from './services/errors/error-service';
 import { RunService } from './services/run-service';
 import { FileService } from './services/files';
+import { registerIntegrationRoutes } from './routes/integrations';
+import { McpService } from './services/mcp/mcp-service';
+import { PmsService } from './services/pms/pms-service';
 import { UsageService } from './services/usage';
 import { Orchestrator } from './services/orchestrator/orchestrator';
 import { PlannerService } from './services/planner/service';
@@ -43,6 +46,7 @@ export interface BuildOptions {
   github?: GithubServiceOptions;
   engines?: { autoRefresh?: boolean; extraPath?: string[] };
   orchestrator?: { autoStart?: boolean };
+  pms?: { autoPoll?: boolean };
 }
 
 export interface BuiltApp {
@@ -150,6 +154,18 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   errorService.attach();
   const runner = new RunService(dbHandle.db, bus, terminals, projects, errorService);
   runner.attach();
+  const mcp = new McpService(dbHandle.db, bus, secrets);
+  const pms = new PmsService({
+    db: dbHandle.db,
+    bus,
+    mcp,
+    tasks: taskService,
+    planner,
+    orchestrator,
+    log: app.log,
+    autoPoll: opts.pms?.autoPoll ?? process.env.NODE_ENV !== 'test',
+  });
+  pms.attach();
   // Work interrupted by a restart can't be resumed mid-stream: mark it failed.
   runs.failOrphans();
   planner.failOrphans();
@@ -187,6 +203,8 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     errors: errorService,
     runner,
     files: new FileService(dbHandle.db),
+    mcp,
+    pms,
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -214,14 +232,18 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerPipelineRoutes(app, ctx);
   registerUsageRoutes(app, ctx);
   registerRuntimeRoutes(app, ctx);
+  registerIntegrationRoutes(app, ctx);
 
   app.addHook('onReady', async () => {
     projects.resumeInterruptedOnboarding();
     orchestrator.start();
+    mcp.start();
   });
 
   app.addHook('onClose', async () => {
+    await pms.stop();
     await orchestrator.stop();
+    await mcp.stop();
     await planner.stop();
     await engineRegistry.stop();
     runner.stopAll();

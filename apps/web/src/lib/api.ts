@@ -44,6 +44,17 @@ import type {
   ErrorDto,
   FileContentDto,
   ProjectRunDto,
+  McpServerDto,
+  McpServerInput,
+  PmsConnectionDto,
+  PmsConnectionInput,
+  PmsIssue,
+  PmsMappingDto,
+  PmsMappingInput,
+  PmsProviderPreset,
+  PmsSyncResultDto,
+  PmsToolMap,
+  PmsFilters,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -163,6 +174,10 @@ export const api = {
     terminals: (projectId: string) => ['terminals', projectId] as const,
     files: (projectId: string) => ['files', projectId] as const,
     file: (projectId: string, path: string) => ['files', projectId, path] as const,
+    mcpServers: ['mcp', 'servers'] as const,
+    pmsProviders: ['pms', 'providers'] as const,
+    pmsConnections: ['pms', 'connections'] as const,
+    pmsMappings: (projectId: string) => ['pms', 'mappings', projectId] as const,
     references: (projectId: string, q: string) =>
       request<ReferenceSuggestions>(
         'GET',
@@ -297,6 +312,41 @@ export const api = {
         `/api/projects/${projectId}/file?${new URLSearchParams({ path })}`,
       ),
   },
+  mcp: {
+    list: () => request<McpServerDto[]>('GET', '/api/mcp/servers'),
+    create: (v: McpServerInput) => request<McpServerDto>('POST', '/api/mcp/servers', v),
+    update: (id: string, v: McpServerInput) =>
+      request<McpServerDto>('PUT', `/api/mcp/servers/${id}`, v),
+    remove: (id: string) => request<void>('DELETE', `/api/mcp/servers/${id}`),
+    test: (id: string) => request<McpServerDto>('POST', `/api/mcp/servers/${id}/test`),
+  },
+  pms: {
+    providers: () => request<PmsProviderPreset[]>('GET', '/api/pms/providers'),
+    connections: () => request<PmsConnectionDto[]>('GET', '/api/pms/connections'),
+    createConnection: (v: PmsConnectionInput) =>
+      request<PmsConnectionDto>('POST', '/api/pms/connections', v),
+    updateConnection: (id: string, v: PmsConnectionInput) =>
+      request<PmsConnectionDto>('PUT', `/api/pms/connections/${id}`, v),
+    removeConnection: (id: string) => request<void>('DELETE', `/api/pms/connections/${id}`),
+    detect: (mcpServerId: string, provider: string) =>
+      request<PmsToolMap>('POST', '/api/pms/detect', { mcpServerId, provider }),
+    preview: (v: {
+      mcpServerId: string;
+      toolMap: PmsToolMap;
+      externalProject: string;
+      filters?: PmsFilters;
+    }) => request<{ issues: PmsIssue[]; total: number }>('POST', '/api/pms/preview', v),
+    mappings: (projectId: string) =>
+      request<PmsMappingDto[]>('GET', `/api/projects/${projectId}/pms`),
+    createMapping: (projectId: string, v: PmsMappingInput) =>
+      request<PmsMappingDto>('POST', `/api/projects/${projectId}/pms`, v),
+    updateMapping: (id: string, v: Partial<Omit<PmsMappingInput, 'connectionId'>>) =>
+      request<PmsMappingDto>('PATCH', `/api/pms/mappings/${id}`, v),
+    removeMapping: (id: string) => request<void>('DELETE', `/api/pms/mappings/${id}`),
+    sync: (id: string) => request<PmsSyncResultDto>('POST', `/api/pms/mappings/${id}/sync`),
+    resolveConflict: (taskId: string, action: 'apply' | 'dismiss') =>
+      request<TaskDto>('POST', `/api/tasks/${taskId}/pms-conflict`, { action }),
+  },
   terminals: {
     list: (projectId: string) =>
       request<TerminalInfo[]>('GET', `/api/terminals?${new URLSearchParams({ projectId })}`),
@@ -349,6 +399,10 @@ export const qk = {
   terminals: (projectId: string) => ['terminals', projectId] as const,
   files: (projectId: string) => ['files', projectId] as const,
   file: (projectId: string, path: string) => ['files', projectId, path] as const,
+  mcpServers: ['mcp', 'servers'] as const,
+  pmsProviders: ['pms', 'providers'] as const,
+  pmsConnections: ['pms', 'connections'] as const,
+  pmsMappings: (projectId: string) => ['pms', 'mappings', projectId] as const,
   references: (projectId: string, q: string) => ['references', projectId, q] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,

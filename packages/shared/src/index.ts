@@ -9,3 +9,4 @@ export * from './engines';
 export * from './planning';
 export * from './pipeline';
 export * from './runtime';
+export * from './integrations';

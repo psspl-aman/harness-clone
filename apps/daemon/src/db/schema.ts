@@ -26,6 +26,10 @@ import type {
   EngineErrorKind,
   ErrorSource,
   McpTransport,
+  McpToolDto,
+  PmsFilters,
+  PmsSyncResultDto,
+  PmsToolMap,
   MemoryKind,
   MemoryScope,
   PlanStatus,
@@ -593,7 +597,7 @@ export const mcpServers = sqliteTable('mcp_servers', {
   enabled: bool('enabled').notNull().default(true),
   lastStatus: text('last_status').$type<'unknown' | 'ok' | 'error'>().notNull().default('unknown'),
   lastError: text('last_error'),
-  toolsCache: json<{ name: string; description?: string }[]>('tools_cache')
+  toolsCache: json<McpToolDto[]>('tools_cache')
     .notNull()
     .default(sql`'[]'`),
   lastCheckedAt: integer('last_checked_at'),
@@ -608,8 +612,8 @@ export const pmsConnections = sqliteTable('pms_connections', {
   mcpServerId: text('mcp_server_id')
     .notNull()
     .references(() => mcpServers.id, { onDelete: 'cascade' }),
-  /** Which MCP tool names implement list/get/update/comment for this provider. */
-  toolMap: json<Record<string, string>>('tool_map')
+  /** Which MCP tools (and argument templates) implement list/get/update/comment. */
+  toolMap: json<PmsToolMap>('tool_map')
     .notNull()
     .default(sql`'{}'`),
   createdAt: createdAt(),
@@ -630,12 +634,15 @@ export const pmsMappings = sqliteTable(
     statusMap: json<Record<string, TaskStatus>>('status_map')
       .notNull()
       .default(sql`'{}'`),
-    filters: json<Record<string, string | string[]>>('filters')
+    filters: json<PmsFilters>('filters')
       .notNull()
       .default(sql`'{}'`),
     pollingIntervalSec: integer('polling_interval_sec'),
     writeBack: bool('write_back').notNull().default(true),
+    autoEnrich: bool('auto_enrich').notNull().default(true),
     lastSyncedAt: integer('last_synced_at'),
+    lastError: text('last_error'),
+    lastResult: json<PmsSyncResultDto>('last_result'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

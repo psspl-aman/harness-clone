@@ -18,12 +18,14 @@ import {
   type TaskStatus,
   type TaskStatusChangeDto,
   type ActivityItemDto,
+  type PmsProvider,
 } from '@agentforge/shared';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
   agentRuns,
   plans,
+  pmsConnections,
   projects,
   subtasks,
   taskDependencies,
@@ -684,6 +686,75 @@ export class TaskService {
     return dto;
   }
 
+  /** A ticket imported from a PMS: lands as a draft, linked to its source. */
+  createImported(
+    projectId: string,
+    v: {
+      title: string;
+      description: string;
+      type: TaskDto['type'];
+      connectionId: string;
+      externalId: string;
+      externalUrl: string | null;
+      externalUpdatedAt: number | null;
+    },
+  ): TaskDto {
+    const plan = this.latestPlan(projectId);
+    let id = '';
+    this.db.transaction((tx) => {
+      id = this.insertTask(tx as unknown as Db, projectId, {
+        planId: plan?.id ?? null,
+        requirementId: null,
+        title: v.title,
+        description: v.description,
+        type: v.type,
+        priority: 'medium',
+        complexity: 'm',
+        acceptanceCriteria: [],
+        affectedAreas: [],
+        roleEngines: {},
+        orderIndex: this.maxOrder(projectId) + 1,
+        origin: 'pms',
+        status: 'DRAFT',
+        pipelineState: {},
+        pmsConnectionId: v.connectionId,
+        externalId: v.externalId,
+        externalUrl: v.externalUrl,
+        externalUpdatedAt: v.externalUpdatedAt,
+      });
+    });
+    if (plan) this.syncPlanApproval(plan.id);
+    const dto = this.get(id);
+    this.emitTask(dto);
+    return dto;
+  }
+
+  /** Raw row lookup for a PMS ticket (null if never imported). */
+  findImported(connectionId: string, externalId: string): TaskRow | null {
+    return (
+      this.db
+        .select()
+        .from(tasks)
+        .where(and(eq(tasks.pmsConnectionId, connectionId), eq(tasks.externalId, externalId)))
+        .get() ?? null
+    );
+  }
+
+  /** Apply PMS-side fields (and pipeline-state patch) to an imported task without status checks. */
+  updateImported(
+    taskId: string,
+    v: Partial<Pick<TaskRow, 'title' | 'description' | 'externalUrl' | 'externalUpdatedAt'>>,
+    state?: Partial<TaskRow['pipelineState']>,
+  ): TaskDto {
+    const row = this.row(taskId);
+    this.db
+      .update(tasks)
+      .set({ ...v, ...(state ? { pipelineState: { ...row.pipelineState, ...state } } : {}) })
+      .where(eq(tasks.id, taskId))
+      .run();
+    return this.touch(taskId);
+  }
+
   /** System-created follow-up task (e.g. conflict resolution), already approved. */
   createFollowUp(
     projectId: string,
@@ -759,13 +830,17 @@ export class TaskService {
               ? 'Created to resolve merge conflicts'
               : v.origin === 'error'
                 ? 'Created to fix a detected error'
-                : 'Created by you',
+                : v.origin === 'pms'
+                  ? 'Imported from the issue tracker'
+                  : 'Created by you',
         actor:
           v.origin === 'planner'
             ? 'planner'
             : v.origin === 'conflict' || v.origin === 'error'
               ? 'orchestrator'
-              : 'user',
+              : v.origin === 'pms'
+                ? 'pms'
+                : 'user',
       })
       .run();
     return id;
@@ -899,6 +974,19 @@ export class TaskService {
       .where(inArray(subtasks.taskId, ids))
       .orderBy(asc(subtasks.orderIndex))
       .all();
+    const connIds = [
+      ...new Set(rows.map((r) => r.pmsConnectionId).filter((x): x is string => !!x)),
+    ];
+    const providers = new Map(
+      connIds.length
+        ? this.db
+            .select({ id: pmsConnections.id, provider: pmsConnections.provider })
+            .from(pmsConnections)
+            .where(inArray(pmsConnections.id, connIds))
+            .all()
+            .map((c) => [c.id, c.provider as PmsProvider])
+        : [],
+    );
     return rows.map((r) => ({
       id: r.id,
       projectId: r.projectId,
@@ -921,6 +1009,17 @@ export class TaskService {
         .filter((s) => s.taskId === r.id)
         .map((s) => ({ id: s.id, title: s.title, done: s.done, orderIndex: s.orderIndex })),
       origin: r.origin,
+      external:
+        r.pmsConnectionId && r.externalId
+          ? {
+              connectionId: r.pmsConnectionId,
+              provider: providers.get(r.pmsConnectionId) ?? null,
+              id: r.externalId,
+              url: r.externalUrl,
+              updatedAt: r.externalUpdatedAt,
+              conflict: r.pipelineState.pmsConflict ?? null,
+            }
+          : null,
       pipeline: {
         branch: r.branchName,
         fixLoops: r.fixLoopCount,

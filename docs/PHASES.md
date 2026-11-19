@@ -9,8 +9,8 @@
 | 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | ✅ Done |
 | 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | ✅ Done |
 | 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | ✅ Done |
-| 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | ⏳ Next |
-| 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | —       |
+| 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | ✅ Done |
+| 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | ⏳ Next |
 | 10  | **Polish & Hardening**: safety guards, more E2E coverage, UX polish                                                              | —       |
 
 ## Phase 1: what was verified
@@ -181,3 +181,15 @@
   - A failed task appears as a pipeline error.
   - The file browser lists files git-aware and refuses `.env`, `.git/`, paths outside the project and binary contents.
 - **E2E (Playwright, 24 tests in total):** run a real Node server from the header, see it in the Preview iframe, run Build from the menu and get the error badge, jump from the error to the file in Monaco, create a fix task, type into a shell terminal, then stop the server.
+
+## Phase 8: what was verified
+
+- **Unit and integration (Vitest, 201 tests in total):**
+  - Argument templates (`{{var}}`, `{{var|number}}`, dropped empty filters), finding the issue list in a tool result (wrapper keys, GraphQL edges, explicit path), and normalising Jira-, GitHub- and Atlassian-document-shaped issues.
+  - Tool-map auto-detection from tool names and input schemas.
+  - MCP servers over stdio and Streamable HTTP against a fake tracker server: secret env vars and headers are stored encrypted and never returned, kept when not re-entered and deleted with the server; connection tests list tools; a server that fails to start reports its stderr.
+  - Sync: open tickets become linked DRAFT tasks (closed ones are skipped), a re-sync is a no-op, a changed draft follows its ticket, a closed draft is cancelled.
+  - A ticket changed or closed while its task is approved or in progress is flagged once, with a notification. Applying updates the task and tells the agent, or cancels it; dismissing keeps it.
+  - Write-back: each status change moves the ticket to the mapped status, and finishing posts a completion comment with summary, branch or PR and usage. Failures are reported on the link and as a notification.
+  - Planner enrichment of imported tickets (acceptance criteria, affected areas, subtasks).
+- **E2E (Playwright, 25 tests in total):** add an MCP server with a secret env var in the UI, connect a tracker with auto-detect and preview, link a project, sync, open an imported task, approve it (status written back), then apply a ticket change flagged on the task.

@@ -1,3 +1,4 @@
+import type { McpServerDto, PmsMappingDto } from './integrations';
 import { z } from 'zod';
 import { AUTH_STATUSES, TASK_STATUSES } from './enums';
 import { AppSettingsSchema } from './settings';
@@ -39,6 +40,11 @@ export const EventPayloads = {
   'pipeline.updated': z.object({ status: z.custom<PipelineStatusDto>() }),
   'error.updated': z.object({ projectId: z.string(), error: z.custom<ErrorDto>() }),
   'project.run': z.object({ run: z.custom<ProjectRunDto>() }),
+  'mcp.updated': z.object({ server: z.custom<McpServerDto>() }),
+  'mcp.removed': z.object({ serverId: z.string() }),
+  'pms.connections_changed': z.object({}),
+  'pms.mapping': z.object({ mapping: z.custom<PmsMappingDto>() }),
+  'pms.mapping_removed': z.object({ projectId: z.string(), mappingId: z.string() }),
   'engine.removed': z.object({ engineId: z.string() }),
   /** High-volume, transient: not kept in the replay buffer. */
   'run.event': z.object({ runId: z.string(), event: z.custom<AgentEvent>() }),

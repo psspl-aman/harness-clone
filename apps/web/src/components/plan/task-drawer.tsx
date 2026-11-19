@@ -48,6 +48,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { TaskStatusBadge, statusLabel } from './badges';
+import { ExternalTicket } from './external-ticket';
 import { InstructionsDialog, SplitDialog } from './dialogs';
 import { PipelineControls, PipelinePanel, PipelineTabs, type PipelineTab } from './task-pipeline';
 import { cn } from '@/lib/utils';
@@ -364,6 +365,7 @@ export function TaskDrawer({
                   </Button>
                 )}
               </div>
+              <ExternalTicket task={task} />
               {!editable && task.status !== 'DONE' && (
                 <p className="text-muted-foreground text-xs">
                   An agent is working on this task — editing is locked until it finishes or is

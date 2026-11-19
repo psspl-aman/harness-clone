@@ -254,6 +254,30 @@ export class PlannerService {
     return this.state(task.projectId);
   }
 
+  /**
+   * Rewrite draft tasks one at a time with the Planner (e.g. tickets imported
+   * from a PMS), waiting for whatever the project's Planner is already doing.
+   * Tasks that are no longer drafts are skipped.
+   */
+  async enrich(taskIds: string[], instructions: string): Promise<void> {
+    for (const id of taskIds) {
+      let task;
+      try {
+        task = this.d.tasks.get(id);
+      } catch {
+        continue;
+      }
+      while (this.running.get(task.projectId)) await this.running.get(task.projectId)!.done;
+      try {
+        if (this.d.tasks.get(id).status !== 'DRAFT') continue;
+      } catch {
+        continue;
+      }
+      this.regenerateTask(id, { instructions });
+      await this.running.get(task.projectId)?.done;
+    }
+  }
+
   cancel(projectId: string): void {
     const r = this.running.get(projectId);
     if (!r) throw notFound('Running planner');

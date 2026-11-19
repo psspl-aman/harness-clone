@@ -208,6 +208,17 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
 - **Fix tasks:** `fix()` creates an approved follow-up task (`origin = error`, `source_error_id`). The orchestrator runs its first step with the **Fixer** role and `fixerPrompt(source: 'error')`, then the usual Review → Test → Document → Merge. The task finishing resolves the error; cancelling it reopens it.
 - **`services/files.ts`:** the read-only Code tab. The tree is `git ls-files --cached --others --exclude-standard`. Reads are confined to the project, refuse `.git/` and anything matching the secret-file pattern, cap at 1 MB and flag binaries.
 
+## Issue trackers via MCP (Phase 8)
+
+- **`services/mcp/mcp-service.ts`:** MCP servers using `@modelcontextprotocol/sdk` clients (`StdioClientTransport` with `getDefaultEnvironment()` plus the configured env and stderr captured for errors; `StreamableHTTPClientTransport`; legacy `SSEClientTransport`). Secret env vars and headers live in `SecretStore` under `mcp:<id>:<env|header>:<key>`, and the row stores `secret:<name>`. Connections are pooled per server, closed after 2 minutes idle or on config change, and reconnected once if dropped. Tool results are parsed from `structuredContent` or JSON text.
+- **`services/pms/normalize.ts`:** the provider-agnostic part. Argument templates, locating the issue list in any JSON result, normalising issues with candidate field paths (overridable per connection), client-side filters, and tool-map detection from tool names and input schemas.
+- **`services/pms/presets.ts`:** provider presets (GitHub Issues, Jira, Linear, Asana, ClickUp, Azure DevOps, Trello, custom). They are suggestions: the UI lists the server's real tools, and `detect` only keeps preset tools that exist.
+- **`services/pms/pms-service.ts`:**
+  - **Sync:** list → normalise → filter. A new open ticket becomes a DRAFT task (`origin = pms`, `pms_connection_id`, `external_id`, `external_url`). Changes are detected by a hash of title, description and status stored in `pipelineState.pmsSeen`. Drafts follow their ticket, or are cancelled when it closes. For approved or active tasks the change is stored as `pipelineState.pmsConflict` (raised once per version) and resolved by the user: apply updates the task and steers the agent, or cancels a closed ticket's task.
+  - **Enrichment:** `PlannerService.enrich()` queues `regenerate_task` runs after any running Planner job.
+  - **Write-back:** a per-task queue on `task.status_changed`. It moves the ticket to the external status mapped to the new task status, and comments on DONE (documenter summary, PR or branch, fix loops, tokens, cost, time) and on FAILED. Cancellations that came from the tracker aren't echoed back.
+  - **Polling:** every 15 s, mappings whose interval has elapsed are synced.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.
@@ -220,7 +231,8 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - New-project wizard (`/projects/new`): one flow for starting from scratch and one for attaching an existing project. It has a side stepper, validates each step, checks paths live, and lets you connect GitHub without leaving the wizard.
   - Project page (`/projects/[id]`): live onboarding status, editable commands showing where each was detected, stack, conventions, structure, git state, env file names, requirements, per-role engine overrides, and removal with a typed confirmation.
   - Project workspace: run controls in the header (Run, Stop, Restart and a menu for build, test and install); **Preview** (iframe of the detected URL, editable); **Code** (git-aware file tree and read-only Monaco, served from `public/monaco`, which `scripts/copy-monaco.mjs` copies from `node_modules` before `dev` and `build`); and a resizable bottom panel with **Terminals**, **Errors** (count badge, Fix with agent, ignore, resolve, jump to file) and **Activity**.
-  - Integrations: connect GitHub.
+  - Integrations: issue-tracker connections (provider presets, MCP server picker or "New server" pre-filled from the preset, a tool-map editor with auto-detect, field paths and a live preview), MCP servers (stdio/HTTP/SSE, env and header editor with write-only secrets, test, tool list), and GitHub.
+  - Project Overview → Issue tracker: links with status mapping, filters, polling, write-back and enrichment toggles, Sync now and the last result or error. Imported tasks show their ticket id on rows and cards; the task drawer links to the ticket and shows tracker changes to apply or dismiss.
   - Agents & Accounts (`/agents`): one card per engine.
     - Status pill (with a reset countdown when a limit is hit), version and account.
     - Usage-window bars.

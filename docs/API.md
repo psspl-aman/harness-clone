@@ -173,3 +173,30 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 | GET    | `/api/projects/:id/file?path=`                  | `FileContentDto` (first 1 MB). 403 for secret files, 400 for `.git/` or invalid paths                              |
 
 Live events: `project.run` (run state changes) and `error.updated` (an error was recorded or changed status).
+
+## MCP servers and issue trackers
+
+| Method | Path                          | Description                                                                                                                         |
+| ------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/mcp/servers`            | `McpServerDto[]`. Secret env vars and headers come back as `{ key, secret: true, value: null }`                                     |
+| POST   | `/api/mcp/servers`            | Create: `name`, `transport` (`stdio`, `http`, `sse`), `command` + `args` + `env`, or `url` + `headers`, `enabled`                   |
+| PUT    | `/api/mcp/servers/:id`        | Replace the config. A secret sent without a value keeps the stored one                                                              |
+| DELETE | `/api/mcp/servers/:id`        | Remove the server, its secrets and its tracker connections                                                                          |
+| POST   | `/api/mcp/servers/:id/test`   | Connect, list tools, and store `lastStatus`, `lastError` and `tools`                                                                |
+| GET    | `/api/pms/providers`          | Provider presets: suggested server setup, tool map and status map                                                                   |
+| GET    | `/api/pms/connections`        | `PmsConnectionDto[]`                                                                                                                |
+| POST   | `/api/pms/connections`        | Create: `name`, `provider`, `mcpServerId`, `toolMap` (`list`, `get`, `updateStatus`, `comment`, `fields`)                           |
+| PUT    | `/api/pms/connections/:id`    | Replace a connection                                                                                                                |
+| DELETE | `/api/pms/connections/:id`    | Remove a connection and its project links                                                                                           |
+| POST   | `/api/pms/detect`             | `{ mcpServerId, provider }` → suggested `PmsToolMap` from the server's tools                                                        |
+| POST   | `/api/pms/preview`            | `{ mcpServerId, toolMap, externalProject, filters? }` → `{ issues, total }` (first 25), without saving anything                     |
+| GET    | `/api/projects/:id/pms`       | The project's tracker links (`PmsMappingDto[]`)                                                                                     |
+| POST   | `/api/projects/:id/pms`       | Link: `connectionId`, `externalProject`, `statusMap`, `filters`, `pollingIntervalSec`, `writeBack`, `autoEnrich` (409 if duplicate) |
+| PATCH  | `/api/pms/mappings/:id`       | Update a link                                                                                                                       |
+| DELETE | `/api/pms/mappings/:id`       | Unlink (imported tasks stay)                                                                                                        |
+| POST   | `/api/pms/mappings/:id/sync`  | Sync now → `PmsSyncResultDto` (`total`, `created`, `updated`, `unchanged`, `skipped`, `conflicts`, `errors`)                        |
+| POST   | `/api/tasks/:id/pms-conflict` | `{ action: 'apply' \| 'dismiss' }` for a ticket that changed while the task was in progress                                         |
+
+Tool-map argument templates: a string that is exactly `{{var}}` is replaced by the raw value (`{{var|number}}` converts to a number), and `{{var}}` inside a longer string is interpolated. Arguments that render empty are dropped. Variables: `project`, `owner` and `repo` (from `owner/repo`), `limit`, `filters.assignee`, `filters.sprint`, `filters.labels`, `filters.status`, plus `issueId`, `status` and `body` for write-back.
+
+`TaskDto.external` is set for imported tasks: `connectionId`, `provider`, `id`, `url`, `updatedAt` and `conflict`. Live events: `mcp.updated`, `mcp.removed`, `pms.connections_changed`, `pms.mapping` and `pms.mapping_removed`.
