@@ -47,6 +47,7 @@ import { newId } from '../../lib/id';
 import type { GithubService } from '../github';
 import { extractJson } from '../planner/parse';
 import type { RunRecorder } from '../runs';
+import type { MemoryService } from '../memory';
 import type { SettingsService } from '../settings';
 import type { TaskService } from '../tasks';
 import * as gitops from './git-ops';
@@ -92,6 +93,7 @@ export interface OrchestratorDeps {
   engines: EngineRegistry;
   runs: RunRecorder;
   settings: SettingsService;
+  memory: MemoryService;
   github: GithubService;
   home: string;
   log: {
@@ -1459,14 +1461,12 @@ export class Orchestrator {
 
   private context(task: TaskRow, project: ProjectRow): RoleContext {
     const dto = this.d.tasks.get(task.id);
-    const memory = this.d.db
-      .select()
-      .from(memoryEntries)
-      .where(and(eq(memoryEntries.projectId, project.id), eq(memoryEntries.scope, 'project')))
-      .all()
-      .concat(
-        this.d.db.select().from(memoryEntries).where(eq(memoryEntries.scope, 'global')).all(),
-      );
+    const memory = this.d.memory.forPrompt(
+      project.id,
+      [dto.title, dto.description, ...dto.acceptanceCriteria, ...dto.affectedAreas].join(' '),
+      undefined,
+      task.id,
+    );
     const deps = this.dependencyRows(task.id).map((d) => ({
       key: d.key,
       title: d.title,
@@ -1487,7 +1487,7 @@ export class Orchestrator {
         commands: project.commands as Record<string, string | null>,
         conventions: project.onboardingReport?.conventions ?? [],
       },
-      memory: memory.map((m) => ({ title: m.title, content: m.content, pinned: m.pinned })),
+      memory,
       memoryBudget: this.d.settings.get().memory.maxPromptChars,
       task: dto,
       dependencies: deps,

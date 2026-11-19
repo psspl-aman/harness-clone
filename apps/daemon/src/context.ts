@@ -19,6 +19,8 @@ import type { RunService } from './services/run-service';
 import type { FileService } from './services/files';
 import type { McpService } from './services/mcp/mcp-service';
 import type { PmsService } from './services/pms/pms-service';
+import type { MemoryService } from './services/memory';
+import type { DocsService } from './services/docs';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -43,6 +45,8 @@ export interface AppContext {
   files: FileService;
   mcp: McpService;
   pms: PmsService;
+  memory: MemoryService;
+  docs: DocsService;
   workspaceRoot: () => string;
   startedAt: number;
 }

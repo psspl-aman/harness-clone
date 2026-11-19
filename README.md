@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–8 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota, Run & Terminal, PMS via MCP) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–9 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota, Run & Terminal, PMS via MCP, Memory & Docs) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -167,6 +167,16 @@ AgentForge reads and updates Jira, Linear, GitHub Issues, Asana, ClickUp, Azure 
 4. **Sync now** (or wait for polling). Open tickets become **draft tasks** with a link back to the ticket. With _Planner adds criteria and subtasks_ on, the Planner fills in acceptance criteria, affected areas and subtasks for you to review. Nothing is built until you approve.
 5. **Write-back.** As a task moves through the pipeline, its ticket moves to the mapped status. When the task is done, AgentForge comments with a summary, the PR or branch, and the tokens, cost and time used.
 6. **Changes during work.** If a ticket is edited or closed after you approved its task, the task shows the change. **Apply** updates the task and tells the agent (or cancels the task if the ticket was closed), or keep the task as it is.
+
+## Memory and documentation
+
+- **Project memory (Memory tab).** Facts agents should know about the project: stack, architecture, conventions, commands, decisions, pitfalls, glossary and features. Project analysis and the Documenter add entries automatically, and you can add, edit, pin or delete your own. **Completed tasks** holds a summary of each finished task.
+- **What agents see.** Every agent prompt includes pinned entries, your global preferences, conventions, commands and pitfalls, plus the entries most relevant to the task, up to the budget in **Settings → Memory & workspace**.
+- **Readable copy.** Memory is mirrored to `.agentforge/memory.md` in the project folder. It is kept out of git and can be turned off in Settings.
+- **Global preferences (Settings).** Coding style and preferred libraries, applied to every project.
+- **Docs tab.**
+  - Lists the project's Markdown (README, CHANGELOG, architecture and other docs, which the Documenter keeps up to date) and a **report for every finished task**: what changed and why, files, review, tests, token usage and limitations.
+  - Download any document as Markdown, export everything as one file, or use **PDF** to print or save it.
 
 ## Configuration
 

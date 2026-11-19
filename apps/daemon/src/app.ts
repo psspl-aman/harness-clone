@@ -9,6 +9,9 @@ import { RunService } from './services/run-service';
 import { FileService } from './services/files';
 import { registerIntegrationRoutes } from './routes/integrations';
 import { McpService } from './services/mcp/mcp-service';
+import { MemoryService } from './services/memory';
+import { DocsService } from './services/docs';
+import { registerMemoryDocsRoutes } from './routes/memory-docs';
 import { PmsService } from './services/pms/pms-service';
 import { UsageService } from './services/usage';
 import { Orchestrator } from './services/orchestrator/orchestrator';
@@ -127,6 +130,8 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     if (e.type === 'settings.updated') engineRegistry.reschedule();
   });
 
+  const memory = new MemoryService(dbHandle.db, bus, settings);
+  const files = new FileService(dbHandle.db);
   const runs = new RunRecorder(dbHandle.db, bus, () => settings.get().pricing);
   const taskService = new TaskService(dbHandle.db, bus);
   const planner = new PlannerService({
@@ -136,6 +141,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     engines: engineRegistry,
     runs,
     settings,
+    memory,
     log: app.log,
   });
   const orchestrator = new Orchestrator({
@@ -145,6 +151,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     engines: engineRegistry,
     runs,
     settings,
+    memory,
     github,
     home: config.home,
     log: app.log,
@@ -169,6 +176,13 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   // Work interrupted by a restart can't be resumed mid-stream: mark it failed.
   runs.failOrphans();
   planner.failOrphans();
+  // Onboarding and the Documenter write memory directly; refresh the mirror file and the UI.
+  bus.subscribe((e) => {
+    if (e.type === 'project.onboarding' && e.payload.status === 'done')
+      memory.changed(e.payload.projectId);
+    if (e.type === 'task.status_changed' && e.payload.to === 'DONE')
+      memory.changed(e.payload.projectId);
+  });
   // The wizard's initial requirement is planned as soon as onboarding has analysed the folder.
   bus.subscribe((e) => {
     if (
@@ -202,9 +216,11 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     usage: new UsageService(dbHandle.db, engineRegistry),
     errors: errorService,
     runner,
-    files: new FileService(dbHandle.db),
+    files,
+    docs: new DocsService(dbHandle.db, files),
     mcp,
     pms,
+    memory,
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -233,6 +249,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerUsageRoutes(app, ctx);
   registerRuntimeRoutes(app, ctx);
   registerIntegrationRoutes(app, ctx);
+  registerMemoryDocsRoutes(app, ctx);
 
   app.addHook('onReady', async () => {
     projects.resumeInterruptedOnboarding();
@@ -244,6 +261,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     await pms.stop();
     await orchestrator.stop();
     await mcp.stop();
+    memory.stop();
     await planner.stop();
     await engineRegistry.stop();
     runner.stopAll();

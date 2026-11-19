@@ -10,8 +10,8 @@
 | 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | ✅ Done |
 | 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | ✅ Done |
 | 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | ✅ Done |
-| 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | ⏳ Next |
-| 10  | **Polish & Hardening**: safety guards, more E2E coverage, UX polish                                                              | —       |
+| 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | ✅ Done |
+| 10  | **Polish & Hardening**: safety guards, more E2E coverage, UX polish                                                              | ⏳ Next |
 
 ## Phase 1: what was verified
 
@@ -193,3 +193,13 @@
   - Write-back: each status change moves the ticket to the mapped status, and finishing posts a completion comment with summary, branch or PR and usage. Failures are reported on the link and as a notification.
   - Planner enrichment of imported tickets (acceptance criteria, affected areas, subtasks).
 - **E2E (Playwright, 25 tests in total):** add an MCP server with a secret env var in the UI, connect a tracker with auto-detect and preview, link a project, sync, open an imported task, approve it (status written back), then apply a ticket change flagged on the task.
+
+## Phase 9: what was verified
+
+- **Unit and integration (Vitest, 206 tests in total):**
+  - Memory CRUD, search across title, content and tags, kind filter, pinning (pinned first), and validation.
+  - Global preferences are kept separate from project memory.
+  - Prompt selection: pinned entries, global preferences and always-relevant kinds (conventions, commands, pitfalls, stack) are included, plus entries that share words with the task. Unrelated decisions are left out, and a tight budget keeps only the top-ranked entries.
+  - `.agentforge/memory.md` is written (grouped by kind, pinned marked), `.agentforge/` is added to `.git/info/exclude`, and turning the mirror off removes the file.
+  - Docs list README, CHANGELOG and architecture files first, then other Markdown, then task reports. Non-Markdown paths are refused. Single-document download and the combined export (headings shifted under each document's title) work.
+- **E2E (Playwright, 26 tests in total):** add, search, pin, edit and delete memory in the Memory tab, check the mirror file, read README and a guide in the Docs tab, download a document, open the print view, and add a global preference in Settings.

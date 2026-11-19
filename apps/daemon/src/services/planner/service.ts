@@ -10,13 +10,12 @@ import {
   type ReferenceSuggestions,
   type TaskDto,
 } from '@agentforge/shared';
-import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { execa } from 'execa';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { Db } from '../../db/client';
 import {
-  memoryEntries,
   projects,
   projectSettings,
   requirements,
@@ -27,9 +26,11 @@ import type { EngineRegistry } from '../../engines/registry';
 import type { EventBus } from '../../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../../http/errors';
 import { newId } from '../../lib/id';
+import type { MemoryService } from '../memory';
 import type { RunRecorder } from '../runs';
 import type { SettingsService } from '../settings';
 import type { TaskService } from '../tasks';
+import { excludeAgentforgeDir } from '../../lib/agentforge-dir';
 import { parsePlannerOutput } from './parse';
 import {
   ALLOWED_OUTPUTS,
@@ -73,6 +74,7 @@ export interface PlannerDeps {
   engines: EngineRegistry;
   runs: RunRecorder;
   settings: SettingsService;
+  memory: MemoryService;
   log: { warn: (o: unknown, m?: string) => void; error: (o: unknown, m?: string) => void };
 }
 
@@ -351,7 +353,7 @@ export class PlannerService {
       path,
     };
     writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta));
-    this.excludeAgentforgeDir(project.localPath);
+    excludeAgentforgeDir(project.localPath);
     return meta;
   }
 
@@ -586,21 +588,10 @@ export class PlannerService {
   private context(job: Job, project: typeof projects.$inferSelect): PlannerContext {
     const board = this.d.tasks.board(job.projectId);
     const plan = board.plans[0] ?? null;
-    const memory = this.d.db
-      .select()
-      .from(memoryEntries)
-      .where(
-        or(
-          and(
-            eq(memoryEntries.scope, 'project'),
-            eq(memoryEntries.projectId, job.projectId),
-            isNull(memoryEntries.taskId),
-          ),
-          eq(memoryEntries.scope, 'global'),
-        ),
-      )
-      .orderBy(desc(memoryEntries.pinned), asc(memoryEntries.createdAt))
-      .all();
+    const memory = this.d.memory.forPrompt(
+      job.projectId,
+      [job.requirement, job.instructions ?? '', ...job.references.files].join(' '),
+    );
     const history = this.d.db
       .select()
       .from(requirements)
@@ -633,7 +624,7 @@ export class PlannerService {
         commands: project.commands as Record<string, string | null>,
       },
       report: project.onboardingReport ?? null,
-      memory: memory.map((m) => ({ title: m.title, content: m.content, pinned: m.pinned })),
+      memory,
       memoryBudget: this.d.settings.get().memory.maxPromptChars,
       plan,
       tasks: board.tasks.filter((t) => t.status !== 'CANCELLED'),
@@ -720,16 +711,6 @@ export class PlannerService {
     const metaPath = join(root, ATTACH_DIR, id, 'meta.json');
     if (!existsSync(metaPath)) throw badRequest(`Attachment ${id} not found`);
     return JSON.parse(readFileSync(metaPath, 'utf8')) as AttachmentDto;
-  }
-
-  /** Keep `.agentforge/` out of git without touching tracked files (uses .git/info/exclude). */
-  private excludeAgentforgeDir(root: string) {
-    const exclude = join(root, '.git', 'info', 'exclude');
-    if (!existsSync(join(root, '.git'))) return;
-    mkdirSync(join(root, '.git', 'info'), { recursive: true });
-    const current = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
-    if (!current.split('\n').some((l) => l.trim() === '.agentforge/'))
-      appendFileSync(exclude, `${current && !current.endsWith('\n') ? '\n' : ''}.agentforge/\n`);
   }
 
   // ─── Messages ──────────────────────────────────────────────────────────────

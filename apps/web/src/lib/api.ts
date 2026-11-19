@@ -55,6 +55,12 @@ import type {
   PmsSyncResultDto,
   PmsToolMap,
   PmsFilters,
+  DocDto,
+  DocSummaryDto,
+  MemoryEntryDto,
+  MemoryInput,
+  MemoryKind,
+  MemoryScope,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -168,16 +174,6 @@ export const api = {
       request<PlannerState>('GET', `/api/projects/${projectId}/planner`),
     cancel: (projectId: string) =>
       request<{ ok: true }>('POST', `/api/projects/${projectId}/planner/cancel`),
-    projectRun: (projectId: string) => ['project-run', projectId] as const,
-    errors: (projectId: string) => ['errors', projectId] as const,
-    activity: (projectId: string) => ['activity', projectId] as const,
-    terminals: (projectId: string) => ['terminals', projectId] as const,
-    files: (projectId: string) => ['files', projectId] as const,
-    file: (projectId: string, path: string) => ['files', projectId, path] as const,
-    mcpServers: ['mcp', 'servers'] as const,
-    pmsProviders: ['pms', 'providers'] as const,
-    pmsConnections: ['pms', 'connections'] as const,
-    pmsMappings: (projectId: string) => ['pms', 'mappings', projectId] as const,
     references: (projectId: string, q: string) =>
       request<ReferenceSuggestions>(
         'GET',
@@ -312,6 +308,38 @@ export const api = {
         `/api/projects/${projectId}/file?${new URLSearchParams({ path })}`,
       ),
   },
+  memory: {
+    list: (
+      projectId: string | null,
+      q: { search?: string; kind?: MemoryKind; scope?: MemoryScope } = {},
+    ) => {
+      const qs = new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]);
+      return request<MemoryEntryDto[]>(
+        'GET',
+        `${projectId ? `/api/projects/${projectId}/memory` : '/api/memory'}${qs.size ? `?${qs}` : ''}`,
+      );
+    },
+    create: (projectId: string | null, v: MemoryInput) =>
+      request<MemoryEntryDto>(
+        'POST',
+        projectId ? `/api/projects/${projectId}/memory` : '/api/memory',
+        v,
+      ),
+    update: (id: string, v: Partial<MemoryInput>) =>
+      request<MemoryEntryDto>('PATCH', `/api/memory/${id}`, v),
+    remove: (id: string) => request<void>('DELETE', `/api/memory/${id}`),
+  },
+  docs: {
+    list: (projectId: string) => request<DocSummaryDto[]>('GET', `/api/projects/${projectId}/docs`),
+    get: (projectId: string, doc: string) =>
+      request<DocDto>(
+        'GET',
+        `/api/projects/${projectId}/docs/item?${new URLSearchParams({ doc })}`,
+      ),
+    downloadUrl: (projectId: string, doc: string) =>
+      `${DAEMON_URL}/api/projects/${projectId}/docs/item?${new URLSearchParams({ doc, download: '1' })}`,
+    exportUrl: (projectId: string) => `${DAEMON_URL}/api/projects/${projectId}/docs/export`,
+  },
   mcp: {
     list: () => request<McpServerDto[]>('GET', '/api/mcp/servers'),
     create: (v: McpServerInput) => request<McpServerDto>('POST', '/api/mcp/servers', v),
@@ -399,6 +427,9 @@ export const qk = {
   terminals: (projectId: string) => ['terminals', projectId] as const,
   files: (projectId: string) => ['files', projectId] as const,
   file: (projectId: string, path: string) => ['files', projectId, path] as const,
+  memory: (projectId: string | null) => ['memory', projectId ?? 'global'] as const,
+  docs: (projectId: string) => ['docs', projectId] as const,
+  doc: (projectId: string, doc: string) => ['docs', projectId, doc] as const,
   mcpServers: ['mcp', 'servers'] as const,
   pmsProviders: ['pms', 'providers'] as const,
   pmsConnections: ['pms', 'connections'] as const,

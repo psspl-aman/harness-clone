@@ -1,5 +1,6 @@
 'use client';
 
+import { MemoryList } from '@/components/memory/memory-list';
 import {
   AGENT_ROLES,
   AppSettingsSchema,
@@ -245,6 +246,13 @@ export default function SettingsPage() {
               value={draft.memory.maxPromptChars}
               onChange={(v) => set('memory', { maxPromptChars: v })}
             />
+            <SwitchField
+              id="mirrorFile"
+              label="Mirror memory to .agentforge/memory.md"
+              hint="A readable copy in each project folder, kept out of git."
+              checked={draft.memory.mirrorFile}
+              onChange={(v) => set('memory', { mirrorFile: v })}
+            />
             <TextField
               id="workspaceRoot"
               label="Managed workspace folder"
@@ -253,6 +261,13 @@ export default function SettingsPage() {
               value={draft.workspaceRoot ?? ''}
               onChange={(v) => set('workspaceRoot', v.trim() === '' ? null : v)}
             />
+          </Section>
+
+          <Section
+            title="Global preferences"
+            description="Your coding preferences, shared with every agent in every project (saved immediately)."
+          >
+            <MemoryList projectId={null} />
           </Section>
 
           <Section title="Safety" description="Guardrails applied to every agent run.">

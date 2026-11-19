@@ -148,3 +148,21 @@
     @apply bg-primary/20;
   }
 }
+
+/* Docs → PDF: print only the document view. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-root,
+  .print-root * {
+    visibility: visible;
+  }
+  .print-root {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    background: white;
+    color: black;
+  }
+}

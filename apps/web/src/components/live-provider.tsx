@@ -137,6 +137,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
                 queryKey: qk.terminals(e.payload.terminal.projectId),
               });
             break;
+          case 'memory.updated':
+            void queryClient.invalidateQueries({ queryKey: qk.memory(e.payload.projectId) });
+            if (!e.payload.projectId) void queryClient.invalidateQueries({ queryKey: ['memory'] });
+            break;
           case 'mcp.updated':
             queryClient.setQueryData<McpServerDto[]>(qk.mcpServers, (l) => {
               if (!l) return l;
@@ -177,6 +181,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             break;
           case 'task.status_changed':
             void queryClient.invalidateQueries({ queryKey: ['activity'] });
+            if (e.payload.to === 'DONE') {
+              void queryClient.invalidateQueries({ queryKey: qk.docs(e.payload.projectId) });
+              void queryClient.invalidateQueries({ queryKey: qk.memory(e.payload.projectId) });
+            }
             break;
           case 'task.deleted':
             queryClient.setQueryData<PlanBoardDto>(qk.board(e.payload.projectId), (b) =>

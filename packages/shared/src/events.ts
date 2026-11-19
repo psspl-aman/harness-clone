@@ -40,6 +40,7 @@ export const EventPayloads = {
   'pipeline.updated': z.object({ status: z.custom<PipelineStatusDto>() }),
   'error.updated': z.object({ projectId: z.string(), error: z.custom<ErrorDto>() }),
   'project.run': z.object({ run: z.custom<ProjectRunDto>() }),
+  'memory.updated': z.object({ projectId: z.string().nullable() }),
   'mcp.updated': z.object({ server: z.custom<McpServerDto>() }),
   'mcp.removed': z.object({ serverId: z.string() }),
   'pms.connections_changed': z.object({}),

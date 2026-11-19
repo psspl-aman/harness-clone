@@ -200,3 +200,19 @@ Live events: `project.run` (run state changes) and `error.updated` (an error was
 Tool-map argument templates: a string that is exactly `{{var}}` is replaced by the raw value (`{{var|number}}` converts to a number), and `{{var}}` inside a longer string is interpolated. Arguments that render empty are dropped. Variables: `project`, `owner` and `repo` (from `owner/repo`), `limit`, `filters.assignee`, `filters.sprint`, `filters.labels`, `filters.status`, plus `issueId`, `status` and `body` for write-back.
 
 `TaskDto.external` is set for imported tasks: `connectionId`, `provider`, `id`, `url`, `updatedAt` and `conflict`. Live events: `mcp.updated`, `mcp.removed`, `pms.connections_changed`, `pms.mapping` and `pms.mapping_removed`.
+
+## Memory and docs
+
+| Method | Path                                            | Description                                                                                   |
+| ------ | ----------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| GET    | `/api/projects/:id/memory?search=&kind=&scope=` | Project memory (`scope=project` for knowledge, `task` for completed-task notes), pinned first |
+| POST   | `/api/projects/:id/memory`                      | Add: `kind`, `title`, `content`, `tags`, `pinned`                                             |
+| GET    | `/api/memory?search=&kind=`                     | Global preferences                                                                            |
+| POST   | `/api/memory`                                   | Add a global preference                                                                       |
+| PATCH  | `/api/memory/:id`                               | Edit or pin/unpin any entry                                                                   |
+| DELETE | `/api/memory/:id`                               | Delete an entry                                                                               |
+| GET    | `/api/projects/:id/docs`                        | `DocSummaryDto[]`: Markdown files in the repo (`id = file:<path>`) and task reports           |
+| GET    | `/api/projects/:id/docs/item?doc=&download=`    | One document; with `download=1`, the raw Markdown as an attachment                            |
+| GET    | `/api/projects/:id/docs/export`                 | Every doc in one Markdown file (`<slug>-docs.md`)                                             |
+
+Live event: `memory.updated` (`projectId`, or `null` for global preferences). Settings: `memory.maxPromptChars` and `memory.mirrorFile`.

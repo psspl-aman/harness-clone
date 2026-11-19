@@ -219,6 +219,14 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - **Write-back:** a per-task queue on `task.status_changed`. It moves the ticket to the external status mapped to the new task status, and comments on DONE (documenter summary, PR or branch, fix loops, tokens, cost, time) and on FAILED. Cancellations that came from the tracker aren't echoed back.
   - **Polling:** every 15 s, mappings whose interval has elapsed are synced.
 
+## Memory and docs (Phase 9)
+
+- **`services/memory.ts`:** `memory_entries` with scopes `global` (preferences), `project` (onboarding facts, Documenter knowledge, your entries) and `task` (the Documenter's summary of each finished task).
+  - **Prompt selection:** `forPrompt(project, query, budget)` scores each entry. Pinned +100, global +50, always-relevant kinds +20, word overlap with the task (stop words removed, light stemming) ×10, plus up to +1 for recency. It keeps entries that are always relevant or share a word with the task, and fills the `memory.maxPromptChars` budget in score order. The orchestrator queries with the task's title, description, criteria and affected areas; the Planner with the requirement, instructions and referenced files.
+  - **Mirror file:** changes (including onboarding finishing and tasks reaching DONE, which is when the Documenter writes) schedule a debounced rewrite of `.agentforge/memory.md` in the project folder. The file is excluded via `.git/info/exclude` (`lib/agentforge-dir.ts`, shared with the Planner's attachments) so it never makes the checkout dirty for merges.
+- **`services/docs.ts`:** task reports from `documents`, plus Markdown files found with `git ls-files` (up to 4 levels deep, no vendored or build folders) read live through `FileService`, so the same path and secret guards apply. `exportAll` concatenates them with a table of contents and headings shifted down one level.
+- **PDF:** the web app's `/projects/[id]/docs/print` renders the document(s) and opens the browser's print dialog. Print CSS hides everything except `.print-root`.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.
@@ -231,6 +239,7 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - New-project wizard (`/projects/new`): one flow for starting from scratch and one for attaching an existing project. It has a side stepper, validates each step, checks paths live, and lets you connect GitHub without leaving the wizard.
   - Project page (`/projects/[id]`): live onboarding status, editable commands showing where each was detected, stack, conventions, structure, git state, env file names, requirements, per-role engine overrides, and removal with a typed confirmation.
   - Project workspace: run controls in the header (Run, Stop, Restart and a menu for build, test and install); **Preview** (iframe of the detected URL, editable); **Code** (git-aware file tree and read-only Monaco, served from `public/monaco`, which `scripts/copy-monaco.mjs` copies from `node_modules` before `dev` and `build`); and a resizable bottom panel with **Terminals**, **Errors** (count badge, Fix with agent, ignore, resolve, jump to file) and **Activity**.
+  - Project Docs tab: project Markdown and task reports, rendered, with Markdown download, PDF via the print view, and export of everything. Memory tab: project knowledge and completed-task notes with search, kind filter, pin, edit and delete. Settings: global preferences and the mirror-file toggle.
   - Integrations: issue-tracker connections (provider presets, MCP server picker or "New server" pre-filled from the preset, a tool-map editor with auto-detect, field paths and a live preview), MCP servers (stdio/HTTP/SSE, env and header editor with write-only secrets, test, tool list), and GitHub.
   - Project Overview → Issue tracker: links with status mapping, filters, polling, write-back and enrichment toggles, Sync now and the last result or error. Imported tasks show their ticket id on rows and cards; the task drawer links to the ticket and shows tracker changes to apply or dismiss.
   - Agents & Accounts (`/agents`): one card per engine.

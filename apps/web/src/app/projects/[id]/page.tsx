@@ -24,6 +24,8 @@ import { ProjectOverview, RemoveDialog } from '@/components/projects/overview';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DocsTab } from '@/components/docs/docs-tab';
+import { MemoryList } from '@/components/memory/memory-list';
 import { BottomPanel } from '@/components/workspace/bottom-panel';
 import { CodeTab } from '@/components/workspace/code-tab';
 import { PreviewTab } from '@/components/workspace/preview-tab';
@@ -32,7 +34,7 @@ import { useWorkspaceUi } from '@/components/workspace/store';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type Tab = 'plan' | 'overview' | 'chat' | 'preview' | 'code';
+type Tab = 'plan' | 'overview' | 'chat' | 'preview' | 'code' | 'docs' | 'memory';
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -47,6 +49,7 @@ export default function ProjectWorkspace() {
     line: null,
   });
   const showTerminal = useWorkspaceUi((s) => s.showTerminal);
+  const settings = useQuery({ queryKey: qk.settings, queryFn: api.settings.get });
   const start = useMutation({
     mutationFn: () => api.runtime.start(id),
     onSuccess: (r) => r.terminalId && showTerminal(r.terminalId),
@@ -101,6 +104,8 @@ export default function ProjectWorkspace() {
     { id: 'plan', label: 'Plan & Tasks' },
     { id: 'preview', label: 'Preview' },
     { id: 'code', label: 'Code' },
+    { id: 'docs', label: 'Docs' },
+    { id: 'memory', label: 'Memory' },
     { id: 'overview', label: 'Overview' },
   ];
 
@@ -236,7 +241,9 @@ export default function ProjectWorkspace() {
           <div
             className={cn(
               'min-h-0 flex-1',
-              tab === 'code' || tab === 'preview' ? 'overflow-hidden' : 'overflow-y-auto',
+              tab === 'code' || tab === 'preview' || tab === 'docs'
+                ? 'overflow-hidden'
+                : 'overflow-y-auto',
             )}
           >
             {tab === 'chat' && (
@@ -257,6 +264,12 @@ export default function ProjectWorkspace() {
                 projectId={id}
                 onStart={() => (p.commands.run ? start.mutate() : setTab('overview'))}
               />
+            )}
+            {tab === 'docs' && <DocsTab projectId={id} />}
+            {tab === 'memory' && (
+              <div className="mx-auto max-w-4xl p-4 md:p-6">
+                <MemoryList projectId={id} budget={settings.data?.memory.maxPromptChars} />
+              </div>
             )}
             {tab === 'code' && (
               <CodeTab

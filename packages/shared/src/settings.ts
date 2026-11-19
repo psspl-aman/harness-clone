@@ -43,6 +43,8 @@ export const AppSettingsSchema = z.object({
   }),
   memory: z.object({
     maxPromptChars: z.number().int().min(500).max(100_000),
+    /** Mirror project memory to `.agentforge/memory.md` (kept out of git). */
+    mirrorFile: z.boolean(),
   }),
   safety: z.object({
     confirmDangerousCommands: z.boolean(),
@@ -71,7 +73,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pipeline: { maxFixLoops: 3, requireHumanReviewBeforeMerge: false, mergeStrategy: 'merge' },
   health: { engineCheckIntervalSec: 120 },
   quota: { probeInitialBackoffSec: 300, probeMaxBackoffSec: 3 * 3600, fallbackEnabled: false },
-  memory: { maxPromptChars: 12_000 },
+  memory: { maxPromptChars: 12_000, mirrorFile: true },
   safety: { confirmDangerousCommands: true, redactSecrets: true },
   pricing: {},
   defaultEngines: {
