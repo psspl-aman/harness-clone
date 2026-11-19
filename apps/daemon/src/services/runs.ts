@@ -3,8 +3,10 @@ import {
   type AgentEvent,
   type AgentRole,
   type AgentRunResultDto,
+  type AppSettings,
   type TaskType,
 } from '@agentforge/shared';
+import { costOf } from '../lib/cost';
 import { asc, eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { agentRuns, runEvents, usageRecords } from '../db/schema';
@@ -67,6 +69,7 @@ export class RunRecorder {
   constructor(
     private readonly db: Db,
     private readonly bus: EventBus,
+    private readonly pricing: () => AppSettings['pricing'] = () => ({}),
   ) {}
 
   start(input: StartRunInput): string {
@@ -144,6 +147,7 @@ export class RunRecorder {
     const row = this.db.select().from(agentRuns).where(eq(agentRuns.id, runId)).get();
     if (!row) return;
     const u = result.usage;
+    const cost = costOf(u, row.engineId, this.pricing());
     const status =
       result.status === 'succeeded'
         ? 'SUCCEEDED'
@@ -165,7 +169,7 @@ export class RunRecorder {
         outputTokens: u.outputTokens,
         cacheReadTokens: u.cacheReadTokens,
         cacheWriteTokens: u.cacheWriteTokens,
-        costUsd: u.costUsd ?? 0,
+        costUsd: cost.costUsd,
         exitCode: result.exitCode,
         errorKind: result.error?.kind ?? null,
         errorMessage: result.error?.message ?? null,
@@ -190,7 +194,8 @@ export class RunRecorder {
           outputTokens: u.outputTokens,
           cacheReadTokens: u.cacheReadTokens,
           cacheWriteTokens: u.cacheWriteTokens,
-          costUsd: u.costUsd ?? 0,
+          costUsd: cost.costUsd,
+          costSource: cost.source,
           durationMs: result.durationMs,
         })
         .run();

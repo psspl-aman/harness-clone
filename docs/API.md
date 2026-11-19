@@ -144,3 +144,13 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 | GET    | `/api/tasks/:id/report`                                | The task report (markdown)                                                                                |
 
 `TaskDto.pipeline` carries `branch`, `fixLoops`, `activeRole`, `activeEngine`, `activeRunId`, `awaitingMergeReview`, `blockedReason`, `pullRequestUrl`, `resumeAt`, `tokens`, `costUsd` and `lastError`.
+
+## Usage
+
+| Method | Path                                            | Description                                                                                                                                                         |
+| ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/usage/summary?days=&projectId=&engineId=` | `UsageSummaryDto`: totals (tokens, cost, estimated share, unpriced runs), `byDay`, `byWeek`, `byProject`, `byEngine`, `byModel`, `byRole`, `topTasks`, `byTaskType` |
+| GET    | `/api/usage/windows`                            | Per engine: CLI-reported windows (utilisation and reset time) and your configured limit (tokens used in the last N hours)                                           |
+| GET    | `/api/tasks/:id/checkpoints`                    | Checkpoints saved when the task paused                                                                                                                              |
+
+`PATCH /api/engines/:id` also accepts `windowTokenLimit` and `windowHours`. `PATCH /api/projects/:id` accepts a `pipeline` object: `maxConcurrentTasks`, `maxFixLoops`, `requireHumanReview`, `mergeStrategy` (each `null` means use the global setting), plus `fallbackEnabled` and `engineFallback`.

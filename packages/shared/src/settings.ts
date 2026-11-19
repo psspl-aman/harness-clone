@@ -49,6 +49,19 @@ export const AppSettingsSchema = z.object({
     redactSecrets: z.boolean(),
   }),
   defaultEngines: RoleEnginesSchema,
+  /**
+   * USD per 1M tokens, keyed by model id (e.g. "gpt-5-codex") or engine id.
+   * Used only when the CLI doesn't report a cost itself.
+   */
+  pricing: z.record(
+    z.string().trim().min(1).max(100),
+    z.object({
+      input: z.number().min(0).max(1000),
+      output: z.number().min(0).max(1000),
+      cacheRead: z.number().min(0).max(1000).default(0),
+      cacheWrite: z.number().min(0).max(1000).default(0),
+    }),
+  ),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
 
@@ -60,6 +73,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   quota: { probeInitialBackoffSec: 300, probeMaxBackoffSec: 3 * 3600, fallbackEnabled: false },
   memory: { maxPromptChars: 12_000 },
   safety: { confirmDangerousCommands: true, redactSecrets: true },
+  pricing: {},
   defaultEngines: {
     planner: 'claude-code',
     developer: 'claude-code',

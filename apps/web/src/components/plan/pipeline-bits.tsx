@@ -113,12 +113,22 @@ export function PipelineBar({ projectId, tasks }: { projectId: string; tasks: Ta
     const d = describeEvent(e.payload.event);
     if (d) setSteps((s) => (s[e.payload.runId] === d ? s : { ...s, [e.payload.runId]: d }));
   });
+  const now = useNow(
+    1000,
+    tasks.some((t) => t.status === 'PAUSED_QUOTA'),
+  );
   const s = status.data;
   const building = tasks.some(
     (t) => !['DRAFT', 'APPROVED', 'DONE', 'CANCELLED'].includes(t.status),
   );
   if (!s || (!building && !s.paused)) return null;
   const running = tasks.filter((t) => t.pipeline.activeRole);
+  const pausedQuota = tasks.filter((t) => t.status === 'PAUSED_QUOTA');
+  const nextResume =
+    pausedQuota
+      .map((t) => t.pipeline.resumeAt)
+      .filter((x): x is number => !!x)
+      .sort((a, b) => a - b)[0] ?? null;
   return (
     <div className="bg-card space-y-2 rounded-xl border p-3 shadow-xs" aria-label="Build pipeline">
       <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -156,6 +166,18 @@ export function PipelineBar({ projectId, tasks }: { projectId: string; tasks: Ta
           )}
         </Button>
       </div>
+      {pausedQuota.length > 0 && (
+        <p
+          className="bg-warning/10 border-warning/30 rounded-md border px-2 py-1 text-xs"
+          role="status"
+        >
+          {pausedQuota.length} task{pausedQuota.length === 1 ? '' : 's'} paused by a usage limit
+          {nextResume
+            ? ` — resumes automatically at ${clockTime(nextResume)} (in ${countdown(nextResume, now)})`
+            : ''}
+          .
+        </p>
+      )}
       {running.length > 0 && (
         <ul className="space-y-1" aria-label="Live agent activity">
           {running.map((t) => (

@@ -8,6 +8,7 @@ import {
   Topics,
   type AgentRole,
   type AgentRunResultDto,
+  type CheckpointDto,
   type DocOutput,
   type PermissionProfile,
   type PipelineState,
@@ -28,6 +29,7 @@ import type { ZodType } from 'zod';
 import type { Db } from '../../db/client';
 import {
   agentRuns,
+  checkpoints,
   documents,
   memoryEntries,
   projects,
@@ -188,6 +190,7 @@ export class Orchestrator {
           .where(inArray(tasks.status, ['APPROVED', 'BLOCKED', 'QUEUED', ...ACTIVE_STATUSES]))
           .all()
           .map((r) => r.id);
+        await this.resumePaused();
         for (const pid of projectIds) {
           try {
             // A paused project keeps approved tasks as they are (no promotion churn).
@@ -291,7 +294,22 @@ export class Orchestrator {
           PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.orderIndex - b.orderIndex,
       );
     for (const t of queued) {
-      if (free-- <= 0) break;
+      if (free <= 0) break;
+      const engine = this.safeEngine(this.engineFor(t, 'developer'));
+      if (
+        engine?.authStatus === 'QUOTA_EXHAUSTED' &&
+        engine.resetAt &&
+        engine.resetAt > Date.now() &&
+        !this.fallbackFor(t.projectId, engine.id)
+      ) {
+        const reason = `Waiting for ${engine.displayName}'s usage window (resets ${new Date(engine.resetAt).toLocaleTimeString()})`;
+        if (t.statusReason !== reason) {
+          this.d.db.update(tasks).set({ statusReason: reason }).where(eq(tasks.id, t.id)).run();
+          this.d.tasks.touch(t.id);
+        }
+        continue;
+      }
+      free--;
       this.d.tasks.transition(
         t.id,
         'IN_DEVELOPMENT',
@@ -982,9 +1000,20 @@ export class Orchestrator {
     commit = false,
   ): Promise<RoleOutcome<T> | null> {
     const signal = driver.controller.signal;
-    const engineId = this.engineFor(task, role);
+    let engineId = this.engineFor(task, role);
     let nextPrompt = prompt;
     let resume: string | null = null;
+    // Resuming after a quota/auth pause: continue the interrupted session when possible.
+    const hint = this.row(task.id).pipelineState.resumeHint;
+    if (hint && hint.role === role) {
+      this.patchState(task.id, { resumeHint: null }, false);
+      if (hint.sessionId && this.d.engines.adapter(engineId).capabilities.resume) {
+        resume = hint.sessionId;
+        nextPrompt = `You were interrupted (usage limit or login) before finishing. Continue exactly where you left off and complete the task as originally instructed.${schema ? ' Finish with the JSON object described earlier.' : ''}`;
+      } else if (hint.summary) {
+        nextPrompt = `${prompt}\n\n## Progress before an interruption\nA previous attempt was interrupted (usage limit or login). Its partial output:\n${hint.summary.slice(0, 6000)}\n\nCheck the working directory for work already done and continue from there.`;
+      }
+    }
     let jsonAttempts = 0;
     let failures = 0;
     for (let attempt = 1; ; attempt++) {
@@ -1107,12 +1136,35 @@ export class Orchestrator {
       if (result.status === 'failed') {
         const e = result.error;
         if (e && (e.kind === 'QUOTA_EXPIRED' || e.kind === 'RATE_LIMIT')) {
+          const fallback = this.fallbackFor(task.projectId, engineId);
+          if (fallback) {
+            // Continue on the fallback engine instead of pausing.
+            this.d.db
+              .update(tasks)
+              .set({ roleEngines: { ...this.row(task.id).roleEngines, [role]: fallback } })
+              .where(eq(tasks.id, task.id))
+              .run();
+            this.notify(
+              task,
+              'info',
+              `${task.key} switched to ${this.engineName(fallback)}`,
+              `${this.engineName(engineId)} hit its usage limit.`,
+            );
+            const partial = result.finalText.trim();
+            engineId = fallback;
+            resume = null;
+            nextPrompt = partial
+              ? `${prompt}\n\n## Progress before an interruption\nAnother engine started this step and was interrupted by a usage limit. Its partial output:\n${partial.slice(0, 6000)}\n\nCheck the working directory for work already done and continue from there.`
+              : prompt;
+            continue;
+          }
           this.pauseFor(
             task,
             'PAUSED_QUOTA',
             `${this.engineName(engineId)} usage limit reached`,
             e.resetAt,
             e.message,
+            { role, engineId, sessionId: result.sessionId, partial: result.finalText },
           );
           return null;
         }
@@ -1123,6 +1175,7 @@ export class Orchestrator {
             `${this.engineName(engineId)} needs you to log in again`,
             null,
             e.message,
+            { role, engineId, sessionId: result.sessionId, partial: result.finalText },
           );
           return null;
         }
@@ -1167,7 +1220,7 @@ export class Orchestrator {
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
   private advance(taskId: string, to: TaskStatus, reason: string) {
-    this.patchState(taskId, { lastError: null }, false);
+    this.patchState(taskId, { lastError: null, quotaProbe: 0 }, false);
     this.d.tasks.transition(taskId, to, reason, 'orchestrator');
   }
 
@@ -1177,16 +1230,51 @@ export class Orchestrator {
     reason: string,
     resetAt: number | null,
     detail: string,
+    run: { role: AgentRole; engineId: string; sessionId: string | null; partial: string },
   ) {
     const current = this.row(task.id);
+    let resumeAt = resetAt;
+    let probe = current.pipelineState.quotaProbe ?? 0;
+    if (status === 'PAUSED_QUOTA' && !resumeAt) {
+      // No reset time in the error: probe again with exponential backoff.
+      const q = this.d.settings.get().quota;
+      resumeAt =
+        Date.now() + Math.min(q.probeInitialBackoffSec * 2 ** probe, q.probeMaxBackoffSec) * 1000;
+      probe++;
+    }
+    const sessionId = run.sessionId ?? current.pipelineState.sessions?.[run.role] ?? null;
+    const summary = run.partial.trim().slice(0, 8000);
+    const lastStep =
+      this.d.tasks
+        .history(task.id)
+        .filter((h) => h.to !== current.status)
+        .at(-1)?.to ?? null;
+    this.d.db
+      .insert(checkpoints)
+      .values({
+        id: newId('chk'),
+        taskId: task.id,
+        runId: current.pipelineState.activeRunId ?? null,
+        taskStatus: current.status,
+        role: run.role,
+        engineId: run.engineId,
+        sessionId,
+        branchName: current.branchName,
+        lastCompletedStep: lastStep,
+        notes: summary,
+        data: { resumeAt, reason },
+      })
+      .run();
     this.d.db
       .update(tasks)
-      .set({ resumeToStatus: current.status, resumeAt: resetAt })
+      .set({ resumeToStatus: current.status, resumeAt })
       .where(eq(tasks.id, task.id))
       .run();
     this.patchState(
       task.id,
       {
+        quotaProbe: probe,
+        resumeHint: { role: run.role, sessionId, summary },
         lastError: {
           kind: status === 'PAUSED_QUOTA' ? 'QUOTA_EXPIRED' : 'AUTH_EXPIRED',
           message: detail,
@@ -1194,13 +1282,120 @@ export class Orchestrator {
       },
       false,
     );
-    this.d.tasks.transition(
-      task.id,
-      status,
-      resetAt ? `${reason} — resumes at ${new Date(resetAt).toLocaleTimeString()}` : reason,
-      'orchestrator',
-    );
-    this.notify(task, 'warning', `${task.key} paused`, reason);
+    const when = resumeAt
+      ? `resumes at ${new Date(resumeAt).toLocaleTimeString()}`
+      : 'resumes after you log in';
+    this.d.tasks.transition(task.id, status, `${reason} — ${when}`, 'orchestrator');
+    this.notify(task, 'warning', `${task.key} paused`, `${reason}. It ${when} automatically.`);
+  }
+
+  /** Resume quota pauses whose time has come (re-checking the engine) and auth pauses whose engine is active again. */
+  private async resumePaused(): Promise<void> {
+    const paused = this.d.db
+      .select()
+      .from(tasks)
+      .where(inArray(tasks.status, ['PAUSED_QUOTA', 'PAUSED_AUTH']))
+      .all();
+    for (const t of paused) {
+      const step = t.resumeToStatus;
+      if (!step) continue;
+      const engineId = this.engineFor(t, this.roleFor(step));
+      if (t.status === 'PAUSED_QUOTA') {
+        if (!t.resumeAt || t.resumeAt > Date.now()) continue;
+        const engine = await this.d.engines.refresh(engineId).catch(() => null);
+        if (
+          engine?.authStatus === 'QUOTA_EXHAUSTED' &&
+          engine.resetAt &&
+          engine.resetAt > Date.now()
+        ) {
+          this.d.db
+            .update(tasks)
+            .set({
+              resumeAt: engine.resetAt,
+              statusReason: `${engine.displayName} usage limit reached — resumes at ${new Date(engine.resetAt).toLocaleTimeString()}`,
+            })
+            .where(eq(tasks.id, t.id))
+            .run();
+          this.d.tasks.touch(t.id);
+          continue;
+        }
+      } else if (this.safeEngine(engineId)?.authStatus !== 'ACTIVE') {
+        continue;
+      }
+      this.d.tasks.transition(
+        t.id,
+        step,
+        t.status === 'PAUSED_QUOTA'
+          ? 'Usage window renewed — resuming'
+          : 'Logged in again — resuming',
+        'orchestrator',
+      );
+      this.d.db
+        .update(tasks)
+        .set({ resumeToStatus: null, resumeAt: null })
+        .where(eq(tasks.id, t.id))
+        .run();
+      this.d.tasks.touch(t.id);
+      this.notify(
+        t,
+        'info',
+        `${t.key} resumed`,
+        `Continuing ${step.toLowerCase().replace(/_/g, ' ')}.`,
+      );
+    }
+  }
+
+  private roleFor(status: TaskStatus): AgentRole {
+    const map: Partial<Record<TaskStatus, AgentRole>> = {
+      IN_REVIEW: 'reviewer',
+      IN_TESTING: 'tester',
+      FIXING: 'fixer',
+      DOCUMENTING: 'documenter',
+    };
+    return map[status] ?? 'developer';
+  }
+
+  /** Fallback engine for `engineId` in this project, if fallback is enabled and that engine is ready. */
+  private fallbackFor(projectId: string, engineId: string): string | null {
+    const ps = this.d.db
+      .select()
+      .from(projectSettings)
+      .where(eq(projectSettings.projectId, projectId))
+      .get();
+    const enabled = (ps?.fallbackEnabled ?? false) || this.d.settings.get().quota.fallbackEnabled;
+    const target = ps?.engineFallback?.[engineId];
+    if (!enabled || !target || target === engineId) return null;
+    const e = this.safeEngine(target);
+    return e && e.enabled && e.installed && e.authStatus === 'ACTIVE' ? target : null;
+  }
+
+  private safeEngine(engineId: string) {
+    try {
+      return this.d.engines.get(engineId);
+    } catch {
+      return null;
+    }
+  }
+
+  checkpointsOf(taskId: string): CheckpointDto[] {
+    this.row(taskId);
+    return this.d.db
+      .select()
+      .from(checkpoints)
+      .where(eq(checkpoints.taskId, taskId))
+      .orderBy(asc(checkpoints.createdAt))
+      .all()
+      .map((c) => ({
+        id: c.id,
+        taskStatus: c.taskStatus,
+        role: c.role,
+        engineId: c.engineId,
+        sessionId: c.sessionId,
+        branchName: c.branchName,
+        lastCompletedStep: c.lastCompletedStep,
+        notes: c.notes,
+        createdAt: c.createdAt,
+      }));
   }
 
   private failTask(taskId: string, step: TaskStatus, message: string) {

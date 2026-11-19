@@ -39,6 +39,13 @@
   --chart-3: oklch(0.7 0.15 155);
   --chart-4: oklch(0.75 0.15 75);
   --chart-5: oklch(0.62 0.2 20);
+  /* Data-viz tokens: reference palette slot 1 (blue) + fixed status palette (always paired with icon + label) */
+  --viz-1: #2a78d6;
+  --viz-1-soft: #cde2fb;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-critical: #d03b3b;
+  --viz-grid: oklch(0.2 0.015 270 / 8%);
 }
 
 .dark {
@@ -70,6 +77,12 @@
   --sidebar-primary: oklch(0.68 0.17 280);
   --sidebar-primary-foreground: oklch(0.16 0.02 280);
   --sidebar-ring: oklch(0.68 0.17 280 / 50%);
+  --viz-1: #3987e5;
+  --viz-1-soft: #184f95;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-critical: #d03b3b;
+  --viz-grid: oklch(1 0 0 / 8%);
 }
 
 @theme inline {
@@ -112,6 +125,12 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-viz-1: var(--viz-1);
+  --color-viz-1-soft: var(--viz-1-soft);
+  --color-viz-good: var(--viz-good);
+  --color-viz-warning: var(--viz-warning);
+  --color-viz-critical: var(--viz-critical);
+  --color-viz-grid: var(--viz-grid);
 }
 
 @layer base {

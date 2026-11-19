@@ -37,6 +37,9 @@ import type {
   TaskDiffDto,
   TaskReportDto,
   TestResultDto,
+  CheckpointDto,
+  UsageSummaryDto,
+  UsageWindowStatusDto,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -238,6 +241,20 @@ export const api = {
     diff: (id: string) => request<TaskDiffDto>('GET', `/api/tasks/${id}/diff`),
     report: (id: string) => request<TaskReportDto | null>('GET', `/api/tasks/${id}/report`),
   },
+  usage: {
+    summary: (q: { days: number; projectId?: string; engineId?: string }) =>
+      request<UsageSummaryDto>(
+        'GET',
+        `/api/usage/summary?${new URLSearchParams(
+          Object.entries(q)
+            .filter(([, v]) => v !== undefined && v !== '')
+            .map(([k, v]) => [k, String(v)]),
+        )}`,
+      ),
+    windows: () => request<UsageWindowStatusDto[]>('GET', '/api/usage/windows'),
+    checkpoints: (taskId: string) =>
+      request<CheckpointDto[]>('GET', `/api/tasks/${taskId}/checkpoints`),
+  },
   runs: {
     get: (id: string) =>
       request<{
@@ -282,6 +299,9 @@ export const qk = {
   board: (projectId: string) => ['board', projectId] as const,
   taskHistory: (taskId: string) => ['task-history', taskId] as const,
   pipeline: (projectId: string) => ['pipeline', projectId] as const,
+  usage: (days: number, projectId: string, engineId: string) =>
+    ['usage', days, projectId, engineId] as const,
+  usageWindows: ['usage', 'windows'] as const,
   taskDetail: (taskId: string, part: 'runs' | 'reviews' | 'tests' | 'diff' | 'report') =>
     ['task-detail', taskId, part] as const,
   run: (runId: string) => ['run', runId] as const,

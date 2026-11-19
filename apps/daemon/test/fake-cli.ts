@@ -130,3 +130,48 @@ export function claudeStream(
   ];
   return lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
 }
+
+/** A Claude Code run rejected by a usage limit that resets at `resetsAtSec` (epoch seconds), or with no reset info. */
+export function claudeLimitStream(
+  resetsAtSec: number | null,
+  sessionId = '11111111-2222-3333-4444-555555555555',
+): string {
+  const lines: object[] = [
+    { type: 'system', subtype: 'init', session_id: sessionId, model: 'claude-haiku-5-5' },
+  ];
+  if (resetsAtSec) {
+    lines.push({
+      type: 'rate_limit_event',
+      rate_limit_info: {
+        status: 'rejected',
+        resetsAt: resetsAtSec,
+        rateLimitType: 'five_hour',
+        unifiedWindows: {
+          five_hour: { utilization: 1, resetsAt: resetsAtSec, status: 'rejected' },
+        },
+      },
+      session_id: sessionId,
+    });
+  }
+  lines.push({
+    type: 'assistant',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'Started on the task…' }] },
+    session_id: sessionId,
+  });
+  lines.push({
+    type: 'result',
+    subtype: 'success',
+    is_error: true,
+    result: resetsAtSec ? "You've hit your limit" : 'Claude AI usage limit reached',
+    session_id: sessionId,
+    total_cost_usd: 0,
+    usage: {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    },
+    modelUsage: {},
+  });
+  return lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
+}

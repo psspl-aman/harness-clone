@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–5 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–6 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -129,6 +129,24 @@ Approved tasks are built automatically. Each one goes through these steps:
   - An expired login pauses it (_Paused · login_).
   - Other failures are retried once, then the task is marked _Failed_.
 - **Records.** Every task keeps its runs (prompt, streamed events, tokens, cost), diff, reviews, test runs with logs, and a generated **report**. The Documenter also adds facts to project memory.
+
+## Usage and quotas
+
+- **Usage page.** Shows tokens and cost:
+  - by day or week, project, engine, model and role
+  - the top tasks, and the average per task type
+  - the current usage windows: Claude Code's own 5-hour and 7-day windows, plus any limit you set per engine (Agents & Accounts → Configure)
+
+  Filter by time range, project and engine, and switch between tokens and cost. Every chart has a table view.
+
+- **Cost.** A cost reported by the CLI (Claude Code) is used as is. Otherwise AgentForge estimates it from **Settings → Pricing** (USD per 1M tokens, by model id or engine id). Runs with no matching price are counted as _unpriced_.
+- **Auto-pause and auto-resume.**
+  - When an engine hits its usage limit, the task pauses (_Paused · quota_), a **checkpoint** is saved (step, branch, CLI session, partial output), and you see when it resumes.
+  - At that time the scheduler re-checks the engine and continues the **same CLI session** where the engine supports resuming; otherwise it reruns the step with a summary of the earlier progress.
+  - If the error didn't say when the window resets, AgentForge retries with exponential backoff (Settings → Usage & sessions).
+  - A task paused for login (_Paused · login_) resumes as soon as the engine is active again.
+  - New tasks don't start on an engine whose window is exhausted.
+- **Engine fallback.** Project → Overview → Pipeline. With fallback enabled and an engine chosen for each primary, a step that hits a usage limit continues immediately on the fallback engine, which is then used for that role on that task.
 
 ## Configuration
 

@@ -5,7 +5,13 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { agentRuns, documents, memoryEntries, reviewComments, testResults } from '../src/db/schema';
-import { claudeStream, FIXTURES, makeFakeCli, type FakeCli, type FakeResponse } from './fake-cli';
+import {
+  claudeLimitStream,
+  claudeStream,
+  makeFakeCli,
+  type FakeCli,
+  type FakeResponse,
+} from './fake-cli';
 import { createTestApp, GIT_ID, tempDir, type TestApp } from './helpers';
 
 let t: TestApp;
@@ -347,11 +353,12 @@ describe('pipeline: fix loops', () => {
 
 describe('pipeline: failures and pauses', () => {
   it('pauses on a usage limit with the reset time, and resumes the same step', async () => {
+    const resetSec = Math.floor(Date.now() / 1000) + 3600;
     script(
       {
         match: '-p',
         stdinIncludes: '# Role: Developer',
-        stdoutFile: join(FIXTURES, 'claude-limit.jsonl'),
+        stdout: claudeLimitStream(resetSec),
         exitCode: 1,
         once: true,
       },
@@ -366,7 +373,7 @@ describe('pipeline: failures and pauses', () => {
     const id = tasks[0]!.id;
     expect(task(id)).toMatchObject({
       status: 'PAUSED_QUOTA',
-      pipeline: { resumeAt: 1795014000_000 },
+      pipeline: { resumeAt: resetSec * 1000 },
     });
     expect(task(id).statusReason).toMatch(/Claude Code usage limit reached — resumes at/);
     await t.app.inject({ method: 'POST', url: `/api/tasks/${id}/resume` });

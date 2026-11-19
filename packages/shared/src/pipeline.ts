@@ -30,6 +30,10 @@ export interface PipelineState {
   mergeCommit?: string | null;
   mergedInto?: string | null;
   lastError?: { kind: EngineErrorKind | 'MERGE' | 'VERIFY'; message: string } | null;
+  /** Consecutive quota pauses without a known reset time (drives backoff). */
+  quotaProbe?: number;
+  /** Set when resuming after a pause: continue the interrupted role's session. */
+  resumeHint?: { role: AgentRole; sessionId: string | null; summary: string } | null;
 }
 
 export interface TaskPipelineDto {
@@ -205,3 +209,63 @@ export const SteerInputSchema = z.object({ message: z.string().trim().min(1).max
 export const RequestChangesInputSchema = z.object({ comments: z.string().trim().min(1).max(8000) });
 
 export type { MemoryKind };
+
+// ─── Usage analytics ─────────────────────────────────────────────────────────
+
+export interface UsageTotals {
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  /** Share of cost that is estimated from the price table (0..1). */
+  estimatedShare: number;
+  unpricedRuns: number;
+  durationMs: number;
+}
+
+export interface UsageBucket {
+  key: string;
+  label: string;
+  runs: number;
+  tokens: number;
+  costUsd: number;
+}
+
+export interface UsageSummaryDto {
+  from: number;
+  to: number;
+  totals: UsageTotals;
+  byDay: UsageBucket[];
+  byWeek: UsageBucket[];
+  byProject: UsageBucket[];
+  byEngine: UsageBucket[];
+  byModel: UsageBucket[];
+  byRole: UsageBucket[];
+  topTasks: (UsageBucket & { projectId: string | null; taskKey: string })[];
+  byTaskType: { type: string; tasks: number; avgTokens: number; avgCostUsd: number }[];
+}
+
+export interface UsageWindowStatusDto {
+  engineId: string;
+  displayName: string;
+  authStatus: string;
+  resetAt: number | null;
+  /** Windows reported by the CLI itself (e.g. Claude's 5-hour / 7-day). */
+  reported: { name: string; utilization: number | null; resetsAt: number | null; status: string }[];
+  /** Limit you configured: tokens used in the last `hours` vs `limit`. */
+  configured: { limit: number; hours: number; used: number } | null;
+}
+
+export interface CheckpointDto {
+  id: string;
+  taskStatus: string;
+  role: AgentRole | null;
+  engineId: string | null;
+  sessionId: string | null;
+  branchName: string | null;
+  lastCompletedStep: string | null;
+  notes: string;
+  createdAt: number;
+}

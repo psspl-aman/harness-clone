@@ -18,6 +18,7 @@ import {
   SwitchField,
   TextField,
 } from '@/components/settings/fields';
+import { PricingEditor } from '@/components/settings/pricing';
 import { PageHeader } from '@/components/shell/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,13 +56,14 @@ export default function SettingsPage() {
   const [edits, setEdits] = useState<AppSettings | null>(null);
   const draft = edits ?? settings.data ?? null;
 
-  const patch = useMemo(
-    () =>
-      edits && settings.data
-        ? (diffObjects(settings.data, edits) as DeepPartial<AppSettings> | undefined)
-        : undefined,
-    [edits, settings.data],
-  );
+  const patch = useMemo(() => {
+    if (!edits || !settings.data) return undefined;
+    const d = diffObjects(settings.data, edits) as DeepPartial<AppSettings> | undefined;
+    // The price table is saved as a whole (so removals stick).
+    if (JSON.stringify(edits.pricing) !== JSON.stringify(settings.data.pricing))
+      return { ...d, pricing: edits.pricing };
+    return d;
+  }, [edits, settings.data]);
   const dirty = patch !== undefined;
   const validation = draft ? AppSettingsSchema.safeParse(draft) : null;
 
@@ -88,7 +90,7 @@ export default function SettingsPage() {
       return {
         ...base,
         [key]:
-          typeof value === 'object' && value !== null
+          typeof value === 'object' && value !== null && key !== 'pricing'
             ? { ...(base[key] as object), ...value }
             : value,
       };
@@ -220,6 +222,13 @@ export default function SettingsPage() {
               checked={draft.quota.fallbackEnabled}
               onChange={(v) => set('quota', { fallbackEnabled: v })}
             />
+          </Section>
+
+          <Section
+            title="Pricing"
+            description="Cost estimates for engines that don't report their own cost."
+          >
+            <PricingEditor value={draft.pricing} onChange={(v) => set('pricing', v)} />
           </Section>
 
           <Section

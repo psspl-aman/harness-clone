@@ -7,8 +7,8 @@
 | 3   | **Engines**: adapter interface; Claude Code, Codex, Gemini/Antigravity and custom adapters; install detection; login PTY; status | ✅ Done |
 | 4   | **Requirement Chat + Planner**: plan and task generation (Zod-validated JSON with retry), editing, approval gate                 | ✅ Done |
 | 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | ✅ Done |
-| 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | ⏳ Next |
-| 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | —       |
+| 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | ✅ Done |
+| 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | ⏳ Next |
 | 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | —       |
 | 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | —       |
 | 10  | **Polish & Hardening**: safety guards, more E2E coverage, UX polish                                                              | —       |
@@ -154,3 +154,18 @@
   - The Tester added coverage for untested criteria (11 tests). AgentForge's own `node --test` passed.
   - The Documenter wrote a README.
   - The work merged with `--no-ff` into `main`. The checkout is clean and the tests pass in the repo.
+
+## Phase 6: what was verified
+
+- **Unit and integration (Vitest, 173 tests in total):**
+  - A quota pause saves a checkpoint, and at the reset time the scheduler resumes the same CLI session (`--resume` with a "you were interrupted" prompt).
+  - Exponential backoff probing when no reset time is known: the wait doubles, then the task resumes and completes.
+  - Fallback to a second engine with no pause.
+  - A login pause resumes once the engine is active again.
+  - No new work starts on an exhausted engine.
+  - The usage summary: totals, estimated share, and the day, week, project, engine, role, top-task and task-type breakdowns, plus engine filtering.
+  - Cost estimation from the price table.
+  - Usage windows against a configured limit (only the last N hours count).
+  - Per-project pipeline overrides.
+- **E2E (Playwright, 23 tests in total):** the Usage dashboard (table view, measure switch, windows), price-table edits including removal, and project pipeline and fallback settings.
+- **Visual check:** the Usage page in light and dark mode against real recorded runs. The meter colours use the fixed status palette, always with an icon and label; the dark-mode set was re-picked after the palette validator flagged two colours that were too similar.

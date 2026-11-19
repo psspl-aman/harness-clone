@@ -103,6 +103,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: qk.taskHistory(e.payload.task.id) });
             void queryClient.invalidateQueries({ queryKey: ['task-detail', e.payload.task.id] });
             break;
+          case 'run.finished':
+            void queryClient.invalidateQueries({ queryKey: ['usage'] });
+            break;
           case 'pipeline.updated':
             queryClient.setQueryData(qk.pipeline(e.payload.status.projectId), e.payload.status);
             break;

@@ -338,6 +338,51 @@ export function EngineCard({ engine, index }: { engine: EngineInfo; index: numbe
                 Leave empty to auto-detect{engine.path ? ` (found ${engine.path})` : ''}.
               </p>
             </form>
+            <form
+              className="space-y-1.5 md:col-span-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                const limit = Number(f.get('limit')) || null;
+                const hours = Number(f.get('hours')) || null;
+                update.mutate({
+                  windowTokenLimit: limit && hours ? limit : null,
+                  windowHours: limit && hours ? hours : null,
+                });
+              }}
+            >
+              <Label htmlFor={`limit-${engine.id}`}>Usage window limit</Label>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Input
+                  id={`limit-${engine.id}`}
+                  name="limit"
+                  type="number"
+                  min={1}
+                  defaultValue={engine.windowTokenLimit ?? ''}
+                  placeholder="tokens"
+                  className="h-8 w-36"
+                />
+                <span className="text-muted-foreground">tokens per</span>
+                <Input
+                  name="hours"
+                  type="number"
+                  min={1}
+                  step="0.5"
+                  defaultValue={engine.windowHours ?? ''}
+                  placeholder="hours"
+                  aria-label="Window length in hours"
+                  className="h-8 w-24"
+                />
+                <span className="text-muted-foreground">hours</span>
+                <Button size="sm" variant="outline" type="submit">
+                  Save
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Optional. Shows how much of your plan’s window is used on the Usage page (Claude
+                Code reports its windows itself).
+              </p>
+            </form>
             {engine.capabilities.apiKey && (
               <form
                 className="space-y-1.5 md:col-span-2"

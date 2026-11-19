@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { EngineRoles } from '@/components/projects/engine-roles';
+import { PipelineSettingsCard } from '@/components/projects/pipeline-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -432,6 +433,7 @@ export function ProjectOverview({ project: p }: { project: ProjectDetail }) {
       <CommandsCard key={`cmd-${p.onboardedAt}`} project={p} />
       <AnalysisCards project={p} />
       <EnginesCard project={p} />
+      <PipelineSettingsCard project={p} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Bot, FolderKanban, Plug, Settings, type LucideIcon } from 'lucide-react';
+import { BarChart3, Bot, FolderKanban, Plug, Settings, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   href: string;
@@ -11,6 +11,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Projects', icon: FolderKanban, shortcut: 'p' },
   { href: '/agents', label: 'Agents & Accounts', icon: Bot, shortcut: 'a' },
+  { href: '/usage', label: 'Usage', icon: BarChart3, shortcut: 'u' },
   { href: '/integrations', label: 'Integrations', icon: Plug, shortcut: 'i' },
   { href: '/settings', label: 'Settings', icon: Settings, shortcut: 's' },
 ];

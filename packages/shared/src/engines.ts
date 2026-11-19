@@ -102,6 +102,8 @@ export interface EngineInfo {
   capabilities: EngineCapabilities;
   lastCheckedAt: number | null;
   customConfig: CustomEngineConfig | null;
+  windowTokenLimit: number | null;
+  windowHours: number | null;
 }
 
 export const UpdateEngineInputSchema = z
@@ -109,6 +111,13 @@ export const UpdateEngineInputSchema = z
     enabled: z.boolean().optional(),
     binaryPath: z.string().trim().max(500).nullable().optional(),
     defaultModel: z.string().trim().max(200).nullable().optional(),
+    windowTokenLimit: z.number().int().positive().max(1e12).nullable().optional(),
+    windowHours: z
+      .number()
+      .positive()
+      .max(24 * 31)
+      .nullable()
+      .optional(),
   })
   .strict();
 export type UpdateEngineInput = z.infer<typeof UpdateEngineInputSchema>;

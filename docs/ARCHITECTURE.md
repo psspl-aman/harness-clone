@@ -186,6 +186,20 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - NEEDS_HUMAN → DONE (merge approved)
   - FAILED or NEEDS_HUMAN → the step being retried
 
+## Usage and quota (Phase 6)
+
+- **`lib/cost.ts`:** decides each run's cost. The CLI-reported cost wins. Otherwise it is estimated from `settings.pricing[model]` or `settings.pricing[engineId]` (stored with `cost_source = estimated`), and otherwise recorded as `none`. `RunRecorder` and engine test runs both use it.
+- **`services/usage.ts`:** SQL aggregations over `usage_records`. Day and week buckets use local time. Breakdowns join projects and tasks. The windows view combines `engines.usage_windows` (from Claude's rate-limit events) with your configured `window_token_limit` / `window_hours`.
+- **Orchestrator:**
+  - `pauseFor` writes a `checkpoints` row: step, role, engine, CLI session, branch, last completed step, partial output and resume time. It also stores `pipelineState.resumeHint`.
+  - With no reset time, `resumeAt = now + min(initial × 2^probe, max)`, and `quotaProbe` resets once a step succeeds.
+  - Each tick runs `resumePaused()`:
+    - due quota pauses re-check the engine with `refresh`. If it is still exhausted with a known reset time, the pause is rescheduled; otherwise the task goes back to its step.
+    - auth pauses resume once the engine is `ACTIVE`.
+  - `runRole` uses the hint to resume the session with a "continue where you left off" prompt, or to rerun with the partial output when the engine can't resume.
+  - `fallbackFor(project, engine)` swaps the role to the fallback engine on a quota error instead of pausing.
+  - `startQueued` skips tasks whose developer engine is exhausted, and records why.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.

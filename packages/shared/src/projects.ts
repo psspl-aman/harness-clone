@@ -173,6 +173,15 @@ export const ProjectDetailSchema = ProjectSummarySchema.extend({
   onboardingError: z.string().nullable(),
   onboardedAt: Timestamp.nullable(),
   roleEngines: RoleEnginesSchema.partial(),
+  pipeline: z.object({
+    maxConcurrentTasks: z.number().nullable(),
+    maxFixLoops: z.number().nullable(),
+    requireHumanReview: z.boolean().nullable(),
+    mergeStrategy: z.enum(['merge', 'pull_request']).nullable(),
+    fallbackEnabled: z.boolean(),
+    engineFallback: z.record(z.string(), z.string()),
+    paused: z.boolean(),
+  }),
   /** Full analysis; typed as OnboardingReport on the client. */
   onboardingReport: z.custom<OnboardingReport>().nullable(),
 });
@@ -185,6 +194,19 @@ export const UpdateProjectInputSchema = z
     stackPreferences: z.string().max(4000).nullable().optional(),
     commands: ProjectCommandsSchema.optional(),
     roleEngines: RoleEnginesSchema.partial().optional(),
+    /** Per-project overrides; null clears an override (back to the global setting). */
+    pipeline: z
+      .object({
+        maxConcurrentTasks: z.number().int().min(1).max(16).nullable(),
+        maxFixLoops: z.number().int().min(0).max(10).nullable(),
+        requireHumanReview: z.boolean().nullable(),
+        mergeStrategy: z.enum(['merge', 'pull_request']).nullable(),
+        fallbackEnabled: z.boolean(),
+        engineFallback: z.record(z.string().max(80), z.string().max(80)),
+      })
+      .partial()
+      .strict()
+      .optional(),
   })
   .strict();
 export type UpdateProjectInput = z.infer<typeof UpdateProjectInputSchema>;

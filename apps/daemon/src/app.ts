@@ -2,6 +2,8 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { registerPlanningRoutes } from './routes/planning';
 import { registerPipelineRoutes } from './routes/pipeline';
+import { registerUsageRoutes } from './routes/usage';
+import { UsageService } from './services/usage';
 import { Orchestrator } from './services/orchestrator/orchestrator';
 import { PlannerService } from './services/planner/service';
 import { RunRecorder } from './services/runs';
@@ -117,7 +119,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     if (e.type === 'settings.updated') engineRegistry.reschedule();
   });
 
-  const runs = new RunRecorder(dbHandle.db, bus);
+  const runs = new RunRecorder(dbHandle.db, bus, () => settings.get().pricing);
   const taskService = new TaskService(dbHandle.db, bus);
   const planner = new PlannerService({
     db: dbHandle.db,
@@ -173,6 +175,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     planner,
     runs,
     orchestrator,
+    usage: new UsageService(dbHandle.db, engineRegistry),
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -198,6 +201,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerTerminalRoutes(app, ctx);
   registerPlanningRoutes(app, ctx);
   registerPipelineRoutes(app, ctx);
+  registerUsageRoutes(app, ctx);
 
   app.addHook('onReady', async () => {
     projects.resumeInterruptedOnboarding();

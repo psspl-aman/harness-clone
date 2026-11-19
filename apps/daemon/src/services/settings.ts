@@ -46,7 +46,11 @@ export class SettingsService {
     if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
       throw badRequest('Settings patch must be a JSON object');
     }
-    const next = AppSettingsSchema.parse(deepMerge(this.get(), patch));
+    const merged = deepMerge(this.get(), patch);
+    // The price table is replaced as a whole so removed models really go away.
+    const p = patch as { pricing?: unknown };
+    if (p.pricing !== undefined) merged.pricing = p.pricing as typeof merged.pricing;
+    const next = AppSettingsSchema.parse(merged);
     this.db
       .insert(settings)
       .values({ key: KEY, value: next })

@@ -15,6 +15,7 @@ import type { Db } from '../db/client';
 import { engines, engineSessions, usageRecords } from '../db/schema';
 import type { EventBus } from '../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../http/errors';
+import { costOf } from '../lib/cost';
 import { newId } from '../lib/id';
 import type { SecretStore } from '../services/secrets';
 import type { SettingsService } from '../services/settings';
@@ -219,6 +220,8 @@ export class EngineRegistry {
     if (input.enabled !== undefined) patch.enabled = input.enabled;
     if (input.binaryPath !== undefined) patch.binaryPath = input.binaryPath || null;
     if (input.defaultModel !== undefined) patch.defaultModel = input.defaultModel || null;
+    if (input.windowTokenLimit !== undefined) patch.windowTokenLimit = input.windowTokenLimit;
+    if (input.windowHours !== undefined) patch.windowHours = input.windowHours;
     const info = this.apply(id, patch);
     if (input.binaryPath !== undefined) void this.refresh(id);
     return info;
@@ -391,6 +394,7 @@ export class EngineRegistry {
         this.testRuns.delete(runId);
         const u = result.usage;
         if (u.inputTokens || u.outputTokens || u.cacheReadTokens) {
+          const cost = costOf(u, id, this.o.settings.get().pricing);
           this.o.db
             .insert(usageRecords)
             .values({
@@ -401,7 +405,8 @@ export class EngineRegistry {
               outputTokens: u.outputTokens,
               cacheReadTokens: u.cacheReadTokens,
               cacheWriteTokens: u.cacheWriteTokens,
-              costUsd: u.costUsd ?? 0,
+              costUsd: cost.costUsd,
+              costSource: cost.source,
               durationMs: result.durationMs,
             })
             .run();
@@ -527,6 +532,8 @@ export class EngineRegistry {
       capabilities: a.capabilities,
       lastCheckedAt: r.lastCheckedAt,
       customConfig: r.customConfig ?? null,
+      windowTokenLimit: r.windowTokenLimit,
+      windowHours: r.windowHours,
     };
   }
 }

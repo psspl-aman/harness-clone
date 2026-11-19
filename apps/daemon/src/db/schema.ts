@@ -557,6 +557,11 @@ export const usageRecords = sqliteTable(
     cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
     cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
     costUsd: real('cost_usd').notNull().default(0),
+    /** Where costUsd came from: the CLI, the price table, or unknown. */
+    costSource: text('cost_source')
+      .$type<'reported' | 'estimated' | 'none'>()
+      .notNull()
+      .default('none'),
     durationMs: integer('duration_ms').notNull().default(0),
     recordedAt: integer('recorded_at').notNull().$defaultFn(now),
   },

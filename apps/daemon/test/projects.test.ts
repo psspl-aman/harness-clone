@@ -195,6 +195,55 @@ describe('attach existing (local)', () => {
     expect(existsSync(join(dir, '.git'))).toBe(false);
   });
 
+  it('stores per-project pipeline overrides and fallback engines', async () => {
+    const p = (
+      await post({
+        mode: 'scratch',
+        name: 'Y',
+        location: { kind: 'local', parentDir: root, folderName: 'y' },
+      })
+    ).json();
+    expect(p.pipeline).toMatchObject({
+      maxConcurrentTasks: null,
+      fallbackEnabled: false,
+      engineFallback: {},
+      paused: false,
+    });
+    const res = await t.app.inject({
+      method: 'PATCH',
+      url: `/api/projects/${p.id}`,
+      payload: {
+        pipeline: {
+          maxFixLoops: 1,
+          mergeStrategy: 'pull_request',
+          fallbackEnabled: true,
+          engineFallback: { 'claude-code': 'codex' },
+        },
+      },
+    });
+    expect(res.json().pipeline).toMatchObject({
+      maxFixLoops: 1,
+      mergeStrategy: 'pull_request',
+      fallbackEnabled: true,
+      engineFallback: { 'claude-code': 'codex' },
+    });
+    const cleared = await t.app.inject({
+      method: 'PATCH',
+      url: `/api/projects/${p.id}`,
+      payload: { pipeline: { maxFixLoops: null } },
+    });
+    expect(cleared.json().pipeline.maxFixLoops).toBeNull();
+    expect(
+      (
+        await t.app.inject({
+          method: 'PATCH',
+          url: `/api/projects/${p.id}`,
+          payload: { pipeline: { maxFixLoops: 99 } },
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+
   it('rejects updates with unknown fields', async () => {
     const p = (
       await post({
