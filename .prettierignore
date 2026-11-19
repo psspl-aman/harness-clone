@@ -4,3 +4,4 @@ dist
 coverage
 pnpm-lock.yaml
 apps/daemon/drizzle/meta
+apps/web/public/monaco

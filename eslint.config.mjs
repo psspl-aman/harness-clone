@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/.next/**',
       '**/coverage/**',
       '**/next-env.d.ts',
+      'apps/web/public/monaco/**',
       'apps/daemon/drizzle/**',
     ],
   },

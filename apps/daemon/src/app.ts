@@ -3,6 +3,10 @@ import multipart from '@fastify/multipart';
 import { registerPlanningRoutes } from './routes/planning';
 import { registerPipelineRoutes } from './routes/pipeline';
 import { registerUsageRoutes } from './routes/usage';
+import { registerRuntimeRoutes } from './routes/runtime';
+import { ErrorService } from './services/errors/error-service';
+import { RunService } from './services/run-service';
+import { FileService } from './services/files';
 import { UsageService } from './services/usage';
 import { Orchestrator } from './services/orchestrator/orchestrator';
 import { PlannerService } from './services/planner/service';
@@ -142,6 +146,10 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     log: app.log,
     autoStart: opts.orchestrator?.autoStart ?? process.env.NODE_ENV !== 'test',
   });
+  const errorService = new ErrorService(dbHandle.db, bus, taskService, terminals);
+  errorService.attach();
+  const runner = new RunService(dbHandle.db, bus, terminals, projects, errorService);
+  runner.attach();
   // Work interrupted by a restart can't be resumed mid-stream: mark it failed.
   runs.failOrphans();
   planner.failOrphans();
@@ -176,6 +184,9 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     runs,
     orchestrator,
     usage: new UsageService(dbHandle.db, engineRegistry),
+    errors: errorService,
+    runner,
+    files: new FileService(dbHandle.db),
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -202,6 +213,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerPlanningRoutes(app, ctx);
   registerPipelineRoutes(app, ctx);
   registerUsageRoutes(app, ctx);
+  registerRuntimeRoutes(app, ctx);
 
   app.addHook('onReady', async () => {
     projects.resumeInterruptedOnboarding();
@@ -212,6 +224,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     await orchestrator.stop();
     await planner.stop();
     await engineRegistry.stop();
+    runner.stopAll();
     terminals.closeAll();
     await projects.drain();
     dbHandle.close();

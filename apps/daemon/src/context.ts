@@ -14,6 +14,9 @@ import type { RunRecorder } from './services/runs';
 import type { TaskService } from './services/tasks';
 import type { Orchestrator } from './services/orchestrator/orchestrator';
 import type { UsageService } from './services/usage';
+import type { ErrorService } from './services/errors/error-service';
+import type { RunService } from './services/run-service';
+import type { FileService } from './services/files';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -33,6 +36,9 @@ export interface AppContext {
   runs: RunRecorder;
   orchestrator: Orchestrator;
   usage: UsageService;
+  errors: ErrorService;
+  runner: RunService;
+  files: FileService;
   workspaceRoot: () => string;
   startedAt: number;
 }

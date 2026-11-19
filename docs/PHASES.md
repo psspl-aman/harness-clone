@@ -8,8 +8,8 @@
 | 4   | **Requirement Chat + Planner**: plan and task generation (Zod-validated JSON with retry), editing, approval gate                 | ✅ Done |
 | 5   | **Orchestrator**: Dev → Review → Test → Fix → Document; worktrees, concurrency, fix loops, merge or PR                           | ✅ Done |
 | 6   | **Usage & Quota**: analytics, checkpoints, auto-pause and auto-resume, engine fallback                                           | ✅ Done |
-| 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | ⏳ Next |
-| 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | —       |
+| 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | ✅ Done |
+| 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | ⏳ Next |
 | 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | —       |
 | 10  | **Polish & Hardening**: safety guards, more E2E coverage, UX polish                                                              | —       |
 
@@ -169,3 +169,15 @@
   - Per-project pipeline overrides.
 - **E2E (Playwright, 23 tests in total):** the Usage dashboard (table view, measure switch, windows), price-table edits including removal, and project pipeline and fallback settings.
 - **Visual check:** the Usage page in light and dark mode against real recorded runs. The meter colours use the fixed status palette, always with an icon and label; the dark-mode set was re-picked after the palette validator flagged two colours that were too similar.
+
+## Phase 7: what was verified
+
+- **Unit and integration (Vitest, 188 tests in total):**
+  - Error matchers: TypeScript, JS exceptions with stack frames, Python tracebacks, Go, Rust, Java, failing tests and bundler errors, with ANSI codes stripped and a stable fingerprint per error.
+  - The dev server starts in a PTY, its preview URL is detected (`0.0.0.0` becomes `localhost`), a second start is refused, and a deliberate stop is not reported as an error.
+  - A crashing server is marked _crashed_ and its exit is recorded as an error with the last output.
+  - Build output is scanned. The same error seen again increments its count; a resolved error that comes back is reopened, and an ignored one stays ignored.
+  - "Fix with agent" creates a high-priority bug task that starts with the **Fixer** (Fix → Review → Test → Document). The error is resolved when the task is done and reopened if it is cancelled.
+  - A failed task appears as a pipeline error.
+  - The file browser lists files git-aware and refuses `.env`, `.git/`, paths outside the project and binary contents.
+- **E2E (Playwright, 24 tests in total):** run a real Node server from the header, see it in the Preview iframe, run Build from the menu and get the error badge, jump from the error to the file in Monaco, create a fix task, type into a shell terminal, then stop the server.

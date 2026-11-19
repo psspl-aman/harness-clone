@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–6 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** Phases 1–7 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota, Run & Terminal) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
 
 ## Requirements
 
@@ -147,6 +147,15 @@ Approved tasks are built automatically. Each one goes through these steps:
   - A task paused for login (_Paused · login_) resumes as soon as the engine is active again.
   - New tasks don't start on an engine whose window is exhausted.
 - **Engine fallback.** Project → Overview → Pipeline. With fallback enabled and an engine chosen for each primary, a step that hits a usage limit continues immediately on the fallback engine, which is then used for that role on that task.
+
+## Running the project, terminals and errors
+
+- **Run.** The project header has **Run**, which starts the project's run command (Overview → Commands) in a terminal. While it runs you get **Stop** and **Restart**. The menu next to it runs **Build**, **Run tests** and **Install dependencies** once each.
+- **Preview.** The local URL your dev server prints is picked up and shown in the **Preview** tab. You can type another URL or open it in a new browser tab.
+- **Code.** A read-only browser of the project's files (respecting `.gitignore`) with syntax highlighting. Files that may contain secrets, such as `.env`, are never shown.
+- **Terminals.** The bottom panel holds the run and build terminals and any shells you open (**New terminal**) in the project folder.
+- **Errors.** AgentForge watches terminal and run output and the pipeline for errors: TypeScript, JavaScript stack traces, Python tracebacks, Go, Rust, Java, failing tests, bundler errors and crashed processes. Repeats are grouped with a count. **Fix with agent** creates a bug task that goes Fix → Review → Test → Document and merges like any other; the error is marked resolved when it's done. You can also ignore, resolve or reopen errors, or jump to the file and line.
+- **Activity.** Every task status change in the project, newest first.
 
 ## Configuration
 

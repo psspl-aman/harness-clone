@@ -1,6 +1,12 @@
 'use client';
 
-import type { AnyAppEvent, ChatMessageDto, EngineInfo, PlanBoardDto } from '@agentforge/shared';
+import type {
+  AnyAppEvent,
+  ChatMessageDto,
+  EngineInfo,
+  ErrorDto,
+  PlanBoardDto,
+} from '@agentforge/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -108,6 +114,32 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             break;
           case 'pipeline.updated':
             queryClient.setQueryData(qk.pipeline(e.payload.status.projectId), e.payload.status);
+            break;
+          case 'error.updated':
+            queryClient.setQueryData<ErrorDto[]>(qk.errors(e.payload.projectId), (list) => {
+              if (!list) return list;
+              const x = e.payload.error;
+              return list.some((y) => y.id === x.id)
+                ? list
+                    .map((y) => (y.id === x.id ? x : y))
+                    .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+                : [x, ...list];
+            });
+            break;
+          case 'project.run':
+            queryClient.setQueryData(qk.projectRun(e.payload.run.projectId), e.payload.run);
+            break;
+          case 'terminal.created':
+            if (e.payload.terminal.projectId)
+              void queryClient.invalidateQueries({
+                queryKey: qk.terminals(e.payload.terminal.projectId),
+              });
+            break;
+          case 'terminal.exit':
+            void queryClient.invalidateQueries({ queryKey: ['terminals'] });
+            break;
+          case 'task.status_changed':
+            void queryClient.invalidateQueries({ queryKey: ['activity'] });
             break;
           case 'task.deleted':
             queryClient.setQueryData<PlanBoardDto>(qk.board(e.payload.projectId), (b) =>

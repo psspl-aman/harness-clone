@@ -139,7 +139,7 @@ ${JSON_ONLY}
 }
 
 export interface FixInput {
-  source: 'review' | 'tests' | 'human';
+  source: 'review' | 'tests' | 'human' | 'error';
   review?: {
     summary: string;
     comments: { file?: string | null; line?: number | null; severity: string; body: string }[];
@@ -154,9 +154,11 @@ export function fixerPrompt(ctx: RoleContext, fix: FixInput): string {
   const problem =
     fix.source === 'review'
       ? `The Reviewer requested changes:\n${fix.review?.summary ?? ''}\n\n${(fix.review?.comments ?? []).map((c) => `- [${c.severity}] ${c.file ?? ''}${c.line ? `:${c.line}` : ''} ${c.body}`).join('\n')}`
-      : fix.source === 'human'
-        ? `The user reviewed the change and asked for:\n${fix.humanComments ?? ''}`
-        : `Tests or the build failed:\n${fix.testSummary ?? ''}\n${(fix.failures ?? []).map((f) => `- ${f}`).join('\n')}${fix.checkLog ? `\n\nOutput of AgentForge's own checks:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`;
+      : fix.source === 'error'
+        ? 'The error described in the task above was detected while running the project. Reproduce it if you can (use the project commands), find the root cause and fix it.'
+        : fix.source === 'human'
+          ? `The user reviewed the change and asked for:\n${fix.humanComments ?? ''}`
+          : `Tests or the build failed:\n${fix.testSummary ?? ''}\n${(fix.failures ?? []).map((f) => `- ${f}`).join('\n')}${fix.checkLog ? `\n\nOutput of AgentForge's own checks:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`;
   return `# Role: Fixer
 You fix problems found in task ${ctx.task.key}'s change.
 

@@ -6,6 +6,7 @@ import type { GithubStatus } from './projects';
 import type { AgentEvent, AgentRunResultDto, EngineInfo, TerminalInfo } from './engines';
 import type { ChatMessageDto, PlanDto, PlannerState, TaskDto } from './planning';
 import type { PipelineStatusDto } from './pipeline';
+import type { ErrorDto, ProjectRunDto } from './runtime';
 
 /**
  * Every event that flows over the EventBus/WebSocket. Add new events here;
@@ -36,6 +37,8 @@ export const EventPayloads = {
   'task.updated': z.object({ projectId: z.string(), task: z.custom<TaskDto>() }),
   'task.deleted': z.object({ projectId: z.string(), taskId: z.string() }),
   'pipeline.updated': z.object({ status: z.custom<PipelineStatusDto>() }),
+  'error.updated': z.object({ projectId: z.string(), error: z.custom<ErrorDto>() }),
+  'project.run': z.object({ run: z.custom<ProjectRunDto>() }),
   'engine.removed': z.object({ engineId: z.string() }),
   /** High-volume, transient: not kept in the replay buffer. */
   'run.event': z.object({ runId: z.string(), event: z.custom<AgentEvent>() }),

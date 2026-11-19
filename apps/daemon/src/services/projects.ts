@@ -431,6 +431,11 @@ export class ProjectService {
     this.emitUpdated(id);
   }
 
+  /** Re-broadcast a project after another service changed it. */
+  touch(id: string): void {
+    this.emitUpdated(id);
+  }
+
   private emitUpdated(id: string) {
     this.deps.bus.emit('project.updated', { project: this.summaryOf(id) }, [
       Topics.global,

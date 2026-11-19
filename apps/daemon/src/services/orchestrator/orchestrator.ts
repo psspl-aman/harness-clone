@@ -295,7 +295,7 @@ export class Orchestrator {
       );
     for (const t of queued) {
       if (free <= 0) break;
-      const engine = this.safeEngine(this.engineFor(t, 'developer'));
+      const engine = this.safeEngine(this.engineFor(t, this.roleFor('IN_DEVELOPMENT', t)));
       if (
         engine?.authStatus === 'QUOTA_EXHAUSTED' &&
         engine.resetAt &&
@@ -415,8 +415,11 @@ export class Orchestrator {
           { key: conflictOf.key, title: conflictOf.title },
           task.pipelineState.conflictFiles ?? [],
         )
-      : developerPrompt(ctx);
-    const out = await this.runRole(task, driver, 'developer', prompt, path, 'full', null, true);
+      : task.origin === 'error'
+        ? fixerPrompt(ctx, { source: 'error' })
+        : developerPrompt(ctx);
+    const role = this.roleFor('IN_DEVELOPMENT', task);
+    const out = await this.runRole(task, driver, role, prompt, path, 'full', null, true);
     if (!out) return;
     this.advance(task.id, 'IN_REVIEW', 'Implementation committed');
   }
@@ -1299,7 +1302,7 @@ export class Orchestrator {
     for (const t of paused) {
       const step = t.resumeToStatus;
       if (!step) continue;
-      const engineId = this.engineFor(t, this.roleFor(step));
+      const engineId = this.engineFor(t, this.roleFor(step, t));
       if (t.status === 'PAUSED_QUOTA') {
         if (!t.resumeAt || t.resumeAt > Date.now()) continue;
         const engine = await this.d.engines.refresh(engineId).catch(() => null);
@@ -1345,7 +1348,10 @@ export class Orchestrator {
     }
   }
 
-  private roleFor(status: TaskStatus): AgentRole {
+  /** The agent role that works on a task in `status`. Error-fix tasks start with the Fixer. */
+  private roleFor(status: TaskStatus, task?: Pick<TaskRow, 'origin' | 'pipelineState'>): AgentRole {
+    if (status === 'IN_DEVELOPMENT' && task?.origin === 'error' && !task.pipelineState.conflictOf)
+      return 'fixer';
     const map: Partial<Record<TaskStatus, AgentRole>> = {
       IN_REVIEW: 'reviewer',
       IN_TESTING: 'tester',

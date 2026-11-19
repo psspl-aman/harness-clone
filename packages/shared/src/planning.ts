@@ -163,6 +163,14 @@ export interface TaskStatusChangeDto {
   createdAt: number;
 }
 
+/** A status change in the project-wide activity feed. */
+export interface ActivityItemDto extends TaskStatusChangeDto {
+  id: number;
+  taskId: string;
+  taskKey: string;
+  taskTitle: string;
+}
+
 export interface TaskDto {
   id: string;
   projectId: string;

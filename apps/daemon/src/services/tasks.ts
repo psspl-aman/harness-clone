@@ -17,6 +17,7 @@ import {
   type TaskDto,
   type TaskStatus,
   type TaskStatusChangeDto,
+  type ActivityItemDto,
 } from '@agentforge/shared';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
@@ -123,6 +124,29 @@ export class TaskService {
         .orderBy(desc(plans.version))
         .get() ?? null
     );
+  }
+
+  /** Latest status changes across a project's tasks, newest first. */
+  activity(projectId: string, limit = 100): ActivityItemDto[] {
+    return this.db
+      .select({ h: taskStatusHistory, key: tasks.key, title: tasks.title })
+      .from(taskStatusHistory)
+      .innerJoin(tasks, eq(tasks.id, taskStatusHistory.taskId))
+      .where(eq(tasks.projectId, projectId))
+      .orderBy(desc(taskStatusHistory.id))
+      .limit(limit)
+      .all()
+      .map(({ h, key, title }) => ({
+        id: h.id,
+        taskId: h.taskId,
+        taskKey: key,
+        taskTitle: title,
+        from: h.fromStatus,
+        to: h.toStatus,
+        reason: h.reason,
+        actor: h.actor,
+        createdAt: h.createdAt,
+      }));
   }
 
   history(taskId: string): TaskStatusChangeDto[] {

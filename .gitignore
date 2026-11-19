@@ -14,3 +14,6 @@ coverage/
 test-results/
 playwright-report/
 next-env.d.ts
+
+# Monaco is copied from node_modules at dev/build time
+apps/web/public/monaco/

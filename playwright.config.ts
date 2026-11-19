@@ -40,7 +40,7 @@ export default defineConfig({
       },
     },
     {
-      command: `pnpm --filter @agentforge/web exec next dev -p ${WEB_PORT}`,
+      command: `pnpm --filter @agentforge/web exec sh -c "node scripts/copy-monaco.mjs && next dev -p ${WEB_PORT}"`,
       url: `http://localhost:${WEB_PORT}`,
       reuseExistingServer: false,
       timeout: 120_000,

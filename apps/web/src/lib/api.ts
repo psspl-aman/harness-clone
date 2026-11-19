@@ -40,6 +40,10 @@ import type {
   CheckpointDto,
   UsageSummaryDto,
   UsageWindowStatusDto,
+  ActivityItemDto,
+  ErrorDto,
+  FileContentDto,
+  ProjectRunDto,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -153,6 +157,12 @@ export const api = {
       request<PlannerState>('GET', `/api/projects/${projectId}/planner`),
     cancel: (projectId: string) =>
       request<{ ok: true }>('POST', `/api/projects/${projectId}/planner/cancel`),
+    projectRun: (projectId: string) => ['project-run', projectId] as const,
+    errors: (projectId: string) => ['errors', projectId] as const,
+    activity: (projectId: string) => ['activity', projectId] as const,
+    terminals: (projectId: string) => ['terminals', projectId] as const,
+    files: (projectId: string) => ['files', projectId] as const,
+    file: (projectId: string, path: string) => ['files', projectId, path] as const,
     references: (projectId: string, q: string) =>
       request<ReferenceSuggestions>(
         'GET',
@@ -262,7 +272,35 @@ export const api = {
         events: { seq: number; event: AgentEvent }[];
       }>('GET', `/api/runs/${id}`),
   },
+  runtime: {
+    run: (projectId: string) => request<ProjectRunDto>('GET', `/api/projects/${projectId}/run`),
+    start: (projectId: string) =>
+      request<ProjectRunDto>('POST', `/api/projects/${projectId}/run/start`),
+    stop: (projectId: string) =>
+      request<ProjectRunDto>('POST', `/api/projects/${projectId}/run/stop`),
+    restart: (projectId: string) =>
+      request<ProjectRunDto>('POST', `/api/projects/${projectId}/run/restart`),
+    oneShot: (projectId: string, kind: 'build' | 'test' | 'install') =>
+      request<TerminalInfo>('POST', `/api/projects/${projectId}/run/${kind}`),
+    shell: (projectId: string) =>
+      request<TerminalInfo>('POST', `/api/projects/${projectId}/terminals`, {}),
+    errors: (projectId: string) => request<ErrorDto[]>('GET', `/api/projects/${projectId}/errors`),
+    errorAction: (errorId: string, action: 'fix' | 'ignore' | 'reopen' | 'resolve') =>
+      request<ErrorDto>('POST', `/api/errors/${errorId}/${action}`),
+    activity: (projectId: string) =>
+      request<ActivityItemDto[]>('GET', `/api/projects/${projectId}/activity`),
+    files: (projectId: string) =>
+      request<{ files: string[]; truncated: boolean }>('GET', `/api/projects/${projectId}/files`),
+    file: (projectId: string, path: string) =>
+      request<FileContentDto>(
+        'GET',
+        `/api/projects/${projectId}/file?${new URLSearchParams({ path })}`,
+      ),
+  },
   terminals: {
+    list: (projectId: string) =>
+      request<TerminalInfo[]>('GET', `/api/terminals?${new URLSearchParams({ projectId })}`),
+    remove: (id: string) => request<void>('DELETE', `/api/terminals/${id}`),
     get: (id: string) =>
       request<TerminalInfo & { scrollback: string }>('GET', `/api/terminals/${id}`),
     input: (id: string, data: string) =>
@@ -305,6 +343,12 @@ export const qk = {
   taskDetail: (taskId: string, part: 'runs' | 'reviews' | 'tests' | 'diff' | 'report') =>
     ['task-detail', taskId, part] as const,
   run: (runId: string) => ['run', runId] as const,
+  projectRun: (projectId: string) => ['project-run', projectId] as const,
+  errors: (projectId: string) => ['errors', projectId] as const,
+  activity: (projectId: string) => ['activity', projectId] as const,
+  terminals: (projectId: string) => ['terminals', projectId] as const,
+  files: (projectId: string) => ['files', projectId] as const,
+  file: (projectId: string, path: string) => ['files', projectId, path] as const,
   references: (projectId: string, q: string) => ['references', projectId, q] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,

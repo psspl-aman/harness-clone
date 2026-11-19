@@ -200,6 +200,14 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - `fallbackFor(project, engine)` swaps the role to the fallback engine on a quota error instead of pausing.
   - `startQueued` skips tasks whose developer engine is exhausted, and records why.
 
+## Run, terminals and errors (Phase 7)
+
+- **`services/run-service.ts`:** one dev server per project, started as `bash -lc <run command>` in a `run` PTY (via `TerminalService`), plus one-shot build, test and install terminals and interactive shells. The first local URL printed (`http://localhost|127.0.0.1|0.0.0.0:port`) becomes the preview URL; with no URL the run counts as running after 4 s. State is mirrored to `projects.running_status` and broadcast as `project.run`. Deleting a project kills its terminals.
+- **`services/errors/matchers.ts`:** pluggable matchers, each a function of the current line and the recent lines. `OutputScanner` buffers PTY chunks into lines, strips ANSI codes, keeps the last 80 lines for excerpts and reports each detection once per terminal.
+- **`services/errors/error-service.ts`:** listens to `terminal.output` and `terminal.exit` for project terminals, and to `task.status_changed`. Errors are upserted by `(project, fingerprint)`, where the fingerprint is a hash of matcher, file and the message with numbers and quoted values normalised. A non-zero exit of a run terminal is recorded only when nothing more specific was found and the stop wasn't deliberate. Failed tasks are recorded with the fingerprint `task:<id>`.
+- **Fix tasks:** `fix()` creates an approved follow-up task (`origin = error`, `source_error_id`). The orchestrator runs its first step with the **Fixer** role and `fixerPrompt(source: 'error')`, then the usual Review → Test → Document → Merge. The task finishing resolves the error; cancelling it reopens it.
+- **`services/files.ts`:** the read-only Code tab. The tree is `git ls-files --cached --others --exclude-standard`. Reads are confined to the project, refuse `.git/` and anything matching the secret-file pattern, cap at 1 MB and flag binaries.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.
@@ -211,6 +219,7 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
 - **Pages:**
   - New-project wizard (`/projects/new`): one flow for starting from scratch and one for attaching an existing project. It has a side stepper, validates each step, checks paths live, and lets you connect GitHub without leaving the wizard.
   - Project page (`/projects/[id]`): live onboarding status, editable commands showing where each was detected, stack, conventions, structure, git state, env file names, requirements, per-role engine overrides, and removal with a typed confirmation.
+  - Project workspace: run controls in the header (Run, Stop, Restart and a menu for build, test and install); **Preview** (iframe of the detected URL, editable); **Code** (git-aware file tree and read-only Monaco, served from `public/monaco`, which `scripts/copy-monaco.mjs` copies from `node_modules` before `dev` and `build`); and a resizable bottom panel with **Terminals**, **Errors** (count badge, Fix with agent, ignore, resolve, jump to file) and **Activity**.
   - Integrations: connect GitHub.
   - Agents & Accounts (`/agents`): one card per engine.
     - Status pill (with a reset countdown when a limit is hit), version and account.

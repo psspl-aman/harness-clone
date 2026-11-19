@@ -154,3 +154,22 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 | GET    | `/api/tasks/:id/checkpoints`                    | Checkpoints saved when the task paused                                                                                                                              |
 
 `PATCH /api/engines/:id` also accepts `windowTokenLimit` and `windowHours`. `PATCH /api/projects/:id` accepts a `pipeline` object: `maxConcurrentTasks`, `maxFixLoops`, `requireHumanReview`, `mergeStrategy` (each `null` means use the global setting), plus `fallbackEnabled` and `engineFallback`.
+
+## Run, terminals, errors and files
+
+| Method | Path                                            | Description                                                                                                        |
+| ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/projects/:id/run`                         | `ProjectRunDto`: `status` (stopped, starting, running, crashed), `command`, `terminalId`, `previewUrl`, `exitCode` |
+| POST   | `/api/projects/:id/run/start`                   | Start the project's run command in a PTY (409 if already running, 400 if no run command)                           |
+| POST   | `/api/projects/:id/run/stop`                    | Stop it (waits up to 5 s for the process to exit)                                                                  |
+| POST   | `/api/projects/:id/run/restart`                 | Stop, then start                                                                                                   |
+| POST   | `/api/projects/:id/run/:kind`                   | One-shot `build`, `test` or `install` in a new terminal; returns the `TerminalInfo`                                |
+| POST   | `/api/projects/:id/terminals`                   | New interactive shell in the project folder (`{ title? }`)                                                         |
+| GET    | `/api/projects/:id/errors?status=`              | Detected errors, newest first; `status` is a comma list of `open`, `fixing`, `resolved`, `ignored`                 |
+| POST   | `/api/errors/:id/fix`                           | Create a fix task for the error (409 while one is already fixing it)                                               |
+| POST   | `/api/errors/:id/ignore` · `resolve` · `reopen` | Change the error's status                                                                                          |
+| GET    | `/api/projects/:id/activity`                    | The latest 100 task status changes in the project                                                                  |
+| GET    | `/api/projects/:id/files`                       | `{ files, truncated }`: tracked and untracked, non-ignored files                                                   |
+| GET    | `/api/projects/:id/file?path=`                  | `FileContentDto` (first 1 MB). 403 for secret files, 400 for `.git/` or invalid paths                              |
+
+Live events: `project.run` (run state changes) and `error.updated` (an error was recorded or changed status).

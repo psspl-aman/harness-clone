@@ -24,10 +24,15 @@ import { ProjectOverview, RemoveDialog } from '@/components/projects/overview';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BottomPanel } from '@/components/workspace/bottom-panel';
+import { CodeTab } from '@/components/workspace/code-tab';
+import { PreviewTab } from '@/components/workspace/preview-tab';
+import { RunControls } from '@/components/workspace/run-controls';
+import { useWorkspaceUi } from '@/components/workspace/store';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type Tab = 'plan' | 'overview' | 'chat';
+type Tab = 'plan' | 'overview' | 'chat' | 'preview' | 'code';
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +42,19 @@ export default function ProjectWorkspace() {
   const [chatOpen, setChatOpen] = useState(true);
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [code, setCode] = useState<{ path: string | null; line: number | null }>({
+    path: null,
+    line: null,
+  });
+  const showTerminal = useWorkspaceUi((s) => s.showTerminal);
+  const start = useMutation({
+    mutationFn: () => api.runtime.start(id),
+    onSuccess: (r) => r.terminalId && showTerminal(r.terminalId),
+    onError: (e) =>
+      toast.error('Could not start the project', {
+        description: e instanceof ApiClientError ? e.message : String(e),
+      }),
+  });
   const analyze = useMutation({
     mutationFn: () => api.projects.analyze(id),
     onError: (e) =>
@@ -73,10 +91,16 @@ export default function ProjectWorkspace() {
     setTab('plan');
     setOpenTask(taskId);
   };
+  const openFile = (path: string, line: number | null) => {
+    setTab('code');
+    setCode({ path, line });
+  };
 
   const tabs: { id: Tab; label: string; mobileOnly?: boolean }[] = [
     { id: 'chat', label: 'Chat', mobileOnly: true },
     { id: 'plan', label: 'Plan & Tasks' },
+    { id: 'preview', label: 'Preview' },
+    { id: 'code', label: 'Code' },
     { id: 'overview', label: 'Overview' },
   ];
 
@@ -123,7 +147,8 @@ export default function ProjectWorkspace() {
             )}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <RunControls project={p} onConfigure={() => setTab('overview')} />
           <Button variant="outline" size="sm" onClick={() => analyze.mutate()} disabled={analysing}>
             {analysing ? <Loader2 className="animate-spin" /> : <ScanSearch />} Re-analyse
           </Button>
@@ -208,7 +233,12 @@ export default function ProjectWorkspace() {
               </button>
             ))}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              tab === 'code' || tab === 'preview' ? 'overflow-hidden' : 'overflow-y-auto',
+            )}
+          >
             {tab === 'chat' && (
               <div className="h-full md:hidden">
                 <ChatPanel
@@ -222,7 +252,22 @@ export default function ProjectWorkspace() {
               <PlanTab projectId={id} openTaskId={openTask} onOpenTask={setOpenTask} />
             )}
             {tab === 'overview' && <ProjectOverview project={p} />}
+            {tab === 'preview' && (
+              <PreviewTab
+                projectId={id}
+                onStart={() => (p.commands.run ? start.mutate() : setTab('overview'))}
+              />
+            )}
+            {tab === 'code' && (
+              <CodeTab
+                projectId={id}
+                path={code.path}
+                line={code.line}
+                onSelect={(path) => setCode({ path, line: null })}
+              />
+            )}
           </div>
+          <BottomPanel projectId={id} onOpenTask={openTaskInPlan} onOpenFile={openFile} />
         </section>
       </div>
       <RemoveDialog project={p} open={removeOpen} onOpenChange={setRemoveOpen} />
