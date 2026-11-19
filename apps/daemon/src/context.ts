@@ -21,6 +21,7 @@ import type { McpService } from './services/mcp/mcp-service';
 import type { PmsService } from './services/pms/pms-service';
 import type { MemoryService } from './services/memory';
 import type { DocsService } from './services/docs';
+import type { SafetyService } from './services/safety';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -47,6 +48,7 @@ export interface AppContext {
   pms: PmsService;
   memory: MemoryService;
   docs: DocsService;
+  safety: SafetyService;
   workspaceRoot: () => string;
   startedAt: number;
 }

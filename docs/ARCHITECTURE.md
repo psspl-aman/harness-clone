@@ -227,6 +227,19 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
 - **`services/docs.ts`:** task reports from `documents`, plus Markdown files found with `git ls-files` (up to 4 levels deep, no vendored or build folders) read live through `FileService`, so the same path and secret guards apply. `exportAll` concatenates them with a table of contents and headings shifted down one level.
 - **PDF:** the web app's `/projects/[id]/docs/print` renders the document(s) and opens the browser's print dialog. Print CSS hides everything except `.print-root`.
 
+## Safety and hardening (Phase 10)
+
+- **Guard (`services/safety.ts`, `safety/classify.ts`).**
+  - At startup the daemon writes `~/.agentforge/bin/agentforge-guard.mjs`. Engines whose adapter sets `supportsGuard` (Claude Code) get a per-run guard from `EngineRegistry`: `--settings '{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"<node> <guard>","timeout":900}]}]}}'` plus `AF_GUARD_URL` and `AF_GUARD_TOKEN` in the CLI's environment. The token is revoked when the run ends, which also expires its pending approvals.
+  - The hook posts each tool call to `/api/safety/check`. `classifyTool` returns allow, confirm or deny:
+    - Bash command rules: destructive deletes, disk and power commands, push/sudo/pipe-to-shell, secret files, environment dumps, and writes outside the root.
+    - File tools must stay inside the run's cwd (the task worktree).
+    - Commands mentioning the safety API are denied.
+  - Confirmations create an approval, broadcast as `safety.approval`. The hook polls `/api/safety/wait` (about 20 s long-polls) until you answer or 10 minutes pass. Exit code 2 blocks the call and tells the agent why. If the daemon can't be reached, the hook fails closed.
+- **Redaction (`safety/redact.ts`).** `RunRecorder` (every run event before it is stored or broadcast) and `TerminalService` (PTY output before scrollback and broadcast) apply a redactor. It masks the decrypted values in `SecretStore` (cached until a secret changes) and common token shapes. It follows `settings.safety.redactSecrets`.
+- **Restart recovery.** At boot, `Orchestrator.start()` looks at the latest run of each active task. If it was cut off by a shutdown or crash, it writes a checkpoint and sets `resumeHint`, so the step continues the same CLI session (or reruns with the partial output).
+- **Virtualized logs.** Run logs in the task drawer render through `components/virtual-log.tsx` (TanStack Virtual, measured rows, follow-tail) and stream live while a run is active. Terminals use xterm's own virtualized buffer.
+
 ## Web app
 
 - **Providers:** `next-themes` (light, dark or system), TanStack Query, `TooltipProvider`, `LiveProvider` (owns the WebSocket and maps events to cache updates and toasts), and Sonner toasts.

@@ -274,13 +274,14 @@ export default function SettingsPage() {
             <SwitchField
               id="confirmDangerous"
               label="Confirm dangerous commands"
-              hint="Force-pushes, recursive deletes outside the project, reading secret files."
+              hint="Claude Code agents ask before pushing, using sudo, reading secret files or writing outside the project. Destructive commands (rm -rf ~, writing outside the project with file tools) are always blocked."
               checked={draft.safety.confirmDangerousCommands}
               onChange={(v) => set('safety', { confirmDangerousCommands: v })}
             />
             <SwitchField
               id="redactSecrets"
               label="Redact secrets from logs"
+              hint="Masks stored secrets and common token formats in agent logs and terminals."
               checked={draft.safety.redactSecrets}
               onChange={(v) => set('safety', { redactSecrets: v })}
             />

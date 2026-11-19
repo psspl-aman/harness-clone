@@ -25,7 +25,13 @@ import { ClaudeCodeAdapter } from './adapters/claude-code';
 import { CodexAdapter } from './adapters/codex';
 import { CustomCliAdapter } from './adapters/custom';
 import { GeminiCliAdapter } from './adapters/gemini-cli';
-import type { AdapterEnv, AgentEngineAdapter, AgentRunInput, AgentRunResult } from './types';
+import type {
+  AdapterEnv,
+  AgentEngineAdapter,
+  AgentRunInput,
+  AgentRunResult,
+  GuardProvider,
+} from './types';
 
 type EngineRow = typeof engines.$inferSelect;
 
@@ -318,6 +324,13 @@ export class EngineRegistry {
    * Run an agent through an engine, respecting the per-engine concurrency
    * limit. Rate-limit and auth outcomes update the engine's status.
    */
+  private guardProvider: GuardProvider | null = null;
+
+  /** Safety guard for engines that support a pre-tool-use hook. */
+  setGuardProvider(p: GuardProvider | null): void {
+    this.guardProvider = p;
+  }
+
   async run(
     id: string,
     input: AgentRunInput,
@@ -329,9 +342,12 @@ export class EngineRegistry {
       throw new AppError(409, 'ENGINE_DISABLED', `${adapter.displayName} is disabled`);
     const gate = this.gate(id);
     const release = await gate.acquire(input.signal);
+    const guard = adapter.supportsGuard
+      ? (this.guardProvider?.({ engineId: id, root: input.cwd, ...input.context }) ?? null)
+      : null;
     try {
       const result = await adapter.run(
-        { ...input, model: input.model ?? row.defaultModel },
+        { ...input, model: input.model ?? row.defaultModel, guard: guard?.config },
         (e) => {
           if (e.kind === 'rate_limit' && e.windows.length)
             this.apply(id, { usageWindows: e.windows });
@@ -341,6 +357,7 @@ export class EngineRegistry {
       this.applyRunOutcome(id, result);
       return result;
     } finally {
+      guard?.revoke();
       release();
     }
   }

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ChatPanel } from '@/components/chat/chat-panel';
 import { GithubIcon } from '@/components/icons';
@@ -35,6 +35,7 @@ import { api, ApiClientError, qk } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 type Tab = 'plan' | 'overview' | 'chat' | 'preview' | 'code' | 'docs' | 'memory';
+const TAB_SHORTCUTS: Tab[] = ['plan', 'preview', 'code', 'docs', 'memory', 'overview'];
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -65,6 +66,21 @@ export default function ProjectWorkspace() {
         description: e instanceof ApiClientError ? e.message : String(e),
       }),
   });
+
+  // Alt+1…6 switches workspace tabs.
+  useEffect(() => {
+    const order = TAB_SHORTCUTS;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= order.length) {
+        e.preventDefault();
+        setTab(order[n - 1]!);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (project.isPending) {
     return (
@@ -223,6 +239,11 @@ export default function ProjectWorkspace() {
               <button
                 key={t.id}
                 role="tab"
+                title={
+                  TAB_SHORTCUTS.includes(t.id)
+                    ? `Alt+${TAB_SHORTCUTS.indexOf(t.id) + 1}`
+                    : undefined
+                }
                 aria-selected={tab === t.id}
                 onClick={() => setTab(t.id)}
                 className={cn(

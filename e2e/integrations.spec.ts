@@ -110,7 +110,7 @@ test('connect a tracker over MCP, import tickets, handle a change and write back
   const link = page.getByTestId('tracker-link');
   await expect(link).toContainText('Fake Jira');
   await link.getByRole('button', { name: 'Sync now' }).click();
-  await expect(page.getByText('2 new')).toBeVisible();
+  await expect(page.getByText('2 new', { exact: true })).toBeVisible();
   await expect(link.getByTestId('sync-summary')).toContainText('3 tickets, 2 new');
 
   // 4. Imported drafts with their ticket ids; approving writes back.

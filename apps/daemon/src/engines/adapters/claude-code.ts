@@ -45,6 +45,7 @@ export class ClaudeCodeAdapter extends CliAdapter {
     { id: 'haiku', label: 'Haiku (latest)' },
   ];
   protected override apiKeyEnvVar = 'ANTHROPIC_API_KEY';
+  readonly supportsGuard = true;
 
   protected binaryCandidates(): string[] {
     const h = homedir();
@@ -81,8 +82,23 @@ export class ClaudeCodeAdapter extends CliAdapter {
         'Grep',
         'Glob',
       );
+    // Every tool call first asks AgentForge's guard (PreToolUse hook, exit 2 = blocked).
+    if (input.guard)
+      args.push(
+        '--settings',
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [
+              {
+                matcher: '*',
+                hooks: [{ type: 'command', command: input.guard.hookCommand, timeout: 900 }],
+              },
+            ],
+          },
+        }),
+      );
     // Prompt goes through stdin: no argv size limits, nothing visible in `ps`.
-    return { args, stdin: input.prompt };
+    return { args, stdin: input.prompt, env: input.guard?.env };
   }
 
   protected parseLine(line: string, state: RunState): AgentEvent[] {

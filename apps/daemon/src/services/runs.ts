@@ -1,3 +1,4 @@
+import { redactDeep, type Redactor } from '../safety/redact';
 import {
   Topics,
   type AgentEvent,
@@ -101,8 +102,16 @@ export class RunRecorder {
   }
 
   /** Event sink for an engine run: persists (batched) and broadcasts. */
+  private redact: Redactor | null = null;
+
+  /** Applied to every run event before it is stored or broadcast. */
+  setRedactor(r: Redactor): void {
+    this.redact = r;
+  }
+
   sink(runId: string): (e: AgentEvent) => void {
-    return (e) => {
+    return (raw) => {
+      const e = this.redact ? redactDeep(raw, this.redact) : raw;
       const l = this.live.get(runId);
       if (!l) return;
       this.bus.emit(

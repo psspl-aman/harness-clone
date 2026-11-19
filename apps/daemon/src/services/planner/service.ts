@@ -451,6 +451,11 @@ export class PlannerService {
             resumeSessionId: sessionId,
             timeoutMs: PLANNER_TIMEOUT_MS,
             signal: entry.controller.signal,
+            context: {
+              projectId: job.projectId,
+              taskId: job.targetTaskId ?? null,
+              role: 'planner',
+            },
           },
           this.d.runs.sink(runId),
         );

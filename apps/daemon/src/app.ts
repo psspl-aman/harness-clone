@@ -10,6 +10,9 @@ import { FileService } from './services/files';
 import { registerIntegrationRoutes } from './routes/integrations';
 import { McpService } from './services/mcp/mcp-service';
 import { MemoryService } from './services/memory';
+import { SafetyService } from './services/safety';
+import { registerSafetyRoutes } from './routes/safety';
+import { createRedactor } from './safety/redact';
 import { DocsService } from './services/docs';
 import { registerMemoryDocsRoutes } from './routes/memory-docs';
 import { PmsService } from './services/pms/pms-service';
@@ -133,6 +136,24 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   const memory = new MemoryService(dbHandle.db, bus, settings);
   const files = new FileService(dbHandle.db);
   const runs = new RunRecorder(dbHandle.db, bus, () => settings.get().pricing);
+  // Secrets are masked in run logs and terminals (Settings → Safety).
+  const redactor = createRedactor(
+    () => secrets.values(),
+    () => settings.get().safety.redactSecrets,
+  );
+  runs.setRedactor(redactor);
+  terminals.setRedactor(redactor);
+  const safety = new SafetyService({
+    db: dbHandle.db,
+    bus,
+    settings,
+    home: config.home,
+    url: () => {
+      const a = app.server.address();
+      return a && typeof a === 'object' ? `http://127.0.0.1:${a.port}` : null;
+    },
+  });
+  engineRegistry.setGuardProvider(safety.provider);
   const taskService = new TaskService(dbHandle.db, bus);
   const planner = new PlannerService({
     db: dbHandle.db,
@@ -218,6 +239,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     runner,
     files,
     docs: new DocsService(dbHandle.db, files),
+    safety,
     mcp,
     pms,
     memory,
@@ -250,6 +272,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerRuntimeRoutes(app, ctx);
   registerIntegrationRoutes(app, ctx);
   registerMemoryDocsRoutes(app, ctx);
+  registerSafetyRoutes(app, ctx);
 
   app.addHook('onReady', async () => {
     projects.resumeInterruptedOnboarding();
@@ -262,6 +285,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     await orchestrator.stop();
     await mcp.stop();
     memory.stop();
+    safety.stop();
     await planner.stop();
     await engineRegistry.stop();
     runner.stopAll();

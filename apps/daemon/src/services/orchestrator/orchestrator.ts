@@ -124,20 +124,34 @@ export class Orchestrator {
   constructor(private readonly d: OrchestratorDeps) {}
 
   start(): void {
-    // Nothing is running right after boot: clear stale "active run" markers.
+    // Nothing is running right after boot: clear stale "active run" markers, and
+    // checkpoint runs cut off by the shutdown/crash so their CLI session continues.
     for (const t of this.d.db
       .select({ id: tasks.id, s: tasks.pipelineState })
       .from(tasks)
       .where(inArray(tasks.status, [...ACTIVE_STATUSES]))
       .all()) {
-      if (t.s.activeRunId)
-        this.d.db
-          .update(tasks)
-          .set({
-            pipelineState: { ...t.s, activeRole: null, activeEngine: null, activeRunId: null },
-          })
-          .where(eq(tasks.id, t.id))
-          .run();
+      const last = this.d.db
+        .select({ id: agentRuns.id })
+        .from(agentRuns)
+        .where(eq(agentRuns.taskId, t.id))
+        .orderBy(desc(agentRuns.startedAt))
+        .get();
+      const hint = !t.s.resumeHint && last ? this.restartHint(t.id, last.id) : null;
+      if (!t.s.activeRunId && !hint) continue;
+      this.d.db
+        .update(tasks)
+        .set({
+          pipelineState: {
+            ...t.s,
+            activeRole: null,
+            activeEngine: null,
+            activeRunId: null,
+            ...(hint ? { resumeHint: hint } : {}),
+          },
+        })
+        .where(eq(tasks.id, t.id))
+        .run();
     }
     if (this.d.autoStart === false) return;
     this.d.bus.subscribe((e) => {
@@ -1014,9 +1028,9 @@ export class Orchestrator {
       this.patchState(task.id, { resumeHint: null }, false);
       if (hint.sessionId && this.d.engines.adapter(engineId).capabilities.resume) {
         resume = hint.sessionId;
-        nextPrompt = `You were interrupted (usage limit or login) before finishing. Continue exactly where you left off and complete the task as originally instructed.${schema ? ' Finish with the JSON object described earlier.' : ''}`;
+        nextPrompt = `You were interrupted (usage limit, login or an AgentForge restart) before finishing. Continue exactly where you left off and complete the task as originally instructed.${schema ? ' Finish with the JSON object described earlier.' : ''}`;
       } else if (hint.summary) {
-        nextPrompt = `${prompt}\n\n## Progress before an interruption\nA previous attempt was interrupted (usage limit or login). Its partial output:\n${hint.summary.slice(0, 6000)}\n\nCheck the working directory for work already done and continue from there.`;
+        nextPrompt = `${prompt}\n\n## Progress before an interruption\nA previous attempt was interrupted (usage limit, login or an AgentForge restart). Its partial output:\n${hint.summary.slice(0, 6000)}\n\nCheck the working directory for work already done and continue from there.`;
       }
     }
     let jsonAttempts = 0;
@@ -1058,6 +1072,7 @@ export class Orchestrator {
             resumeSessionId: resume,
             timeoutMs: STEP_TIMEOUT_MS,
             signal: runController.signal,
+            context: { projectId: task.projectId, taskId: task.id, role },
           },
           this.d.runs.sink(runId),
         );
@@ -1292,6 +1307,42 @@ export class Orchestrator {
       : 'resumes after you log in';
     this.d.tasks.transition(task.id, status, `${reason} — ${when}`, 'orchestrator');
     this.notify(task, 'warning', `${task.key} paused`, `${reason}. It ${when} automatically.`);
+  }
+
+  /** Resume hint (and checkpoint) for a run interrupted by a daemon restart. */
+  private restartHint(taskId: string, runId: string): PipelineState['resumeHint'] {
+    let detail;
+    try {
+      detail = this.d.runs.get(runId);
+    } catch {
+      return null;
+    }
+    const run = detail.run;
+    // Still marked active at boot: it was cut off by a shutdown (cancelled) or crash (failed orphan).
+    if (run.status === 'SUCCEEDED' || run.status === 'RUNNING') return null;
+    if (run.status === 'FAILED' && !/daemon restart/i.test(run.errorMessage ?? '')) return null;
+    const summary = detail.events
+      .map((e) => (e.event.kind === 'text' ? e.event.text : ''))
+      .join('')
+      .slice(-6000);
+    const t = this.row(taskId);
+    this.d.db
+      .insert(checkpoints)
+      .values({
+        id: newId('chk'),
+        taskId,
+        runId,
+        taskStatus: t.status,
+        role: run.role,
+        engineId: run.engineId,
+        sessionId: run.sessionId,
+        branchName: t.branchName,
+        lastCompletedStep: null,
+        notes: summary,
+        data: { reason: 'Interrupted by a daemon restart' },
+      })
+      .run();
+    return { role: run.role, sessionId: run.sessionId, summary };
   }
 
   /** Resume quota pauses whose time has come (re-checking the engine) and auth pauses whose engine is active again. */

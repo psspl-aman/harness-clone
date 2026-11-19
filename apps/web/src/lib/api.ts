@@ -61,6 +61,7 @@ import type {
   MemoryInput,
   MemoryKind,
   MemoryScope,
+  SafetyApprovalDto,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -308,6 +309,11 @@ export const api = {
         `/api/projects/${projectId}/file?${new URLSearchParams({ path })}`,
       ),
   },
+  safety: {
+    approvals: () => request<SafetyApprovalDto[]>('GET', '/api/safety/approvals'),
+    decide: (id: string, decision: 'approve' | 'deny') =>
+      request<SafetyApprovalDto>('POST', `/api/safety/approvals/${id}`, { decision }),
+  },
   memory: {
     list: (
       projectId: string | null,
@@ -427,6 +433,7 @@ export const qk = {
   terminals: (projectId: string) => ['terminals', projectId] as const,
   files: (projectId: string) => ['files', projectId] as const,
   file: (projectId: string, path: string) => ['files', projectId, path] as const,
+  safetyApprovals: ['safety', 'approvals'] as const,
   memory: (projectId: string | null) => ['memory', projectId ?? 'global'] as const,
   docs: (projectId: string) => ['docs', projectId] as const,
   doc: (projectId: string, doc: string) => ['docs', projectId, doc] as const,

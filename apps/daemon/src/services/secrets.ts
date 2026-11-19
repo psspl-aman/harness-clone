@@ -13,6 +13,7 @@ import { newId } from '../lib/id';
  */
 export class SecretStore {
   private readonly key: Buffer;
+  private cachedValues: string[] | null = null;
 
   constructor(
     private readonly db: Db,
@@ -42,6 +43,7 @@ export class SecretStore {
       .values({ id: newId('sec'), name, ...row })
       .onConflictDoUpdate({ target: secrets.name, set: { ...row, updatedAt: Date.now() } })
       .run();
+    this.cachedValues = null;
   }
 
   get(name: string): string | null {
@@ -58,6 +60,24 @@ export class SecretStore {
 
   delete(name: string): void {
     this.db.delete(secrets).where(eq(secrets.name, name)).run();
+    this.cachedValues = null;
+  }
+
+  /** Every stored secret value (for redacting logs); cached until a secret changes. */
+  values(): string[] {
+    if (!this.cachedValues) {
+      const out: string[] = [];
+      for (const r of this.db.select({ name: secrets.name }).from(secrets).all()) {
+        try {
+          const v = this.get(r.name);
+          if (v && v.length >= 8) out.push(v);
+        } catch {
+          // A secret written with another key can't be decrypted; skip it.
+        }
+      }
+      this.cachedValues = out.sort((a, b) => b.length - a.length);
+    }
+    return this.cachedValues;
   }
 
   has(name: string): boolean {

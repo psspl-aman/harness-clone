@@ -427,7 +427,7 @@ describe('pipeline: failures and pauses', () => {
     await t.ctx.orchestrator.idle();
     expect(task(a).status).toBe('DONE');
     expect(existsSync(join(t.home, 'worktrees', projectId, 'SA-2'))).toBe(false);
-  });
+  }, 30_000); // several real CLI processes; slow under a fully loaded test run
 
   it('delivers your message to the running agent by resuming its session', async () => {
     script(
@@ -643,14 +643,28 @@ describe('pipeline: restart recovery', () => {
     await t.ctx.orchestrator.tick();
     const id = tasks[0]!.id;
     await waitFor(() => task(id).pipeline.activeRole === 'reviewer');
+    // Wait until the reviewer's CLI session has started.
+    await waitFor(() =>
+      t.ctx.db
+        .select()
+        .from(agentRuns)
+        .all()
+        .some((r) => r.taskId === id && r.role === 'reviewer' && !!r.sessionId),
+    );
     const home = t.home;
     await t.app.close(); // daemon stops mid-review
-    script(reviewer(), tester(), documenter());
+    // The interrupted review continues its CLI session with a "continue" prompt.
+    script(reply(APPROVE, { stdinIncludes: 'an AgentForge restart' }), tester(), documenter());
     await setupApp(home);
     expect(task(id).status).toBe('IN_REVIEW');
     expect(task(id).pipeline.activeRole).toBeNull();
     await t.ctx.orchestrator.idle();
     expect(task(id).status).toBe('DONE');
     expect(t.ctx.db.select().from(documents).all()).toHaveLength(1);
+    const resumed = agent.calls().find((c) => c.stdin.includes('an AgentForge restart'))!;
+    expect(resumed.args).toContain('--resume');
+    expect(t.ctx.orchestrator.checkpointsOf(id)).toEqual([
+      expect.objectContaining({ role: 'reviewer', sessionId: expect.any(String) }),
+    ]);
   });
 });

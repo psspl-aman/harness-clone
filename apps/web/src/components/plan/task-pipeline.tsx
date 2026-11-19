@@ -1,5 +1,7 @@
 'use client';
 
+import { useLiveEvent, useLiveTopic } from '@/components/live-provider';
+import { VirtualLog, type LogLine } from '@/components/virtual-log';
 import type { AgentEvent, RunSummaryDto, TaskDto, TaskStatus } from '@agentforge/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
@@ -287,6 +289,13 @@ export function PipelineControls({ task }: { task: TaskDto }) {
 
 function RunLog({ runId }: { runId: string }) {
   const run = useQuery({ queryKey: qk.run(runId), queryFn: () => api.runs.get(runId) });
+  const [live, setLive] = useState<{ seq: number; event: AgentEvent }[]>([]);
+  const running = run.data?.run.status === 'RUNNING';
+  useLiveTopic(running ? `run:${runId}` : null);
+  useLiveEvent((e) => {
+    if (e.type === 'run.event' && e.payload.runId === runId)
+      setLive((l) => [...l, { seq: -(l.length + 1), event: e.payload.event }]);
+  });
   if (run.isPending) return <Skeleton className="h-20" />;
   const line = (e: AgentEvent): { text: string; tone?: string } | null => {
     switch (e.kind) {
@@ -310,18 +319,12 @@ function RunLog({ runId }: { runId: string }) {
         return null;
     }
   };
-  return (
-    <div className="bg-muted/40 max-h-72 overflow-auto rounded-md p-2 font-mono text-[11px] leading-relaxed">
-      {(run.data?.events ?? []).map((e) => {
-        const l = line(e.event);
-        return l ? (
-          <p key={e.seq} className={cn('break-words whitespace-pre-wrap', l.tone)}>
-            {l.text}
-          </p>
-        ) : null;
-      })}
-    </div>
-  );
+  const lines: LogLine[] = [];
+  for (const e of [...(run.data?.events ?? []), ...(running ? live : [])]) {
+    const l = line(e.event);
+    if (l) lines.push({ key: `${e.seq}`, ...l });
+  }
+  return <VirtualLog lines={lines} empty={running ? 'Waiting for output…' : 'No output.'} />;
 }
 
 function Activity({ taskId }: { taskId: string }) {

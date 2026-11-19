@@ -8,6 +8,7 @@ import type {
   McpServerDto,
   PlanBoardDto,
   PmsMappingDto,
+  SafetyApprovalDto,
 } from '@agentforge/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -135,6 +136,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             if (e.payload.terminal.projectId)
               void queryClient.invalidateQueries({
                 queryKey: qk.terminals(e.payload.terminal.projectId),
+              });
+            break;
+          case 'safety.approval':
+            queryClient.setQueryData<SafetyApprovalDto[]>(qk.safetyApprovals, (l) => {
+              const x = e.payload.approval;
+              const list = l ?? [];
+              return list.some((y) => y.id === x.id)
+                ? list.map((y) => (y.id === x.id ? x : y))
+                : [x, ...list];
+            });
+            if (e.payload.approval.status === 'blocked')
+              toast.warning('Blocked an agent action', {
+                description: `${e.payload.approval.summary} — ${e.payload.approval.reason}`,
               });
             break;
           case 'memory.updated':

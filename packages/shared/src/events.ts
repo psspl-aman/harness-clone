@@ -1,3 +1,4 @@
+import type { SafetyApprovalDto } from './safety';
 import type { McpServerDto, PmsMappingDto } from './integrations';
 import { z } from 'zod';
 import { AUTH_STATUSES, TASK_STATUSES } from './enums';
@@ -40,6 +41,7 @@ export const EventPayloads = {
   'pipeline.updated': z.object({ status: z.custom<PipelineStatusDto>() }),
   'error.updated': z.object({ projectId: z.string(), error: z.custom<ErrorDto>() }),
   'project.run': z.object({ run: z.custom<ProjectRunDto>() }),
+  'safety.approval': z.object({ approval: z.custom<SafetyApprovalDto>() }),
   'memory.updated': z.object({ projectId: z.string().nullable() }),
   'mcp.updated': z.object({ server: z.custom<McpServerDto>() }),
   'mcp.removed': z.object({ serverId: z.string() }),

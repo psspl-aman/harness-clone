@@ -11,7 +11,7 @@
 | 7   | **Run & Terminal**: run panel, preview, xterm/node-pty terminals, error matchers, "Fix with agent"                               | ✅ Done |
 | 8   | **PMS via MCP**: MCP servers, PMS connections, mapping, sync, write-back                                                         | ✅ Done |
 | 9   | **Memory & Docs**: memory service and editor, task reports, Docs tab, export                                                     | ✅ Done |
-| 10  | **Polish & Hardening**: safety guards, more E2E coverage, UX polish                                                              | ⏳ Next |
+| 10  | **Polish & Hardening**: safety guards, more E2E coverage, UX polish                                                              | ✅ Done |
 
 ## Phase 1: what was verified
 
@@ -203,3 +203,15 @@
   - `.agentforge/memory.md` is written (grouped by kind, pinned marked), `.agentforge/` is added to `.git/info/exclude`, and turning the mirror off removes the file.
   - Docs list README, CHANGELOG and architecture files first, then other Markdown, then task reports. Non-Markdown paths are refused. Single-document download and the combined export (headings shifted under each document's title) work.
 - **E2E (Playwright, 26 tests in total):** add, search, pin, edit and delete memory in the Memory tab, check the mirror file, read README and a guide in the Docs tab, download a document, open the print view, and add a global preference in Settings.
+
+## Phase 10: what was verified
+
+- **Unit and integration (Vitest, 215 tests in total):**
+  - The command classifier: ordinary development commands are allowed, catastrophic ones blocked and risky ones held for approval. File tools stay inside the project, and `.env.example` is fine while `.env` is not.
+  - The redactor: stored secret values, token shapes, private-key blocks and `password=`/`Authorization:` values.
+  - The guard end to end through a listening daemon with a fake Claude CLI that honours `--settings` hooks: allow, block, wait-for-approval then allow, deny, agents can't call the safety API, approvals can't be answered without the app's Origin, and turning confirmations off keeps the blocks.
+  - Secrets are redacted in run events and terminal output.
+  - Restart recovery now continues the interrupted CLI session (`--resume` with a "continue" prompt) and writes a checkpoint.
+- **Real CLI check:** Claude Code 2.1.328 (haiku, about $0.007) with the guard. `rm -rf ../…` was blocked before it ran and the agent reported the reason; `cat .env` waited for approval and ran once approved.
+- **Production build:** `node apps/daemon/dist/main.js` and `next start` were served from a throwaway home: health OK, web 200, Monaco served locally, guard hook installed.
+- **E2E (Playwright, 27 tests in total):** an agent's risky command shows an approval card, _Allow once_ lets it run, the following catastrophic command is blocked with a toast, and answering the approval API directly is refused.

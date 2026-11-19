@@ -1,3 +1,4 @@
+import type { Redactor } from '../safety/redact';
 import { Topics, type TerminalInfo } from '@agentforge/shared';
 import { eq } from 'drizzle-orm';
 import { existsSync, statSync } from 'node:fs';
@@ -110,7 +111,8 @@ export class TerminalService {
       })
       .run();
 
-    proc.onData((data) => {
+    proc.onData((chunk) => {
+      const data = this.redact ? this.redact(chunk) : chunk;
       session.scrollback = (session.scrollback + data).slice(-SCROLLBACK_BYTES);
       session.pending += data;
       session.flushTimer ??= setTimeout(() => this.flush(session), FLUSH_MS);
@@ -153,6 +155,13 @@ export class TerminalService {
           (!filter.projectId || i.projectId === filter.projectId) &&
           (!filter.kind || i.kind === filter.kind),
       );
+  }
+
+  private redact: Redactor | null = null;
+
+  /** Applied to terminal output before it is kept or broadcast. */
+  setRedactor(r: Redactor): void {
+    this.redact = r;
   }
 
   write(id: string, data: string): void {

@@ -10,7 +10,20 @@ import type {
 
 export interface AgentRunInput extends AgentRunInputDto {
   signal?: AbortSignal;
+  /** Who is running (shown when a tool call needs your approval). */
+  context?: { projectId?: string | null; taskId?: string | null; role?: string | null };
+  /** Pre-tool-use safety hook, for engines that support one (set by the registry). */
+  guard?: { hookCommand: string; env: Record<string, string> };
 }
+
+/** Issues a per-run safety guard; `revoke` is called when the run ends. */
+export type GuardProvider = (ctx: {
+  engineId: string;
+  root: string;
+  projectId?: string | null;
+  taskId?: string | null;
+  role?: string | null;
+}) => { config: NonNullable<AgentRunInput['guard']>; revoke: () => void } | null;
 export type AgentRunResult = AgentRunResultDto;
 
 export interface DetectResult {
@@ -54,6 +67,8 @@ export interface AgentEngineAdapter {
   readonly installGuideUrl: string | null;
   readonly installCommand: string | null;
   readonly capabilities: EngineCapabilities;
+  /** Runs AgentForge's pre-tool-use safety hook (`input.guard`). */
+  readonly supportsGuard?: boolean;
   /** Static model suggestions; `getAuthStatus` may return a live list. */
   readonly staticModels: { id: string; label: string }[];
 

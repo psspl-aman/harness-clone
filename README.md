@@ -4,7 +4,7 @@ A local-first harness in which specialised AI coding agents (Planner, Developer,
 
 AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
-> **Status:** Phases 1–9 (Foundation, Projects, Engines, Requirement Chat & Planner, Orchestrator, Usage & Quota, Run & Terminal, PMS via MCP, Memory & Docs) are complete. See [docs/PHASES.md](docs/PHASES.md) for the roadmap and what each phase delivers.
+> **Status:** all 10 build phases are complete. See [docs/PHASES.md](docs/PHASES.md) for what each phase delivered and how it was verified.
 
 ## Requirements
 
@@ -29,6 +29,68 @@ pnpm dev:web        # Next.js dev server
 ```
 
 The daemon creates its data directory on first start. It applies database migrations automatically.
+
+## Setup guide
+
+1. **Install the prerequisites.**
+   - Node.js 22 or newer, and pnpm (`corepack enable`).
+   - Git.
+   - At least one agent CLI:
+     - [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (`claude`; the VS Code extension's bundled binary is found automatically)
+     - OpenAI Codex CLI (`codex`)
+     - Google Antigravity (`agy`) or Gemini CLI (`gemini`)
+2. **Start AgentForge.**
+   - Run `pnpm install`, then `pnpm dev`, and open <http://localhost:4318>.
+   - For an always-on setup, build once with `pnpm build` and run `pnpm start`. It serves the same ports with the production web build.
+   - `NEXT_PUBLIC_AGENTFORGE_DAEMON_URL` is baked in at build time, so set it before `pnpm build` if the daemon runs elsewhere.
+3. **Sign in to your agents.**
+   - Open **Agents & Accounts**. Each engine shows whether it is installed and whether its session is _Active_ or _Expired_.
+   - **Log in** runs the CLI's own login in an embedded terminal. You can also save an API key, which is stored encrypted.
+   - **Test** sends a one-line prompt.
+4. **Choose who does what.** In **Settings → Default engines**, pick an engine for each role (Planner, Developer, Reviewer, Tester, Fixer, Documenter). Projects can override these.
+5. **Optional connections (Integrations):**
+   - A GitHub token, to create or clone repositories and open pull requests.
+   - Issue trackers through MCP.
+6. **Create a project.**
+   - **Projects → New project.** Start from scratch in a local folder or a GitHub repository, or attach an existing project.
+   - Describe what you want in the chat, review the plan and tasks, and approve them.
+7. **Watch it build.**
+   - Each task goes through Develop → Review → Test → Fix → Document in its own git worktree, then merges.
+   - The **Plan & Tasks** tab shows live progress. **Run**, **Preview** and the **Terminals** panel let you try the result.
+
+**Your data.**
+
+- Everything lives in `~/.agentforge` (or `AGENTFORGE_HOME`):
+  - `agentforge.db` (SQLite)
+  - `secret.key`, which encrypts tokens and API keys. Keep it private, and back it up together with the database.
+  - `worktrees/` for tasks in progress
+  - `workspaces/` for cloned repositories
+- Projects stay in the folders you chose. Removing a project from AgentForge never deletes its files.
+
+**Troubleshooting.**
+
+| Symptom                                         | What to do                                                                                                                              |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| "Daemon unreachable" banner                     | Start the daemon (`pnpm dev:daemon`) and check that port 4317 is free (`AGENTFORGE_PORT`).                                              |
+| An engine shows _Not installed_                 | Install the CLI, or set its path under Agents & Accounts → Configure, then **Refresh**.                                                 |
+| An engine shows _Expired_                       | Log in again from Agents & Accounts. Tasks paused for login resume by themselves afterwards.                                            |
+| A task is _Paused · quota_                      | The engine's usage window ran out. The task resumes at the shown time, or set a fallback engine (Project → Overview → Pipeline).        |
+| A merge is _Blocked_                            | Your checkout has uncommitted changes, or the branches conflict. Commit or stash your changes, or let the conflict-resolution task run. |
+| An agent is waiting for approval                | A card in the bottom-right corner shows the command. Allow or deny it; with no answer it is denied after 10 minutes.                    |
+| `better-sqlite3` or `node-pty` fails to install | Install a C/C++ toolchain (`build-essential` / Xcode command-line tools) and run `pnpm install` again.                                  |
+
+## Safety
+
+- **Agents work inside the project.** Each task runs in its own git worktree, and AgentForge commits and merges; agents are told not to.
+- **Guarded tool calls (Claude Code).** Before every tool call, a pre-tool-use hook asks AgentForge whether it may run:
+  - **Blocked:** catastrophic commands, such as recursive deletes of `/`, `~` or other projects, disk formatting or fork bombs, and file edits outside the project.
+  - **Asks you:** risky commands. These include `git push` (and force-push), `sudo`, piping a download into a shell, printing the environment, touching `.env` or key files, and writing outside the project. A card appears in the app. _Allow once_ or _Deny_; with no answer the command is denied after 10 minutes. You can turn the questions off in **Settings → Safety** (blocks still apply).
+  - Other engines run with their own permission modes and sandboxes. Codex, for example, uses its workspace-write sandbox.
+- **Secrets.**
+  - Tokens and API keys are stored encrypted (AES-256-GCM).
+  - Secret files (`.env`, keys) are never committed by AgentForge and never shown in the Code tab.
+  - With **Redact secrets from logs** on (the default), stored secrets and common token formats are masked in agent logs and terminals.
+- **Local only.** The daemon only answers on loopback and only to the AgentForge web app's origin.
 
 ## Projects and GitHub
 

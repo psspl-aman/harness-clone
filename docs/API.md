@@ -216,3 +216,14 @@ Tool-map argument templates: a string that is exactly `{{var}}` is replaced by t
 | GET    | `/api/projects/:id/docs/export`                 | Every doc in one Markdown file (`<slug>-docs.md`)                                             |
 
 Live event: `memory.updated` (`projectId`, or `null` for global preferences). Settings: `memory.maxPromptChars` and `memory.mirrorFile`.
+
+## Safety
+
+| Method | Path                        | Description                                                                                                                                         |
+| ------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/safety/check`         | Called by the guard hook (per-run `x-agentforge-guard` header) with `{ tool, input, cwd }` → `{ decision: allow \| deny \| pending, reason?, id? }` |
+| POST   | `/api/safety/wait`          | Called by the hook while a decision is pending: `{ id }` → the same shape (holds about 20 s per call)                                               |
+| GET    | `/api/safety/approvals`     | Pending requests and the latest 100 decisions (`SafetyApprovalDto`)                                                                                 |
+| POST   | `/api/safety/approvals/:id` | `{ decision: 'approve' \| 'deny' }`. Requires the web app's `Origin` (scripts get 403)                                                              |
+
+Live event: `safety.approval` (a request was created, answered, expired or blocked).
