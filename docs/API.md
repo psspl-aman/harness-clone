@@ -229,3 +229,10 @@ Live event: `memory.updated` (`projectId`, or `null` for global preferences). Se
 | POST   | `/api/safety/approvals/:id` | `{ decision: 'approve' \| 'deny' }`. Requires the web app's `Origin` (scripts get 403)                                                              |
 
 Live event: `safety.approval` (a request was created, answered, expired or blocked).
+
+## Agent tools (MCP) and paused tasks
+
+| Method | Path                | Description                                                                                                                              |
+| ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/mcp`              | MCP Streamable HTTP endpoint (stateless) for agents during a run; requires the run's `x-agentforge-guard` header (401 once the run ends) |
+| GET    | `/api/tasks/paused` | Tasks paused for quota or login in every project (`PausedTaskDto[]`), soonest resume first                                               |

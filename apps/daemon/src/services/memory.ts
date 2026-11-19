@@ -88,13 +88,17 @@ export class MemoryService {
     return this.toDtos(rows);
   }
 
-  create(projectId: string | null, raw: unknown): MemoryEntryDto {
+  create(
+    projectId: string | null,
+    raw: unknown,
+    source: 'user' | 'agent' = 'user',
+  ): MemoryEntryDto {
     const v = MemoryInputSchema.parse(raw);
     if (projectId) this.project(projectId);
     const id = newId('mem');
     this.db
       .insert(memoryEntries)
-      .values({ id, scope: projectId ? 'project' : 'global', projectId, ...v, source: 'user' })
+      .values({ id, scope: projectId ? 'project' : 'global', projectId, ...v, source })
       .run();
     this.changed(projectId);
     return this.get(id);

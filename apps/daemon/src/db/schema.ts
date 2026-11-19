@@ -666,7 +666,7 @@ export const memoryEntries = sqliteTable(
       .default(sql`'[]'`),
     pinned: bool('pinned').notNull().default(false),
     source: text('source')
-      .$type<'user' | 'documenter' | 'onboarding' | 'planner'>()
+      .$type<'user' | 'documenter' | 'onboarding' | 'planner' | 'agent'>()
       .notNull()
       .default('user'),
     createdAt: createdAt(),

@@ -12,6 +12,7 @@ import { McpService } from './services/mcp/mcp-service';
 import { MemoryService } from './services/memory';
 import { SafetyService } from './services/safety';
 import { registerSafetyRoutes } from './routes/safety';
+import { registerAgentMcpRoutes } from './routes/agent-mcp';
 import { createRedactor } from './safety/redact';
 import { DocsService } from './services/docs';
 import { registerMemoryDocsRoutes } from './routes/memory-docs';
@@ -274,6 +275,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerIntegrationRoutes(app, ctx);
   registerMemoryDocsRoutes(app, ctx);
   registerSafetyRoutes(app, ctx);
+  registerAgentMcpRoutes(app, ctx);
 
   app.addHook('onReady', async () => {
     projects.resumeInterruptedOnboarding();

@@ -233,6 +233,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: qk.githubOwners });
             break;
           case 'notification': {
+            // Pauses and resumes are announced globally; refresh the paused-tasks banner.
+            void queryClient.invalidateQueries({ queryKey: qk.pausedTasks });
             const { level, title, message } = e.payload;
             const fn = level === 'info' ? toast.info : toast[level];
             fn(title, { description: message });

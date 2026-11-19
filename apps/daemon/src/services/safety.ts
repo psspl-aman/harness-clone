@@ -44,7 +44,7 @@ try {
 }
 `;
 
-interface Session {
+export interface Session {
   root: string;
   engineId: string;
   projectId: string | null;
@@ -94,6 +94,11 @@ export class SafetyService {
     chmodSync(this.hookPath, 0o755);
   }
 
+  /** The run a guard token belongs to (also authenticates the agent tools MCP server). */
+  sessionFor(token: string | undefined): Readonly<Session> | null {
+    return (token && this.sessions.get(token)) || null;
+  }
+
   /** For EngineRegistry: a guard per run, or null when the daemon isn't listening yet. */
   readonly provider: GuardProvider = (ctx) => {
     const url = this.d.url();
@@ -110,6 +115,7 @@ export class SafetyService {
       config: {
         hookCommand: `"${process.execPath}" "${this.hookPath}"`,
         env: { AF_GUARD_URL: url, AF_GUARD_TOKEN: token },
+        mcp: { url: `${url}/mcp`, headers: { 'x-agentforge-guard': token } },
       },
       revoke: () => this.revoke(token),
     };

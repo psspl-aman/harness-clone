@@ -67,9 +67,24 @@ export class ClaudeCodeAdapter extends CliAdapter {
     if (input.model) args.push('--model', input.model);
     if (input.resumeSessionId) args.push('--resume', input.resumeSessionId);
     if (input.systemPrompt) args.push('--append-system-prompt', input.systemPrompt);
+    // AgentForge's own MCP tools (project memory, task, errors) for this run.
+    const mcp = input.guard?.mcp;
+    if (mcp)
+      args.push(
+        '--mcp-config',
+        JSON.stringify({
+          mcpServers: { agentforge: { type: 'http', url: mcp.url, headers: mcp.headers } },
+        }),
+      );
+    const own = mcp ? ['mcp__agentforge'] : [];
     if (input.permission === 'readonly')
-      args.push('--permission-mode', 'dontAsk', '--allowedTools', ...READONLY_TOOLS);
-    else if (input.permission === 'edit') args.push('--permission-mode', 'acceptEdits');
+      args.push('--permission-mode', 'dontAsk', '--allowedTools', ...READONLY_TOOLS, ...own);
+    else if (input.permission === 'edit')
+      args.push(
+        '--permission-mode',
+        'acceptEdits',
+        ...(own.length ? ['--allowedTools', ...own] : []),
+      );
     else
       args.push(
         '--permission-mode',
@@ -81,6 +96,7 @@ export class ClaudeCodeAdapter extends CliAdapter {
         'Read',
         'Grep',
         'Glob',
+        ...own,
       );
     // Every tool call first asks AgentForge's guard (PreToolUse hook, exit 2 = blocked).
     if (input.guard)

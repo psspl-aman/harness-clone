@@ -193,6 +193,18 @@ export interface TaskDiffDto {
   truncated: boolean;
 }
 
+/** A paused task anywhere in AgentForge (for the global banner). */
+export interface PausedTaskDto {
+  id: string;
+  key: string;
+  title: string;
+  projectId: string;
+  projectName: string;
+  status: 'PAUSED_QUOTA' | 'PAUSED_AUTH' | 'PAUSED_MANUAL';
+  statusReason: string | null;
+  resumeAt: number | null;
+}
+
 export interface TaskReportDto {
   id: string;
   title: string;

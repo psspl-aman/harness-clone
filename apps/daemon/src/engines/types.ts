@@ -13,7 +13,12 @@ export interface AgentRunInput extends AgentRunInputDto {
   /** Who is running (shown when a tool call needs your approval). */
   context?: { projectId?: string | null; taskId?: string | null; role?: string | null };
   /** Pre-tool-use safety hook, for engines that support one (set by the registry). */
-  guard?: { hookCommand: string; env: Record<string, string> };
+  guard?: {
+    hookCommand: string;
+    env: Record<string, string>;
+    /** AgentForge's own MCP server for this run (project memory, task, errors). */
+    mcp?: { url: string; headers: Record<string, string> };
+  };
 }
 
 /** Issues a per-run safety guard; `revoke` is called when the run ends. */

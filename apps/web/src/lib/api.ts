@@ -62,6 +62,7 @@ import type {
   MemoryKind,
   MemoryScope,
   SafetyApprovalDto,
+  PausedTaskDto,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -274,6 +275,7 @@ export const api = {
         )}`,
       ),
     windows: () => request<UsageWindowStatusDto[]>('GET', '/api/usage/windows'),
+    paused: () => request<PausedTaskDto[]>('GET', '/api/tasks/paused'),
     checkpoints: (taskId: string) =>
       request<CheckpointDto[]>('GET', `/api/tasks/${taskId}/checkpoints`),
   },
@@ -434,6 +436,7 @@ export const qk = {
   files: (projectId: string) => ['files', projectId] as const,
   file: (projectId: string, path: string) => ['files', projectId, path] as const,
   safetyApprovals: ['safety', 'approvals'] as const,
+  pausedTasks: ['tasks', 'paused'] as const,
   memory: (projectId: string | null) => ['memory', projectId ?? 'global'] as const,
   docs: (projectId: string) => ['docs', projectId] as const,
   doc: (projectId: string, doc: string) => ['docs', projectId, doc] as const,

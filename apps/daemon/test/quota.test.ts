@@ -139,6 +139,10 @@ describe('auto-pause and auto-resume', () => {
     expect(
       (await t.app.inject({ method: 'GET', url: `/api/tasks/${id}/checkpoints` })).json(),
     ).toHaveLength(1);
+    // The global "paused" banner lists it with its resume time.
+    expect((await t.app.inject({ method: 'GET', url: '/api/tasks/paused' })).json()).toEqual([
+      expect.objectContaining({ id, status: 'PAUSED_QUOTA', resumeAt: resetSec * 1000 }),
+    ]);
 
     await until(() => get(id).status !== 'PAUSED_QUOTA'); // the scheduler resumes on its own
     await t.ctx.orchestrator.idle();

@@ -11,7 +11,7 @@ export const MemoryInputSchema = z.object({
 export type MemoryInput = z.input<typeof MemoryInputSchema>;
 export const MemoryUpdateSchema = MemoryInputSchema.partial();
 
-export type MemorySource = 'user' | 'documenter' | 'onboarding' | 'planner';
+export type MemorySource = 'user' | 'documenter' | 'onboarding' | 'planner' | 'agent';
 
 export interface MemoryEntryDto {
   id: string;

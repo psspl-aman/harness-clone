@@ -228,6 +228,19 @@ describe('pipeline: happy path', () => {
         .all()
         .map((m) => m.title),
     ).toEqual(expect.arrayContaining(['SA-1: Feature A', 'Plain text storage']));
+    // Task memory carries the summary, decisions, files touched and limitations.
+    const taskMem = t.ctx.db
+      .select()
+      .from(memoryEntries)
+      .where(eq(memoryEntries.scope, 'task'))
+      .all()
+      .find((m) => m.title === 'SA-1: Feature A')!;
+    expect(taskMem.content).toContain('Delivered the feature.');
+    expect(taskMem.content).toContain(
+      'Decisions:\n- Plain text storage: Features are stored as .txt files.',
+    );
+    expect(taskMem.content).toMatch(/Files touched: .*src\/a\.txt/);
+    expect(taskMem.content).toContain('Known limitations: No UI yet');
     const diff = (
       await t.app.inject({ method: 'GET', url: `/api/tasks/${tasks[0]!.id}/diff` })
     ).json();

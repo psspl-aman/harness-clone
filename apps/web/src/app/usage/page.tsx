@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
-import { BarList, ColumnChart, Meter } from '@/components/charts/charts';
+import { BarList, ColumnChart, LineChart, Meter } from '@/components/charts/charts';
 import { PageHeader } from '@/components/shell/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -296,16 +296,22 @@ export default function UsagePage() {
                 ))}
               </div>
             </div>
-            <ColumnChart
-              title={metric === 'cost' ? 'Cost' : 'Tokens'}
-              format={fmt}
-              points={series.map((b) => ({
-                key: b.key,
-                label: b.label,
-                value: val(b),
-                detail: `${b.runs} runs`,
-              }))}
-            />
+            {/* Daily usage is a trend (line); weekly totals are discrete periods (columns). */}
+            {(() => {
+              const Chart = period === 'day' ? LineChart : ColumnChart;
+              return (
+                <Chart
+                  title={metric === 'cost' ? 'Cost' : 'Tokens'}
+                  format={fmt}
+                  points={series.map((b) => ({
+                    key: b.key,
+                    label: b.label,
+                    value: val(b),
+                    detail: `${b.runs} runs`,
+                  }))}
+                />
+              );
+            })()}
           </Panel>
 
           <div className="grid gap-6 md:grid-cols-2">

@@ -1711,6 +1711,23 @@ export class Orchestrator {
           content,
         })
         .run();
+    // Task memory: what it delivered, the decisions it made and the files it touched.
+    const decisions = doc.memory.filter((m) => m.kind === 'decision' || m.kind === 'architecture');
+    const taskMemory = [
+      doc.summary,
+      decisions.length
+        ? `Decisions:\n${decisions.map((m) => `- ${m.title}: ${m.content}`).join('\n')}`
+        : '',
+      d.files.length
+        ? `Files touched: ${d.files
+            .slice(0, 40)
+            .map((f) => f.path)
+            .join(', ')}${d.files.length > 40 ? ` (+${d.files.length - 40} more)` : ''}`
+        : '',
+      doc.limitations.length ? `Known limitations: ${doc.limitations.join('; ')}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
     this.d.db.transaction((tx) => {
       tx.delete(memoryEntries)
         .where(and(eq(memoryEntries.taskId, task.id), eq(memoryEntries.source, 'documenter')))
@@ -1723,7 +1740,7 @@ export class Orchestrator {
           taskId: task.id,
           kind: 'feature',
           title: `${task.key}: ${task.title}`,
-          content: doc.summary,
+          content: taskMemory,
           source: 'documenter',
           tags: [task.key],
         })

@@ -230,3 +230,22 @@ A re-check of the master spec against the build closed these gaps:
 - **Dashboard errors badge (§4.3)** now updates live.
 
 Verified with Vitest (216 tests: fail → errors badge → Fix with agent from the Errors panel → Fixer → review → tests → done, with the error resolved) and Playwright (27 tests: the pipeline spec now also checks the Agents tab, the engines chip and Code → Changes).
+
+## Spec audit — second pass
+
+The master spec was re-checked section by section. Closed in this pass:
+
+- **MCP tools for agents (§2, §3).**
+  - During a Claude Code run, AgentForge serves its own MCP server (`/mcp`, Streamable HTTP, authenticated by the run's token) and passes it with `--mcp-config`.
+  - Tools: `project_memory_search`, `project_memory_add` (not for reviewers), `task_details`, `project_tasks`, `task_report` and `project_errors`, all scoped to the run's project and task.
+  - Verified with the real CLI (haiku, about $0.0065): the agent found the server, called `project_memory_search` (through the safety guard) and answered from project memory.
+- **Global paused banner (§10.2).** Tasks paused for quota or login across all projects show "… paused — usage window expired, resumes at HH:MM (in …)" in a global banner.
+- **Task memory (§13).** A finished task's memory entry now holds its summary, its decisions, the files it touched and its known limitations.
+- **Usage charts (§10.1, "line + bar").** Daily usage is drawn as a line chart (2px line, crosshair, tooltip, table view); weekly totals and breakdowns stay as bars.
+
+Deliberately unchanged:
+
+- GitHub uses a personal access token, which the spec allows ("OAuth device flow _or_ PAT").
+- Git runs through the `git` CLI via `execa` rather than `simple-git`; it covers the same operations, including worktrees and `merge-tree`.
+
+Verified with Vitest (218 tests) and Playwright (27 tests).

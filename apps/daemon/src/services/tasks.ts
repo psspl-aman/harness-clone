@@ -19,6 +19,7 @@ import {
   type TaskStatusChangeDto,
   type ActivityItemDto,
   type PmsProvider,
+  type PausedTaskDto,
 } from '@agentforge/shared';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
@@ -127,6 +128,27 @@ export class TaskService {
         .orderBy(desc(plans.version))
         .get() ?? null
     );
+  }
+
+  /** Tasks paused for quota or login across all projects (manual pauses are the user's own). */
+  pausedEverywhere(): PausedTaskDto[] {
+    return this.db
+      .select({ t: tasks, projectName: projects.name })
+      .from(tasks)
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .where(inArray(tasks.status, ['PAUSED_QUOTA', 'PAUSED_AUTH']))
+      .orderBy(asc(tasks.resumeAt))
+      .all()
+      .map(({ t, projectName }) => ({
+        id: t.id,
+        key: t.key,
+        title: t.title,
+        projectId: t.projectId,
+        projectName,
+        status: t.status as PausedTaskDto['status'],
+        statusReason: t.statusReason,
+        resumeAt: t.resumeAt,
+      }));
   }
 
   /** Latest status changes across a project's tasks, newest first. */

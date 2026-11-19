@@ -20,6 +20,7 @@ export function registerUsageRoutes(app: FastifyInstance, ctx: AppContext): void
     });
   });
   app.get('/api/usage/windows', async () => ctx.usage.windows());
+  app.get('/api/tasks/paused', async () => ctx.tasks.pausedEverywhere());
   app.get('/api/tasks/:id/checkpoints', async (req) =>
     ctx.orchestrator.checkpointsOf(z.object({ id: z.string().max(64) }).parse(req.params).id),
   );

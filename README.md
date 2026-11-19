@@ -86,6 +86,7 @@ The daemon creates its data directory on first start. It applies database migrat
   - **Blocked:** catastrophic commands, such as recursive deletes of `/`, `~` or other projects, disk formatting or fork bombs, and file edits outside the project.
   - **Asks you:** risky commands. These include `git push` (and force-push), `sudo`, piping a download into a shell, printing the environment, touching `.env` or key files, and writing outside the project. A card appears in the app. _Allow once_ or _Deny_; with no answer the command is denied after 10 minutes. You can turn the questions off in **Settings → Safety** (blocks still apply).
   - Other engines run with their own permission modes and sandboxes. Codex, for example, uses its workspace-write sandbox.
+- **AgentForge tools for agents.** Claude Code agents also get an `agentforge` MCP server for their run. With it they can search and add to project memory, read their task, related tasks and finished tasks' reports, and see the project's open errors.
 - **Secrets.**
   - Tokens and API keys are stored encrypted (AES-256-GCM).
   - Secret files (`.env`, keys) are never committed by AgentForge and never shown in the Code tab.

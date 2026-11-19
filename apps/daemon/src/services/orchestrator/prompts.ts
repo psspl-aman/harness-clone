@@ -65,7 +65,8 @@ const WORKTREE_RULES = (ctx: RoleContext) => `## Rules
 - You are in a git worktree on branch \`${ctx.branch}\` (created from \`${ctx.workingBranch}\`). Work only inside this directory.
 - Do NOT commit, push, merge, rebase or switch branches — AgentForge commits your changes after you finish.
 - Never create, modify or print .env files, keys or other secrets.
-- Keep changes focused on this task; follow the project's conventions.`;
+- Keep changes focused on this task; follow the project's conventions.
+- If you have the \`agentforge\` tools: search project memory before design decisions (\`project_memory_search\`) and record lasting decisions or pitfalls with \`project_memory_add\`.`;
 
 const JSON_ONLY =
   'Finish with ONLY one JSON object as your final message — no prose around it and no code fences.';
