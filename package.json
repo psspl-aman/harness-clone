@@ -8,11 +8,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "dev": "pnpm -r --parallel --filter './apps/*' dev",
     "dev:daemon": "pnpm --filter @agentforge/daemon dev",
     "dev:web": "pnpm --filter @agentforge/web dev",
     "build": "pnpm -r build",
-    "start": "pnpm -r --parallel --filter ./apps/* start",
+    "start": "pnpm -r --parallel --filter './apps/*' start",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",
