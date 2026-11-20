@@ -12,6 +12,7 @@ import {
   type FakeCli,
   type FakeResponse,
 } from './fake-cli';
+import { HandoffService } from '../src/services/handoff';
 import { createTestApp, GIT_ID, tempDir, type TestApp } from './helpers';
 
 let t: TestApp;
@@ -364,6 +365,123 @@ describe('pipeline: fix loops', () => {
   });
 });
 
+describe('subtasks and timing', () => {
+  it('ticks subtasks the agents report, completes the rest when done, and tracks time', async () => {
+    await t.app.inject({
+      method: 'PATCH',
+      url: '/api/settings',
+      payload: { pipeline: { requireHumanReviewBeforeMerge: true } },
+    });
+    script(
+      role('Developer', 'Implemented SA-1.\n\nSubtasks done: 1', {
+        stdinIncludes: ['# Role: Developer', 'Task SA-1:'],
+        writeFiles: { 'src/a.txt': 'a' },
+      }),
+      reviewer(),
+      tester(),
+      documenter(),
+    );
+    const { planId, tasks } = plan({
+      ...pt('T1', 'Feature A'),
+      subtasks: ['Write the parser', 'Wire it into the CLI'],
+    });
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+    const id = tasks[0]!.id;
+    expect(task(id).status).toBe('NEEDS_HUMAN');
+    // The developer said it finished the first one.
+    expect(task(id).subtasks.map((x) => x.done)).toEqual([true, false]);
+    const dev = agent.calls().find((c) => c.stdin.includes('# Role: Developer'))!;
+    expect(dev.stdin).toContain('1. [ ] Write the parser\n2. [ ] Wire it into the CLI');
+    expect(dev.stdin).toContain('`Subtasks done: <numbers>`');
+
+    await t.app.inject({ method: 'POST', url: `/api/tasks/${id}/approve-merge` });
+    await t.ctx.orchestrator.idle();
+    const done = task(id);
+    expect(done.status).toBe('DONE');
+    expect(done.subtasks.map((x) => x.done)).toEqual([true, true]);
+    expect(done.timing.spentMs).toBeGreaterThan(0);
+    expect(done.timing.runningSince).toBeNull();
+    expect(done.timing.startedAt).toBeLessThanOrEqual(done.timing.finishedAt!);
+  }, 30_000);
+});
+
+describe('handoff notes', () => {
+  it('keeps PROJECT.md and per-task notes, out of git, and shows them to every agent', async () => {
+    script(
+      developer(
+        'SA-1',
+        { 'src/a.txt': 'a\n' },
+        // The agent can read its task's notes inside the worktree.
+        { shell: 'cp .agentforge/tasks/SA-1.md seen-by-agent.md' },
+      ),
+      reviewer(),
+      tester(),
+      documenter(),
+    );
+    const { planId, tasks } = plan(pt('T1', 'Feature A'));
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+    const a = tasks[0]!.id;
+    expect(task(a).status).toBe('DONE');
+
+    // What the developer saw: the task spec in the worktree copy.
+    expect(readFileSync(join(repo, 'seen-by-agent.md'), 'utf8')).toContain('# SA-1: Feature A');
+    const dev = agent.calls().find((c) => c.stdin.includes('# Role: Developer'))!;
+    expect(dev.stdin).toContain('## Handoff notes');
+    expect(dev.stdin).toContain('`.agentforge/tasks/SA-1.md`');
+    expect(dev.stdin).not.toContain('You are taking over');
+
+    // Never committed: neither in the merged history nor as a tracked file.
+    expect(git(repo, 'ls-files')).not.toMatch(/\.agentforge/);
+
+    // Files in the project folder reflect the finished pipeline.
+    await waitFor(() =>
+      readFileSync(join(repo, '.agentforge/PROJECT.md'), 'utf8').includes('| SA-1 | DONE'),
+    );
+    const project = readFileSync(join(repo, '.agentforge/PROJECT.md'), 'utf8');
+    expect(project).toContain('# Shop App — project handoff');
+    expect(project).toContain('[notes](tasks/SA-1.md)');
+    await waitFor(() =>
+      readFileSync(join(repo, '.agentforge/tasks/SA-1.md'), 'utf8').includes('## Report'),
+    );
+    const notes = readFileSync(join(repo, '.agentforge/tasks/SA-1.md'), 'utf8');
+    expect(notes).toContain('- **Status:** DONE');
+    expect(notes).toContain('## Agent runs (oldest first)');
+    expect(notes).toMatch(/· Developer · .* · succeeded/);
+    expect(notes).toContain('Implemented SA-1.');
+    expect(notes).toContain('## Latest review — approved');
+    expect(notes).toContain('## Latest tests — passed');
+    expect(notes).toContain('Delivered the feature.');
+
+    // A different engine taking over gets what earlier agents did, inline.
+    const handoff = new HandoffService({
+      db: t.ctx.db,
+      bus: t.ctx.bus,
+      settings: t.ctx.settings,
+      tasks: t.ctx.tasks,
+      engines: t.ctx.engines,
+      log: t.app.log,
+    });
+    handoff.setSource(t.ctx.orchestrator);
+    const takeover = handoff.prepareRun(a, 'fixer', 'codex', repo);
+    expect(takeover).toContain('## You are taking over (Fixer on OpenAI Codex)');
+    expect(takeover).toContain('Implemented SA-1.');
+    expect(takeover).toContain('Latest review: approved');
+    expect(handoff.prepareRun(a, 'fixer', 'claude-code', repo)).not.toContain('taking over');
+
+    // Turning it off removes the files.
+    await t.app.inject({
+      method: 'PATCH',
+      url: '/api/settings',
+      payload: { memory: { handoffFiles: false } },
+    });
+    await waitFor(() => !existsSync(join(repo, '.agentforge/PROJECT.md')));
+    expect(existsSync(join(repo, '.agentforge/tasks'))).toBe(false);
+    expect(handoff.prepareRun(a, 'developer', 'claude-code', repo)).toBe('');
+  }, 30_000);
+});
+
 describe('pipeline: failures and pauses', () => {
   it('pauses on a usage limit with the reset time, and resumes the same step', async () => {
     const resetSec = Math.floor(Date.now() / 1000) + 3600;
@@ -486,6 +604,93 @@ describe('pipeline: failures and pauses', () => {
     expect(task(a).status).toBe('DONE');
     expect(existsSync(join(t.home, 'worktrees', projectId, 'SA-2'))).toBe(false);
   }, 30_000); // several real CLI processes; slow under a fully loaded test run
+
+  it('drops a cancelled dependency so its dependents still build, and can restore it', async () => {
+    script(
+      developer('SA-1', { 'src/a.txt': 'half done' }, { sleepMs: 10_000 }),
+      developer('SA-2', { 'src/b.txt': 'b' }),
+      reviewer(),
+      tester(),
+      documenter(),
+    );
+    const { planId, tasks } = plan(pt('T1', 'Feature A'), pt('T2', 'Feature B', ['T1']));
+    await approveAll(planId);
+    await t.ctx.orchestrator.tick();
+    const [a, b] = [tasks[0]!.id, tasks[1]!.id];
+    await waitFor(() => task(a).pipeline.activeRole === 'developer');
+    expect(task(b)).toMatchObject({ status: 'BLOCKED', statusReason: 'Waiting for SA-1' });
+    await t.app.inject({ method: 'POST', url: `/api/tasks/${a}/cancel` });
+    await t.ctx.orchestrator.idle();
+    expect(task(a).status).toBe('CANCELLED');
+    expect(task(b).status).toBe('DONE');
+    // The cancelled task's partial work was not merged in along with its dependent.
+    expect(existsSync(join(repo, 'src/a.txt'))).toBe(false);
+    expect(readFileSync(join(repo, 'src/b.txt'), 'utf8')).toBe('b');
+
+    const restored = await t.app.inject({ method: 'POST', url: `/api/tasks/${a}/unapprove` });
+    expect(restored.json()).toMatchObject({ status: 'DRAFT' });
+  }, 30_000);
+
+  it('resumes a cancelled task at its step, keeping its work', async () => {
+    script(
+      developer('SA-1', { 'src/a.txt': 'part one\n' }, { sleepMs: 10_000, once: true }),
+      developer('SA-1', { 'src/a2.txt': 'part two\n' }),
+      reviewer(),
+      tester(),
+      documenter(),
+    );
+    const { planId, tasks } = plan(pt('T1', 'Feature A'));
+    await approveAll(planId);
+    await t.ctx.orchestrator.tick();
+    const a = tasks[0]!.id;
+    await waitFor(() => task(a).pipeline.activeRole === 'developer');
+    // Let the fake agent write its file before we cancel mid-run.
+    await waitFor(() => existsSync(join(t.home, 'worktrees', projectId, 'SA-1', 'src/a.txt')));
+    await t.app.inject({ method: 'POST', url: `/api/tasks/${a}/cancel` });
+    await t.ctx.orchestrator.idle();
+    expect(task(a).status).toBe('CANCELLED');
+    // The partial work was saved on the branch before the worktree was removed.
+    const branch = task(a).pipeline.branch!;
+    expect(git(repo, 'show', `${branch}:src/a.txt`)).toBe('part one');
+
+    const res = await t.app.inject({ method: 'POST', url: `/api/tasks/${a}/resume` });
+    expect(res.json()).toMatchObject({ status: 'IN_DEVELOPMENT', statusReason: 'Resumed by you' });
+    await t.ctx.orchestrator.idle();
+    expect(task(a).status).toBe('DONE');
+    expect(readFileSync(join(repo, 'src/a.txt'), 'utf8')).toBe('part one\n');
+    expect(readFileSync(join(repo, 'src/a2.txt'), 'utf8')).toBe('part two\n');
+  }, 30_000);
+
+  it('restarts a cancelled task from scratch, discarding its branch', async () => {
+    script(
+      developer('SA-1', { 'src/old.txt': 'old\n' }, { sleepMs: 10_000, once: true }),
+      developer('SA-1', { 'src/new.txt': 'new\n' }),
+      reviewer(),
+      tester(),
+      documenter(),
+    );
+    const { planId, tasks } = plan(pt('T1', 'Feature A'));
+    await approveAll(planId);
+    await t.ctx.orchestrator.tick();
+    const a = tasks[0]!.id;
+    await waitFor(() => existsSync(join(t.home, 'worktrees', projectId, 'SA-1', 'src/old.txt')));
+    await t.app.inject({ method: 'POST', url: `/api/tasks/${a}/cancel` });
+    await t.ctx.orchestrator.idle();
+    const branch = task(a).pipeline.branch!;
+
+    const res = await t.app.inject({ method: 'POST', url: `/api/tasks/${a}/restart` });
+    expect(res.statusCode).toBe(200);
+    expect(git(repo, 'branch', '--list', branch)).toBe('');
+    await t.ctx.orchestrator.idle();
+    expect(task(a).status).toBe('DONE');
+    expect(existsSync(join(repo, 'src/old.txt'))).toBe(false);
+    expect(readFileSync(join(repo, 'src/new.txt'), 'utf8')).toBe('new\n');
+    expect(statuses(a).join(' ')).toContain('CANCELLED APPROVED QUEUED IN_DEVELOPMENT');
+    // Restart is only for cancelled tasks.
+    expect(
+      (await t.app.inject({ method: 'POST', url: `/api/tasks/${a}/restart` })).statusCode,
+    ).toBe(409);
+  }, 30_000);
 
   it('delivers your message to the running agent by resuming its session', async () => {
     script(

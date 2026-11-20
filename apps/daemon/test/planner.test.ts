@@ -1,4 +1,9 @@
-import type { AnyAppEvent, ChatMessageDto } from '@agentforge/shared';
+import {
+  DEFAULT_ESTIMATE_MS,
+  type AnyAppEvent,
+  type ChatMessageDto,
+  type TaskDto,
+} from '@agentforge/shared';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -178,6 +183,36 @@ describe('Planner: generate plan', () => {
       'usage',
     ]);
     expect(events.some((e) => e.type === 'planner.state')).toBe(true);
+  });
+
+  it('approves the plan automatically when that setting is on, with time estimates', async () => {
+    await t.app.inject({
+      method: 'PATCH',
+      url: '/api/settings',
+      payload: { pipeline: { autoApprovePlans: true } },
+    });
+    script(answer(`\`\`\`json\n${PLAN}\n\`\`\``));
+    await send({ content: 'Build a todo app with tags', intent: 'generate_plan' });
+    await idle();
+    const b = await board();
+    expect(b.plans[0].status).toBe('APPROVED');
+    expect(b.tasks.map((x: { status: string }) => x.status)).toEqual(['APPROVED', 'APPROVED']);
+    expect(t.ctx.tasks.history(b.tasks[0].id).at(-1)).toMatchObject({
+      to: 'APPROVED',
+      reason: 'Approved automatically (Settings → Pipeline)',
+      actor: 'planner',
+    });
+    expect((await chat())[1]!.content).toContain('approved automatically');
+    // No history yet: estimates come from the defaults for each complexity.
+    for (const x of b.tasks as TaskDto[])
+      expect(x.timing).toEqual({
+        estimateMs: DEFAULT_ESTIMATE_MS[x.complexity],
+        estimateBasis: 'default',
+        spentMs: 0,
+        runningSince: null,
+        startedAt: null,
+        finishedAt: null,
+      });
   });
 
   it('feeds validation errors back and retries in the same CLI session', async () => {

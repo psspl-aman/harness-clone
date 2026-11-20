@@ -23,7 +23,8 @@ const PIPELINE: Record<TaskStatus, readonly TaskStatus[]> = {
   // DONE: you approved the merge ("require my review before merge").
   NEEDS_HUMAN: ['QUEUED', 'FIXING', 'CANCELLED', 'DONE', 'BLOCKED'],
   FAILED: ['QUEUED', 'CANCELLED', 'FIXING'],
-  CANCELLED: ['DRAFT'],
+  // DRAFT/APPROVED: restored, restarted, or resumed before it had started.
+  CANCELLED: ['DRAFT', 'APPROVED'],
 };
 
 /** States in which an agent is actively working on the task. */
@@ -63,9 +64,9 @@ export function canTransition(from: TaskStatus, to: TaskStatus, resumeTo?: TaskS
     if (isPaused(to)) return true; // e.g. quota pause becomes manual pause
     return resumeTo !== undefined && to === resumeTo;
   }
-  // Retry: a failed or escalated task may go back to the step it stopped at.
+  // Retry / resume: a failed, escalated or cancelled task may go back to the step it stopped at.
   if (
-    (from === 'FAILED' || from === 'NEEDS_HUMAN') &&
+    (from === 'FAILED' || from === 'NEEDS_HUMAN' || from === 'CANCELLED') &&
     resumeTo !== undefined &&
     to === resumeTo &&
     isActive(to)

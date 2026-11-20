@@ -133,7 +133,8 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 | ------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | GET    | `/api/projects/:id/pipeline`                           | `{ paused, running: [{ taskId, key, role, engineId, runId }], queued, limit }`                            |
 | POST   | `/api/projects/:id/pipeline/pause` and `/resume`       | Pauses or resumes starting new tasks in the project                                                       |
-| POST   | `/api/tasks/:id/pause`, `/resume`, `/cancel`, `/retry` | Task controls. Each returns the updated `TaskDto`                                                         |
+| POST   | `/api/tasks/:id/pause`, `/resume`, `/cancel`, `/retry` | Task controls. Each returns the updated `TaskDto`. `/resume` on a cancelled task continues at its step    |
+| POST   | `/api/tasks/:id/restart`                               | Rebuilds a cancelled task from scratch (deletes its branch). Returns the updated `TaskDto`                |
 | POST   | `/api/tasks/:id/steer`                                 | `{ message }`. Delivered to the running agent (restarts its step), or to the next run                     |
 | POST   | `/api/tasks/:id/approve-merge`                         | Merges a task waiting for your review (also retries a merge that was blocked by uncommitted changes)      |
 | POST   | `/api/tasks/:id/request-changes`                       | `{ comments }`. Sends the task back to the Fixer with your comments                                       |

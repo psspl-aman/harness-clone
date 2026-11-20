@@ -28,6 +28,8 @@ export const AppSettingsSchema = z.object({
     maxFixLoops: z.number().int().min(0).max(10),
     requireHumanReviewBeforeMerge: z.boolean(),
     mergeStrategy: z.enum(['merge', 'pull_request']),
+    /** Approve the Planner's tasks automatically so building starts without waiting for you. */
+    autoApprovePlans: z.boolean(),
   }),
   health: z.object({
     engineCheckIntervalSec: z.number().int().min(15).max(3600),
@@ -45,6 +47,8 @@ export const AppSettingsSchema = z.object({
     maxPromptChars: z.number().int().min(500).max(100_000),
     /** Mirror project memory to `.agentforge/memory.md` (kept out of git). */
     mirrorFile: z.boolean(),
+    /** Keep `.agentforge/PROJECT.md` and `tasks/<KEY>.md` handoff notes for agents (kept out of git). */
+    handoffFiles: z.boolean(),
   }),
   safety: z.object({
     confirmDangerousCommands: z.boolean(),
@@ -70,10 +74,15 @@ export type AppSettings = z.infer<typeof AppSettingsSchema>;
 export const DEFAULT_SETTINGS: AppSettings = {
   workspaceRoot: null,
   concurrency: { maxTasksPerProject: 2, maxRunsPerEngine: 2 },
-  pipeline: { maxFixLoops: 3, requireHumanReviewBeforeMerge: false, mergeStrategy: 'merge' },
+  pipeline: {
+    maxFixLoops: 3,
+    requireHumanReviewBeforeMerge: false,
+    mergeStrategy: 'merge',
+    autoApprovePlans: false,
+  },
   health: { engineCheckIntervalSec: 120 },
   quota: { probeInitialBackoffSec: 300, probeMaxBackoffSec: 3 * 3600, fallbackEnabled: false },
-  memory: { maxPromptChars: 12_000, mirrorFile: true },
+  memory: { maxPromptChars: 12_000, mirrorFile: true, handoffFiles: true },
   safety: { confirmDangerousCommands: true, redactSecrets: true },
   pricing: {},
   defaultEngines: {

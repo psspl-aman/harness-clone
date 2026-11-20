@@ -18,6 +18,7 @@ import {
 } from './enums';
 import { EngineIdSchema, type RoleEngines } from './settings';
 import type { TaskPipelineDto } from './pipeline';
+import type { TaskTimingDto } from './estimate';
 
 // ─── Planner output contract (what the Planner agent must return) ────────────
 
@@ -197,6 +198,8 @@ export interface TaskDto {
   /** Open errors recorded against this task (pipeline failures). */
   openErrors: number;
   pipeline: TaskPipelineDto;
+  /** Estimated and spent agent time. */
+  timing: TaskTimingDto;
   createdAt: number;
   updatedAt: number;
 }

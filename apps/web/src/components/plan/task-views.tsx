@@ -23,10 +23,12 @@ import { useState, type DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { CancelledActions } from './cancelled-actions';
 import { PriorityLabel, TaskStatusBadge, TaskTypeIcon } from './badges';
 import { TicketChip } from './external-ticket';
 import { EnginesChip, ErrorsChip } from './task-chips';
 import { TaskProgress } from './pipeline-bits';
+import { TaskTimeChip } from './task-time';
 
 export interface ViewProps {
   tasks: TaskDto[];
@@ -52,6 +54,11 @@ function Row({
     disabled: !sortable,
   });
   const done = task.subtasks.filter((s) => s.done).length;
+  // Cancelled dependencies no longer gate anything, so don't list them.
+  const liveDeps = task.dependsOn.filter((d) =>
+    tasks.some((t) => t.id === d && t.status !== 'CANCELLED'),
+  );
+  const cancelled = task.status === 'CANCELLED';
   return (
     <li
       ref={setNodeRef}
@@ -81,9 +88,16 @@ function Row({
         className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         onClick={() => onOpen(task.id)}
       >
-        <span className="text-muted-foreground w-14 shrink-0 font-mono text-xs">{task.key}</span>
+        <span
+          className={cn(
+            'text-muted-foreground w-14 shrink-0 font-mono text-xs',
+            cancelled && 'line-through',
+          )}
+        >
+          {task.key}
+        </span>
         <TaskTypeIcon type={task.type} />
-        <span className="min-w-0 flex-1">
+        <span className={cn('min-w-0 flex-1', cancelled && 'opacity-60')}>
           <span className="block truncate text-sm font-medium">{task.title}</span>
           <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-[11px]">
             <PriorityLabel priority={task.priority} />
@@ -96,13 +110,19 @@ function Row({
                 · {done}/{task.subtasks.length} subtasks
               </span>
             )}
-            {task.dependsOn.length > 0 && (
-              <span>· after {task.dependsOn.map((d) => keyOf(tasks, d)).join(', ')}</span>
+            {liveDeps.length > 0 && (
+              <span>· after {liveDeps.map((d) => keyOf(tasks, d)).join(', ')}</span>
             )}
+            <TaskTimeChip task={task} className="before:content-['·_']" />
           </span>
         </span>
       </button>
       <TaskProgress task={task} />
+      {cancelled && (
+        <span className="flex items-center gap-1.5">
+          <CancelledActions task={task} compact />
+        </span>
+      )}
       <TaskStatusBadge status={task.status} />
       {task.status === 'DRAFT' && (
         <Button
@@ -162,6 +182,7 @@ const COLUMNS: { title: string; statuses: TaskStatus[]; drop?: 'approve' | 'unap
     statuses: ['NEEDS_HUMAN', 'FAILED', 'PAUSED_QUOTA', 'PAUSED_AUTH', 'PAUSED_MANUAL'],
   },
   { title: 'Done', statuses: ['DONE'] },
+  { title: 'Cancelled', statuses: ['CANCELLED'] },
 ];
 
 export function TaskBoard({
@@ -224,6 +245,7 @@ export function TaskBoard({
                   </div>
                   <p className="line-clamp-2 text-sm font-medium">{t.title}</p>
                   <EnginesChip task={t} className="mt-1" />
+                  <TaskTimeChip task={t} className="text-muted-foreground mt-1 text-[11px]" />
                   {col.statuses.length > 1 && (
                     <TaskStatusBadge status={t.status} className="mt-1.5" />
                   )}

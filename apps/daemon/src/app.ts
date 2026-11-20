@@ -10,6 +10,7 @@ import { FileService } from './services/files';
 import { registerIntegrationRoutes } from './routes/integrations';
 import { McpService } from './services/mcp/mcp-service';
 import { MemoryService } from './services/memory';
+import { HandoffService } from './services/handoff';
 import { SafetyService } from './services/safety';
 import { registerSafetyRoutes } from './routes/safety';
 import { registerAgentMcpRoutes } from './routes/agent-mcp';
@@ -179,6 +180,19 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     log: app.log,
     autoStart: opts.orchestrator?.autoStart ?? process.env.NODE_ENV !== 'test',
   });
+  // Markdown handoff notes (.agentforge/PROJECT.md, tasks/<KEY>.md) so any agent can pick up a task.
+  const handoff = new HandoffService({
+    db: dbHandle.db,
+    bus,
+    settings,
+    tasks: taskService,
+    engines: engineRegistry,
+    log: app.log,
+    redact: redactor,
+  });
+  handoff.setSource(orchestrator);
+  handoff.attach();
+  orchestrator.setHandoff(handoff);
   const errorService = new ErrorService(dbHandle.db, bus, taskService, terminals);
   errorService.attach();
   errorService.setTaskFixer((id) => orchestrator.fixFailed(id));
@@ -203,8 +217,11 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   bus.subscribe((e) => {
     if (e.type === 'project.onboarding' && e.payload.status === 'done')
       memory.changed(e.payload.projectId);
-    if (e.type === 'task.status_changed' && e.payload.to === 'DONE')
+    if (e.type === 'task.status_changed' && e.payload.to === 'DONE') {
       memory.changed(e.payload.projectId);
+      // It passed review and tests, so its checklist is complete too.
+      taskService.completeSubtasks(e.payload.taskId, 'all');
+    }
   });
   // The wizard's initial requirement is planned as soon as onboarding has analysed the folder.
   bus.subscribe((e) => {
@@ -288,6 +305,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     await orchestrator.stop();
     await mcp.stop();
     memory.stop();
+    handoff.stop();
     safety.stop();
     await planner.stop();
     await engineRegistry.stop();

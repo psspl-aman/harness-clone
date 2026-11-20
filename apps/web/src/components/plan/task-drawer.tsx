@@ -48,7 +48,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { TaskStatusBadge, statusLabel } from './badges';
+import { CancelledActions } from './cancelled-actions';
 import { ExternalTicket } from './external-ticket';
+import { TaskTimePanel } from './task-time';
 import { InstructionsDialog, SplitDialog } from './dialogs';
 import { PipelineControls, PipelinePanel, PipelineTabs, type PipelineTab } from './task-pipeline';
 import { cn } from '@/lib/utils';
@@ -199,8 +201,13 @@ function DependencyPicker({
           key={d.id}
           className="bg-muted flex items-center gap-1 rounded-md px-2 py-0.5 text-xs"
         >
-          <span className="font-mono">{d.key}</span>{' '}
+          <span className={cn('font-mono', d.status === 'CANCELLED' && 'line-through')}>
+            {d.key}
+          </span>{' '}
           <span className="max-w-40 truncate">{d.title}</span>
+          {d.status === 'CANCELLED' && (
+            <span className="text-muted-foreground">(cancelled — skipped)</span>
+          )}
           {!disabled && (
             <button aria-label={`Remove dependency ${d.key}`} onClick={() => toggle(d.id)}>
               <X className="size-3" />
@@ -338,6 +345,7 @@ export function TaskDrawer({
                     <Undo2 /> Back to draft
                   </Button>
                 )}
+                <CancelledActions task={task} />
                 {editable && (
                   <>
                     <Button size="sm" variant="outline" onClick={() => setRegenOpen(true)}>
@@ -366,6 +374,7 @@ export function TaskDrawer({
                 )}
               </div>
               <ExternalTicket task={task} />
+              <TaskTimePanel task={task} />
               {!editable && task.status !== 'DONE' && (
                 <p className="text-muted-foreground text-xs">
                   An agent is working on this task — editing is locked until it finishes or is
@@ -452,6 +461,11 @@ export function TaskDrawer({
               </Field>
 
               <Field label="Subtasks">
+                <p className="text-muted-foreground text-xs">
+                  An optional checklist for the agents. They tick items off as they finish them, and
+                  everything is ticked when the task is done — you don&apos;t need to tick anything
+                  to approve or build it.
+                </p>
                 <div className="space-y-1">
                   {task.subtasks.map((s) => (
                     <div key={s.id} className="group flex items-center gap-2">

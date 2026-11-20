@@ -19,6 +19,7 @@ export function registerPipelineRoutes(app: FastifyInstance, ctx: AppContext): v
   action('pause', (t) => o.pause(t));
   action('resume', (t) => o.resume(t));
   action('cancel', (t) => o.cancel(t));
+  action('restart', (t) => o.restart(t));
   action('retry', (t) => o.retry(t));
   action('fix', (t) => o.fixFailed(t));
   action('steer', (t, b) => o.steer(t, b));

@@ -22,7 +22,7 @@ import {
   type TaskStatusChangeDto,
   type TestResultDto,
 } from '@agentforge/shared';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ZodType } from 'zod';
@@ -56,6 +56,7 @@ import {
   developerPrompt,
   documenterPrompt,
   fixerPrompt,
+  parseSubtasksDone,
   reviewerPrompt,
   testerPrompt,
   type FixInput,
@@ -120,8 +121,16 @@ export class Orchestrator {
   private timer: NodeJS.Timeout | null = null;
   private debounce: NodeJS.Timeout | null = null;
   private stopped = false;
+  private handoff: {
+    prepareRun(taskId: string, role: AgentRole, engineId: string, cwd: string): string;
+  } | null = null;
 
   constructor(private readonly d: OrchestratorDeps) {}
+
+  /** Handoff notes written before each agent run (see HandoffService). */
+  setHandoff(h: NonNullable<Orchestrator['handoff']>): void {
+    this.handoff = h;
+  }
 
   start(): void {
     // Nothing is running right after boot: clear stale "active run" markers, and
@@ -262,14 +271,15 @@ export class Orchestrator {
         .all()
         .map((r) => all.get(r.d))
         .filter((x) => !!x);
-      const pending = deps.filter((x) => x.status !== 'DONE');
+      // A cancelled dependency was dropped from the plan, so it no longer gates its dependents.
+      const pending = deps.filter((x) => x.status !== 'DONE' && x.status !== 'CANCELLED');
       if (!pending.length) {
         this.d.tasks.transition(t.id, 'QUEUED', 'Ready to build', 'orchestrator');
         continue;
       }
-      const broken = pending.filter((x) => x.status === 'FAILED' || x.status === 'CANCELLED');
+      const broken = pending.filter((x) => x.status === 'FAILED');
       const reason = broken.length
-        ? `Dependency ${broken.map((x) => x.key).join(', ')} ${broken.length > 1 ? 'are' : 'is'} ${broken[0]!.status === 'FAILED' ? 'failed' : 'cancelled'}`
+        ? `Dependency ${broken.map((x) => x.key).join(', ')} ${broken.length > 1 ? 'have' : 'has'} failed`
         : `Waiting for ${pending.map((x) => x.key).join(', ')}`;
       if (t.status === 'APPROVED') this.d.tasks.transition(t.id, 'BLOCKED', reason, 'orchestrator');
       else if (t.statusReason !== reason) {
@@ -761,8 +771,9 @@ export class Orchestrator {
     this.drivers.get(taskId)?.controller.abort();
   }
 
-  resume(taskId: string): void {
+  async resume(taskId: string): Promise<void> {
     const t = this.row(taskId);
+    if (t.status === 'CANCELLED') return this.resumeCancelled(t);
     if (!['PAUSED_MANUAL', 'PAUSED_QUOTA', 'PAUSED_AUTH'].includes(t.status))
       throw conflict(`${t.key} isn't paused`);
     const to = t.resumeToStatus ?? 'QUEUED';
@@ -780,12 +791,93 @@ export class Orchestrator {
     const t = this.row(taskId);
     if (t.status === 'DONE' || t.status === 'CANCELLED')
       throw conflict(`${t.key} is already ${t.status.toLowerCase()}`);
+    // Remember where it stopped, so "Resume" can pick it up from that step later.
+    const step = ACTIVE_STATUSES.includes(t.status)
+      ? t.status
+      : t.resumeToStatus && ACTIVE_STATUSES.includes(t.resumeToStatus)
+        ? t.resumeToStatus
+        : t.status === 'DRAFT'
+          ? 'DRAFT'
+          : 'APPROVED';
+    this.d.db
+      .update(tasks)
+      .set({ resumeToStatus: step, resumeAt: null })
+      .where(eq(tasks.id, taskId))
+      .run();
     this.d.tasks.transition(taskId, 'CANCELLED', 'Cancelled by you', 'user');
     const driver = this.drivers.get(taskId);
     driver?.controller.abort();
     await driver?.promise;
-    if (t.worktreePath)
+    if (t.worktreePath && existsSync(t.worktreePath)) {
+      // Keep the partial work on the task branch (the worktree itself is removed).
+      await gitops
+        .commitAll(t.worktreePath, `WIP ${t.key}: ${t.title} (cancelled)`)
+        .catch((err: Error) => this.d.log.warn({ err, taskId }, 'could not save cancelled work'));
       await gitops.removeWorktree(this.project(t.projectId).localPath, t.worktreePath);
+    }
+  }
+
+  /** Continue a cancelled task from the step it was cancelled at, with its saved work. */
+  private async resumeCancelled(t: TaskRow): Promise<void> {
+    const step = t.resumeToStatus;
+    const project = this.project(t.projectId);
+    const hasWork = !!t.branchName && (await gitops.branchExists(project.localPath, t.branchName));
+    if (step && ACTIVE_STATUSES.includes(step) && hasWork) {
+      const working = t.baseBranch ?? project.workingBranch ?? project.defaultBranch ?? 'main';
+      const path = t.worktreePath ?? join(this.d.home, 'worktrees', t.projectId, t.key);
+      await gitops.ensureWorktree(project.localPath, path, t.branchName!, working);
+      this.d.db.update(tasks).set({ worktreePath: path }).where(eq(tasks.id, t.id)).run();
+      // Continue the interrupted agent's session when the engine supports it.
+      const last = this.d.db
+        .select({ id: agentRuns.id })
+        .from(agentRuns)
+        .where(eq(agentRuns.taskId, t.id))
+        .orderBy(desc(agentRuns.startedAt))
+        .get();
+      const hint = last ? this.restartHint(t.id, last.id) : null;
+      this.patchState(t.id, { lastError: null, ...(hint ? { resumeHint: hint } : {}) }, false);
+      this.d.tasks.transition(t.id, step, 'Resumed by you', 'user');
+    } else {
+      // It hadn't started (or its work is gone): queue it again behind its dependencies.
+      this.d.tasks.transition(
+        t.id,
+        step === 'DRAFT' ? 'DRAFT' : 'APPROVED',
+        'Resumed by you',
+        'user',
+      );
+    }
+    this.d.db.update(tasks).set({ resumeToStatus: null }).where(eq(tasks.id, t.id)).run();
+    this.d.tasks.touch(t.id);
+    this.schedule();
+  }
+
+  /** Throw away a cancelled task's work and build it again from scratch. */
+  async restart(taskId: string): Promise<void> {
+    const t = this.row(taskId);
+    if (t.status !== 'CANCELLED') throw conflict(`${t.key} can only be restarted once cancelled`);
+    const project = this.project(t.projectId);
+    if (t.worktreePath) await gitops.removeWorktree(project.localPath, t.worktreePath);
+    if (t.branchName) await gitops.deleteBranch(project.localPath, t.branchName);
+    // Fresh pipeline state; a conflict-resolution task keeps what it is resolving.
+    const s = t.pipelineState;
+    this.d.db
+      .update(tasks)
+      .set({
+        branchName: null,
+        worktreePath: null,
+        baseBranch: null,
+        fixLoopCount: 0,
+        resumeToStatus: null,
+        resumeAt: null,
+        pipelineState: {
+          ...(s.conflictOf ? { conflictOf: s.conflictOf } : {}),
+          ...(s.conflictFiles ? { conflictFiles: s.conflictFiles } : {}),
+        },
+      })
+      .where(eq(tasks.id, taskId))
+      .run();
+    this.d.tasks.transition(taskId, 'APPROVED', 'Restarted by you', 'user');
+    this.schedule();
   }
 
   retry(taskId: string): void {
@@ -1046,6 +1138,8 @@ export class Orchestrator {
   ): Promise<RoleOutcome<T> | null> {
     const signal = driver.controller.signal;
     let engineId = this.engineFor(task, role);
+    // Point the agent at the handoff notes (and, after an engine switch, at what earlier agents did).
+    prompt += this.handoff?.prepareRun(task.id, role, engineId, cwd) ?? '';
     let nextPrompt = prompt;
     let resume: string | null = null;
     // Resuming after a quota/auth pause: continue the interrupted session when possible.
@@ -1147,6 +1241,12 @@ export class Orchestrator {
             { taskId: task.id, files: c.skippedSecrets },
             'refused to commit secret-looking files',
           );
+      }
+
+      // Implementers report finished subtasks; tick them off so nobody has to.
+      if (result.status === 'succeeded' && (role === 'developer' || role === 'fixer')) {
+        const done = parseSubtasksDone(result.finalText);
+        if (done && (done === 'all' || done.length)) this.d.tasks.completeSubtasks(task.id, done);
       }
 
       let value: T | null = null;
@@ -1761,6 +1861,7 @@ export class Orchestrator {
     });
   }
 
+  /** Dependencies that still count — cancelled ones are dropped (no branch merge, no context). */
   private dependencyRows(taskId: string): TaskRow[] {
     const ids = this.d.db
       .select({ d: taskDependencies.dependsOnTaskId })
@@ -1768,7 +1869,13 @@ export class Orchestrator {
       .where(eq(taskDependencies.taskId, taskId))
       .all()
       .map((r) => r.d);
-    return ids.length ? this.d.db.select().from(tasks).where(inArray(tasks.id, ids)).all() : [];
+    return ids.length
+      ? this.d.db
+          .select()
+          .from(tasks)
+          .where(and(inArray(tasks.id, ids), sql`${tasks.status} <> 'CANCELLED'`))
+          .all()
+      : [];
   }
 
   private engineFor(task: TaskRow, role: AgentRole): string {

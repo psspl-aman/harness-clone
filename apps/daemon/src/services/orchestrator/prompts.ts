@@ -48,7 +48,9 @@ function contextBlock(ctx: RoleContext): string {
     `Type: ${t.type} · Priority: ${t.priority} · Complexity: ${t.complexity}`,
     t.description,
     `Acceptance criteria:\n${t.acceptanceCriteria.map((c) => `- ${c}`).join('\n') || '- (none given)'}`,
-    t.subtasks.length ? `Subtasks:\n${t.subtasks.map((s) => `- ${s.title}`).join('\n')}` : '',
+    t.subtasks.length
+      ? `Subtasks:\n${t.subtasks.map((s, i) => `${i + 1}. [${s.done ? 'x' : ' '}] ${s.title}`).join('\n')}`
+      : '',
     t.affectedAreas.length ? `Likely affected areas: ${t.affectedAreas.join(', ')}` : '',
     ctx.dependencies.length
       ? `## Already completed dependencies\n${ctx.dependencies.map((d) => `- ${d.key} ${d.title}${d.summary ? `: ${clip(d.summary, 400)}` : ''}`).join('\n')}`
@@ -68,6 +70,24 @@ const WORKTREE_RULES = (ctx: RoleContext) => `## Rules
 - Keep changes focused on this task; follow the project's conventions.
 - If you have the \`agentforge\` tools: search project memory before design decisions (\`project_memory_search\`) and record lasting decisions or pitfalls with \`project_memory_add\`.`;
 
+/** Asks implementers to report finished subtasks so AgentForge can tick them off. */
+const subtaskReport = (ctx: RoleContext) =>
+  ctx.task.subtasks.length
+    ? '\n\nEnd your reply with one line `Subtasks done: <numbers>` listing the subtasks above that are now complete (e.g. `Subtasks done: 1, 3`; `all` and `none` also work).'
+    : '';
+
+/** Reads the `Subtasks done:` line from an implementer's reply (last one wins). */
+export function parseSubtasksDone(text: string): number[] | 'all' | null {
+  const m = [...text.matchAll(/subtasks done\s*:\s*([^\n]*)/gi)].at(-1);
+  if (!m) return null;
+  const v = m[1]!
+    .replace(/[`*_.]/g, '')
+    .trim()
+    .toLowerCase();
+  if (v.startsWith('all')) return 'all';
+  return [...v.matchAll(/\d+/g)].map((x) => Number(x[0]));
+}
+
 const JSON_ONLY =
   'Finish with ONLY one JSON object as your final message — no prose around it and no code fences.';
 
@@ -81,7 +101,7 @@ ${WORKTREE_RULES(ctx)}
 - Implement the task fully, including unit tests for the code you add.
 - Run the relevant build/test commands if you can and fix what you break.
 
-When done, reply with a short summary of what you changed and anything the Reviewer should know.`;
+When done, reply with a short summary of what you changed and anything the Reviewer should know.${subtaskReport(ctx)}`;
 }
 
 export function reviewerPrompt(
@@ -174,7 +194,7 @@ ${problem}
 ${WORKTREE_RULES(ctx)}
 - Fix the root cause; keep the change minimal and keep existing tests passing.
 
-When done, reply with a short summary of each fix.`;
+When done, reply with a short summary of each fix.${subtaskReport(ctx)}`;
 }
 
 export function documenterPrompt(

@@ -149,6 +149,13 @@ export default function SettingsPage() {
               checked={draft.pipeline.requireHumanReviewBeforeMerge}
               onChange={(v) => set('pipeline', { requireHumanReviewBeforeMerge: v })}
             />
+            <SwitchField
+              id="autoApprovePlans"
+              label="Approve plans automatically"
+              hint="Tasks the Planner drafts start building right away, without waiting for you to review them. Agents still review and test every change."
+              checked={draft.pipeline.autoApprovePlans}
+              onChange={(v) => set('pipeline', { autoApprovePlans: v })}
+            />
             <SelectField
               id="mergeStrategy"
               label="When a task is done"
@@ -252,6 +259,13 @@ export default function SettingsPage() {
               hint="A readable copy in each project folder, kept out of git."
               checked={draft.memory.mirrorFile}
               onChange={(v) => set('memory', { mirrorFile: v })}
+            />
+            <SwitchField
+              id="handoffFiles"
+              label="Keep handoff notes for agents"
+              hint="Writes .agentforge/PROJECT.md and tasks/<KEY>.md (out of git): project status, each task's history, reviews and tests — so any agent, on any engine, can pick up where another left off."
+              checked={draft.memory.handoffFiles}
+              onChange={(v) => set('memory', { handoffFiles: v })}
             />
             <TextField
               id="workspaceRoot"

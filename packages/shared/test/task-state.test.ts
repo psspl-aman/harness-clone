@@ -67,6 +67,14 @@ describe('task state machine', () => {
     expect(canTransition('PAUSED_AUTH', 'CANCELLED')).toBe(true);
   });
 
+  it('lets a cancelled task be resumed at its step, restarted or restored', () => {
+    expect(canTransition('CANCELLED', 'IN_REVIEW', 'IN_REVIEW')).toBe(true);
+    expect(canTransition('CANCELLED', 'IN_REVIEW')).toBe(false);
+    expect(canTransition('CANCELLED', 'APPROVED')).toBe(true);
+    expect(canTransition('CANCELLED', 'DRAFT')).toBe(true);
+    expect(canTransition('CANCELLED', 'DONE')).toBe(false);
+  });
+
   it('lets failed / needs-human tasks be retried', () => {
     expect(canTransition('FAILED', 'QUEUED')).toBe(true);
     expect(canTransition('NEEDS_HUMAN', 'FIXING')).toBe(true);

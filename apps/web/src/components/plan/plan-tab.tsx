@@ -1,10 +1,11 @@
 'use client';
 
-import type { PlanDto, TaskDto } from '@agentforge/shared';
+import { planRemaining, spentNow, type PlanDto, type TaskDto } from '@agentforge/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
   ChevronDown,
+  Clock,
   Columns3,
   ListTree,
   Merge,
@@ -24,11 +25,39 @@ import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { AddTaskDialog, EditPlanDialog, InstructionsDialog } from './dialogs';
 import { TaskDrawer } from './task-drawer';
+import { fmtMinutes } from './task-time';
+import { useNow } from '@/hooks/use-now';
 import { PipelineBar } from './pipeline-bits';
 import { TaskBoard, TaskGraph, TaskList } from './task-views';
 
 type View = 'list' | 'board' | 'graph';
 const errText = (e: unknown) => (e instanceof ApiClientError ? e.message : String(e));
+
+/** Time left to build the plan: dependency chains run in order, up to N tasks at once. */
+function PlanEta({ projectId, tasks }: { projectId: string; tasks: TaskDto[] }) {
+  const status = useQuery({
+    queryKey: qk.pipeline(projectId),
+    queryFn: () => api.pipeline.status(projectId),
+  });
+  const now = useNow(
+    30_000,
+    tasks.some((t) => !!t.timing.runningSince),
+  );
+  const parallel = status.data?.limit ?? 1;
+  const { workMs, etaMs } = planRemaining(tasks, parallel, now);
+  const spent = tasks.reduce((s, t) => s + spentNow(t.timing, now), 0);
+  if (!workMs && !spent) return null;
+  return (
+    <span
+      className="text-muted-foreground inline-flex items-center gap-1 text-xs"
+      title={`About ${fmtMinutes(workMs)} of agent work left; dependencies run in order and up to ${parallel} task${parallel === 1 ? '' : 's'} build at once. Agents have spent ${fmtMinutes(spent)} so far.`}
+    >
+      <Clock className="size-3" aria-hidden />
+      {workMs ? `≈ ${fmtMinutes(etaMs)} left` : 'all done'}
+      {spent > 0 && ` · ${fmtMinutes(spent)} spent`}
+    </span>
+  );
+}
 
 function PlanSummary({ plan, tasks }: { plan: PlanDto; tasks: TaskDto[] }) {
   const [open, setOpen] = useState(false);
@@ -48,6 +77,7 @@ function PlanSummary({ plan, tasks }: { plan: PlanDto; tasks: TaskDto[] }) {
         <span className="text-muted-foreground text-xs">
           {approved}/{tasks.length} approved · {timeAgo(plan.updatedAt)}
         </span>
+        <PlanEta projectId={plan.projectId} tasks={tasks} />
       </div>
       <p className="text-sm">{plan.goal}</p>
       {(details.length > 0 || plan.risks.length > 0 || plan.assumptions.length > 0) && (
@@ -123,20 +153,23 @@ export function PlanTab({
   if (board.isPending) return <Skeleton className="m-6 h-64 rounded-xl" />;
   const plan = board.data?.plans[0] ?? null;
   const tasks = (board.data?.tasks ?? []).filter((t) => t.status !== 'CANCELLED');
+  const cancelled = (board.data?.tasks ?? []).filter((t) => t.status === 'CANCELLED');
   const drafts = tasks.filter((t) => t.status === 'DRAFT');
   const busy = planner.data?.running ?? false;
   const sel = [...selected].filter((id) => tasks.some((t) => t.id === id));
   const toggle = (id: string) =>
     setSelected((s) => (s.has(id) ? new Set([...s].filter((x) => x !== id)) : new Set([...s, id])));
+  // Cancelled tasks are out of the plan but stay visible so they can be resumed or restarted.
+  const visible = [...tasks, ...cancelled];
   const viewProps = {
-    tasks,
+    tasks: visible,
     selected,
     onToggleSelect: toggle,
     onOpen: (id: string) => onOpenTask(id),
     onApprove: (id: string) => act.mutate(() => api.tasks.approve(id)),
   };
 
-  if (!plan && !tasks.length) {
+  if (!plan && !tasks.length && !cancelled.length) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center">
         <div className="bg-accent text-accent-foreground grid size-12 place-items-center rounded-xl">
@@ -289,7 +322,7 @@ export function PlanTab({
       {view === 'board' && (
         <TaskBoard {...viewProps} onUnapprove={(id) => act.mutate(() => api.tasks.unapprove(id))} />
       )}
-      {view === 'graph' && <TaskGraph {...viewProps} />}
+      {view === 'graph' && <TaskGraph {...viewProps} tasks={tasks} />}
 
       <TaskDrawer projectId={projectId} taskId={openTaskId} onClose={() => onOpenTask(null)} />
       {plan && dialog === 'edit' && (

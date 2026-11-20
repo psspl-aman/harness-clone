@@ -545,11 +545,12 @@ export class PlannerService {
           job.requirementId,
           out.tasks,
         );
+        const auto = this.autoApprove(plan.id, created);
         return this.finishMessage(entry.messageId, {
           kind: 'plan',
           status: 'done',
           planId: plan.id,
-          content: `${out.message || `Drafted plan v${plan.version}.`}\n\n${created.length} task${created.length === 1 ? '' : 's'} ready for your review.`,
+          content: `${out.message || `Drafted plan v${plan.version}.`}\n\n${created.length} task${created.length === 1 ? '' : 's'} ${auto ? 'approved automatically — building has started.' : 'ready for your review.'}`,
         });
       }
       case 'tasks': {
@@ -562,11 +563,12 @@ export class PlannerService {
           out.tasks,
         );
         this.d.tasks.syncPlanApproval(plan.id); // the plan has new drafts again
+        const auto = this.autoApprove(plan.id, created);
         return this.finishMessage(entry.messageId, {
           kind: 'plan',
           status: 'done',
           planId: plan.id,
-          content: `${out.message || 'Added tasks to the plan.'}\n\nAdded ${created.map((t) => t.key).join(', ')} for your review.`,
+          content: `${out.message || 'Added tasks to the plan.'}\n\nAdded ${created.map((t) => t.key).join(', ')} ${auto ? '— approved automatically, building has started.' : 'for your review.'}`,
         });
       }
       case 'task': {
@@ -586,6 +588,17 @@ export class PlannerService {
         });
       }
     }
+  }
+
+  /** Settings → Pipeline → "Approve plans automatically": skip the review step. */
+  private autoApprove(planId: string, created: { id: string }[]): boolean {
+    if (!this.d.settings.get().pipeline.autoApprovePlans || !created.length) return false;
+    this.d.tasks.approvePlan(
+      planId,
+      created.map((t) => t.id),
+      { reason: 'Approved automatically (Settings → Pipeline)', actor: 'planner' },
+    );
+    return true;
   }
 
   // ─── Context ───────────────────────────────────────────────────────────────

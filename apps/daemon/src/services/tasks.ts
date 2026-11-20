@@ -1,5 +1,9 @@
 import {
   assertTransition,
+  COMPLEXITIES,
+  DEFAULT_ESTIMATE_MS,
+  ESTIMATE_MIN_SAMPLES,
+  type Complexity,
   CreateTaskInputSchema,
   InvalidTransitionError,
   MergeTasksInputSchema,
@@ -273,7 +277,11 @@ export class TaskService {
    * Approve draft tasks (all of the plan's drafts, or the given subset).
    * The plan becomes APPROVED once it has no draft tasks left.
    */
-  approvePlan(planId: string, taskIds?: string[]): PlanBoardDto {
+  approvePlan(
+    planId: string,
+    taskIds?: string[],
+    by: { reason: string; actor: string } = { reason: 'Approved by you', actor: 'user' },
+  ): PlanBoardDto {
     const plan = this.planRow(planId);
     if (plan.status === 'SUPERSEDED') throw conflict('This plan was superseded');
     const drafts = this.db
@@ -284,7 +292,7 @@ export class TaskService {
     const chosen = taskIds ? drafts.filter((t) => taskIds.includes(t.id)) : drafts;
     if (taskIds && chosen.length !== taskIds.length)
       throw badRequest('Some tasks are not draft tasks of this plan');
-    for (const t of chosen) this.transition(t.id, 'APPROVED', 'Approved by you', 'user');
+    for (const t of chosen) this.transition(t.id, 'APPROVED', by.reason, by.actor);
     this.syncPlanApproval(planId);
     return this.board(plan.projectId);
   }
@@ -663,6 +671,27 @@ export class TaskService {
 
   // ─── Subtasks ──────────────────────────────────────────────────────────────
 
+  /**
+   * Tick subtasks off for the agents (1-based positions, or all of them). Only
+   * ever marks them done — never unticks what you ticked. Works while the task
+   * is running, unlike the editing endpoints.
+   */
+  completeSubtasks(taskId: string, which: number[] | 'all'): number {
+    const rows = this.db
+      .select()
+      .from(subtasks)
+      .where(eq(subtasks.taskId, taskId))
+      .orderBy(asc(subtasks.orderIndex))
+      .all();
+    const ids = rows
+      .filter((r, i) => !r.done && (which === 'all' || which.includes(i + 1)))
+      .map((r) => r.id);
+    if (!ids.length) return 0;
+    this.db.update(subtasks).set({ done: true }).where(inArray(subtasks.id, ids)).run();
+    this.touch(taskId);
+    return ids.length;
+  }
+
   addSubtask(taskId: string, raw: unknown): TaskDto {
     const { title } = SubtaskInputSchema.parse(raw);
     this.editableRow(taskId);
@@ -962,15 +991,58 @@ export class TaskService {
     return p;
   }
 
+  private estimateCache: { at: number; medians: Map<Complexity, number> } | null = null;
+
+  /**
+   * Median agent time of finished tasks per complexity (all projects, most recent
+   * 200), used as the estimate once there are enough samples. Cached briefly.
+   */
+  private learnedEstimates(): Map<Complexity, number> {
+    if (this.estimateCache && Date.now() - this.estimateCache.at < 60_000)
+      return this.estimateCache.medians;
+    const rows = this.db
+      .select({
+        complexity: tasks.complexity,
+        spent: sql<number>`sum(coalesce(${agentRuns.durationMs}, 0))`,
+      })
+      .from(tasks)
+      .innerJoin(agentRuns, eq(agentRuns.taskId, tasks.id))
+      .where(eq(tasks.status, 'DONE'))
+      .groupBy(tasks.id)
+      .orderBy(desc(tasks.updatedAt))
+      .limit(200)
+      .all();
+    const medians = new Map<Complexity, number>();
+    for (const c of COMPLEXITIES) {
+      const xs = rows
+        .filter((r) => r.complexity === c && Number(r.spent) > 0)
+        .map((r) => Number(r.spent))
+        .sort((a, b) => a - b);
+      if (xs.length >= ESTIMATE_MIN_SAMPLES) {
+        const mid = Math.floor(xs.length / 2);
+        medians.set(c, xs.length % 2 ? xs[mid]! : Math.round((xs[mid - 1]! + xs[mid]!) / 2));
+      }
+    }
+    this.estimateCache = { at: Date.now(), medians };
+    return medians;
+  }
+
   private toDtos(rows: TaskRow[]): TaskDto[] {
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
+    const medians = this.learnedEstimates();
     const usage = new Map(
       this.db
         .select({
           taskId: agentRuns.taskId,
           tokens: sql<number>`sum(${agentRuns.inputTokens} + ${agentRuns.outputTokens} + ${agentRuns.cacheReadTokens} + ${agentRuns.cacheWriteTokens})`,
           cost: sql<number>`sum(${agentRuns.costUsd})`,
+          spent: sql<number>`sum(coalesce(${agentRuns.durationMs}, 0))`,
+          runningSince: sql<
+            number | null
+          >`max(case when ${agentRuns.status} = 'RUNNING' then ${agentRuns.startedAt} end)`,
+          startedAt: sql<number | null>`min(${agentRuns.startedAt})`,
+          finishedAt: sql<number | null>`max(${agentRuns.finishedAt})`,
         })
         .from(agentRuns)
         .where(inArray(agentRuns.taskId, ids))
@@ -1072,6 +1144,21 @@ export class TaskService {
         costUsd: Number(usage.get(r.id)?.cost ?? 0),
         lastError: r.pipelineState.lastError?.message ?? null,
       },
+      timing: (() => {
+        const u = usage.get(r.id);
+        const learned = medians.get(r.complexity);
+        return {
+          estimateMs: learned ?? DEFAULT_ESTIMATE_MS[r.complexity],
+          estimateBasis: learned ? ('history' as const) : ('default' as const),
+          spentMs: Number(u?.spent ?? 0),
+          runningSince: u?.runningSince != null ? Number(u.runningSince) : null,
+          startedAt: u?.startedAt != null ? Number(u.startedAt) : null,
+          finishedAt:
+            r.status === 'DONE'
+              ? (r.completedAt ?? (u?.finishedAt != null ? Number(u.finishedAt) : null))
+              : null,
+        };
+      })(),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
