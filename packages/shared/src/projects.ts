@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RoleEnginesSchema } from './settings';
+import { RoleEnginesSchema, RoleModelsSchema, RoutingSchema } from './settings';
 import { ProjectSummarySchema, Timestamp } from './entities';
 
 // ─── Directory browser ───────────────────────────────────────────────────────
@@ -231,6 +231,7 @@ export const ProjectDetailSchema = ProjectSummarySchema.extend({
   onboardingError: z.string().nullable(),
   onboardedAt: Timestamp.nullable(),
   roleEngines: RoleEnginesSchema.partial(),
+  roleModels: RoleModelsSchema,
   pipeline: z.object({
     maxConcurrentTasks: z.number().nullable(),
     maxFixLoops: z.number().nullable(),
@@ -239,6 +240,8 @@ export const ProjectDetailSchema = ProjectSummarySchema.extend({
     fallbackEnabled: z.boolean(),
     engineFallback: z.record(z.string(), z.string()),
     paused: z.boolean(),
+    /** Complexity→pipeline routing override; null uses the global routing setting. */
+    routing: RoutingSchema.nullable(),
   }),
   /** Full analysis; typed as OnboardingReport on the client. */
   onboardingReport: z.custom<OnboardingReport>().nullable(),
@@ -252,6 +255,7 @@ export const UpdateProjectInputSchema = z
     stackPreferences: z.string().max(4000).nullable().optional(),
     commands: ProjectCommandsSchema.optional(),
     roleEngines: RoleEnginesSchema.partial().optional(),
+    roleModels: RoleModelsSchema.optional(),
     /** Per-project overrides; null clears an override (back to the global setting). */
     pipeline: z
       .object({
@@ -261,6 +265,8 @@ export const UpdateProjectInputSchema = z
         mergeStrategy: z.enum(['merge', 'pull_request']).nullable(),
         fallbackEnabled: z.boolean(),
         engineFallback: z.record(z.string().max(80), z.string().max(80)),
+        /** null clears the override (back to the global routing setting). */
+        routing: RoutingSchema.nullable(),
       })
       .partial()
       .strict()

@@ -38,6 +38,8 @@ import type {
   ProjectSource,
   RequirementIntent,
   RoleEngines,
+  RoleModels,
+  Routing,
   RunStatus,
   ProjectServiceDto,
   SheetField,
@@ -115,6 +117,12 @@ export const projectSettings = sqliteTable('project_settings', {
   roleEngines: json<Partial<RoleEngines>>('role_engines')
     .notNull()
     .default(sql`'{}'`),
+  /** Per-role model overrides; missing roles fall back to global roleModels, then the engine default. */
+  roleModels: json<RoleModels>('role_models')
+    .notNull()
+    .default(sql`'{}'`),
+  /** Complexity→pipeline routing override; null falls back to the global routing setting. */
+  routing: json<Routing>('routing'),
   maxConcurrentTasks: integer('max_concurrent_tasks'),
   maxFixLoops: integer('max_fix_loops'),
   requireHumanReview: bool('require_human_review'),
@@ -238,6 +246,9 @@ export const tasks = sqliteTable(
       .notNull()
       .default(sql`'[]'`),
     roleEngines: json<Partial<RoleEngines>>('role_engines')
+      .notNull()
+      .default(sql`'{}'`),
+    roleModels: json<RoleModels>('role_models')
       .notNull()
       .default(sql`'{}'`),
     orderIndex: real('order_index').notNull().default(0),

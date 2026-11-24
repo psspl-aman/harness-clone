@@ -84,6 +84,7 @@ export class ProjectService {
       onboardedAt: row.onboardedAt,
       onboardingReport: row.onboardingReport ?? null,
       roleEngines: settings?.roleEngines ?? {},
+      roleModels: settings?.roleModels ?? {},
       pipeline: {
         maxConcurrentTasks: settings?.maxConcurrentTasks ?? null,
         maxFixLoops: settings?.maxFixLoops ?? null,
@@ -92,6 +93,7 @@ export class ProjectService {
         fallbackEnabled: settings?.fallbackEnabled ?? false,
         engineFallback: settings?.engineFallback ?? {},
         paused: settings?.pipelinePaused ?? false,
+        routing: settings?.routing ?? null,
       },
     };
   }
@@ -276,6 +278,12 @@ export class ProjectService {
       if (input.roleEngines !== undefined) {
         tx.update(projectSettings)
           .set({ roleEngines: input.roleEngines })
+          .where(eq(projectSettings.projectId, id))
+          .run();
+      }
+      if (input.roleModels !== undefined) {
+        tx.update(projectSettings)
+          .set({ roleModels: input.roleModels })
           .where(eq(projectSettings.projectId, id))
           .run();
       }
