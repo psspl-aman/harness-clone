@@ -149,6 +149,9 @@ export function EngineCard({ engine, index }: { engine: EngineInfo; index: numbe
   const installed = engine.installed;
   const needsLogin =
     installed && (engine.authStatus === 'LOGGED_OUT' || engine.authStatus === 'EXPIRED');
+  // Signed in (a used-up quota still means signed in): no Login button — switch accounts by
+  // logging out under Configure first.
+  const signedIn = engine.authStatus === 'ACTIVE' || engine.authStatus === 'QUOTA_EXHAUSTED';
 
   return (
     <motion.article
@@ -196,7 +199,7 @@ export function EngineCard({ engine, index }: { engine: EngineInfo; index: numbe
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {installed && engine.capabilities.login && (
+          {installed && engine.capabilities.login && !signedIn && (
             <Button
               size="sm"
               variant={needsLogin ? 'default' : 'outline'}

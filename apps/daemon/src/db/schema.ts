@@ -39,6 +39,10 @@ import type {
   RequirementIntent,
   RoleEngines,
   RunStatus,
+  ProjectServiceDto,
+  SheetField,
+  SheetKind,
+  SheetSyncResultDto,
   TaskStatus,
   TaskType,
 } from '@agentforge/shared';
@@ -55,6 +59,7 @@ export interface ProjectCommands {
   build?: string | null;
   test?: string | null;
   lint?: string | null;
+  services?: ProjectServiceDto[] | null;
 }
 
 // ─── Projects ────────────────────────────────────────────────────────────────
@@ -647,6 +652,33 @@ export const pmsMappings = sqliteTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex('pms_mappings_uq').on(t.projectId, t.connectionId, t.externalProject)],
+);
+
+/** A spreadsheet (Google Sheet, Excel or CSV file) whose rows become tasks of a project. */
+export const sheetSources = sqliteTable(
+  'sheet_sources',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind').$type<SheetKind>().notNull(),
+    location: text('location').notNull(),
+    sheet: text('sheet'),
+    columns: json<Partial<Record<SheetField, string>>>('columns')
+      .notNull()
+      .default(sql`'{}'`),
+    pollingIntervalSec: integer('polling_interval_sec'),
+    autoStart: bool('auto_start').notNull().default(true),
+    autoEnrich: bool('auto_enrich').notNull().default(true),
+    lastSyncedAt: integer('last_synced_at'),
+    lastError: text('last_error'),
+    lastResult: json<SheetSyncResultDto>('last_result'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('sheet_sources_uq').on(t.projectId, t.location, t.sheet)],
 );
 
 // ─── Memory & docs ───────────────────────────────────────────────────────────

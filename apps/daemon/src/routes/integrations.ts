@@ -52,4 +52,25 @@ export function registerIntegrationRoutes(app: FastifyInstance, ctx: AppContext)
   app.post('/api/tasks/:id/pms-conflict', async (req) =>
     ctx.pms.resolveConflict(id(req), req.body),
   );
+
+  // ── Spreadsheets (Google Sheets / Excel / CSV) ──
+  app.get('/api/sheets', async () => ctx.sheets.list());
+  app.post('/api/sheets/preview', async (req) => ctx.sheets.preview(req.body));
+  app.get('/api/projects/:id/sheets', async (req) => {
+    ctx.projects.get(id(req));
+    return ctx.sheets.list(id(req));
+  });
+  app.post('/api/projects/:id/sheets', async (req, reply) => {
+    ctx.projects.get(id(req));
+    const src = ctx.sheets.create(id(req), req.body);
+    // First import straight away; a failure is shown on the source, not as a create error.
+    void ctx.sheets.sync(src.id).catch(() => undefined);
+    return reply.status(201).send(src);
+  });
+  app.patch('/api/sheets/:id', async (req) => ctx.sheets.update(id(req), req.body));
+  app.delete('/api/sheets/:id', async (req, reply) => {
+    ctx.sheets.remove(id(req));
+    return reply.status(204).send();
+  });
+  app.post('/api/sheets/:id/sync', async (req) => ctx.sheets.sync(id(req)));
 }

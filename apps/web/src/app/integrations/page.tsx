@@ -4,9 +4,10 @@ import { GithubConnect } from '@/components/github/github-connect';
 import { GithubIcon } from '@/components/icons';
 import { McpServersSection } from '@/components/integrations/mcp-servers';
 import { PmsConnectionsSection } from '@/components/integrations/pms-connections';
+import { SheetSourcesSection } from '@/components/integrations/sheet-sources';
 import { PageHeader } from '@/components/shell/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SquareKanban, Server } from 'lucide-react';
+import { FileSpreadsheet, SquareKanban, Server } from 'lucide-react';
 
 export default function IntegrationsPage() {
   return (
@@ -29,6 +30,21 @@ export default function IntegrationsPage() {
           </CardHeader>
           <CardContent>
             <PmsConnectionsSection />
+          </CardContent>
+        </Card>
+        <Card className="shadow-xs">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileSpreadsheet className="size-4" /> Spreadsheets
+            </CardTitle>
+            <CardDescription>
+              Keep your task list in Google Sheets or Excel: each row becomes a task with its
+              priority, and new rows are picked up automatically — agents start on them, highest
+              priority first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SheetSourcesSection />
           </CardContent>
         </Card>
         <Card className="shadow-xs">

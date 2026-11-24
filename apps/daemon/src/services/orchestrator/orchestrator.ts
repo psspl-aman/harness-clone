@@ -1884,7 +1884,15 @@ export class Orchestrator {
       .from(projectSettings)
       .where(eq(projectSettings.projectId, task.projectId))
       .get();
-    return task.roleEngines[role] ?? ps?.r[role] ?? this.d.settings.get().defaultEngines[role];
+    // Task override → project override → global default; an engine that isn't installed
+    // (or is disabled) is skipped so a stale choice doesn't fail the step.
+    const chain = [task.roleEngines[role], ps?.r[role], this.d.settings.get().defaultEngines[role]];
+    const set = chain.filter((x): x is string => !!x);
+    const usable = set.find((id) => {
+      const e = this.safeEngine(id);
+      return !!e && e.installed && e.enabled;
+    });
+    return usable ?? set[0]!;
   }
 
   private engineName(engineId: string): string {

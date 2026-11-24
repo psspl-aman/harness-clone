@@ -8,6 +8,7 @@ import type {
   McpServerDto,
   PlanBoardDto,
   PmsMappingDto,
+  SheetSourceDto,
   SafetyApprovalDto,
 } from '@agentforge/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -114,6 +115,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             break;
           case 'run.finished':
             void queryClient.invalidateQueries({ queryKey: ['usage'] });
+            void queryClient.invalidateQueries({
+              predicate: (q) => q.queryKey[0] === 'projects' && q.queryKey[2] === 'cost',
+            });
             break;
           case 'pipeline.updated':
             queryClient.setQueryData(qk.pipeline(e.payload.status.projectId), e.payload.status);
@@ -190,6 +194,25 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             queryClient.setQueryData<PmsMappingDto[]>(qk.pmsMappings(e.payload.projectId), (l) =>
               l?.filter((y) => y.id !== e.payload.mappingId),
             );
+            break;
+          case 'sheet.source':
+            queryClient.setQueryData<SheetSourceDto[]>(qk.sheets, (l) => {
+              if (!l) return l;
+              const x = e.payload.source;
+              return l.some((y) => y.id === x.id)
+                ? l.map((y) => (y.id === x.id ? x : y))
+                : [...l, x];
+            });
+            break;
+          case 'sheet.removed':
+            queryClient.setQueryData<SheetSourceDto[]>(qk.sheets, (l) =>
+              l?.filter((y) => y.id !== e.payload.sourceId),
+            );
+            break;
+          case 'project.command_suggestion':
+            queryClient.setQueryData(qk.commandSuggestion(e.payload.suggestion.projectId), {
+              suggestion: e.payload.suggestion,
+            });
             break;
           case 'terminal.exit':
             void queryClient.invalidateQueries({ queryKey: ['terminals'] });

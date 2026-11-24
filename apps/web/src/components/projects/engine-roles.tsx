@@ -15,7 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { EngineSelectItems, useEngineOptions } from '@/components/engines/engine-select-items';
+import {
+  EngineSelectItems,
+  useEngineOptions,
+  useUnusableEngine,
+} from '@/components/engines/engine-select-items';
+import { cn } from '@/lib/utils';
 import { api, qk } from '@/lib/api';
 
 const DEFAULT = '__default';
@@ -43,23 +48,57 @@ export function EngineRoles({
   return (
     <div className="divide-y rounded-xl border">
       {AGENT_ROLES.map((role) => (
-        <div key={role} className="flex items-center justify-between gap-4 px-4 py-2.5">
-          <span className="text-sm font-medium" id={`role-${role}`}>
-            {ROLE_LABELS[role]}
-          </span>
-          <Select value={value[role] ?? DEFAULT} onValueChange={(v) => set(role, v)}>
-            <SelectTrigger size="sm" className="w-52" aria-labelledby={`role-${role}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={DEFAULT}>
-                Default{settings.data ? ` · ${label(settings.data.defaultEngines[role])}` : ''}
-              </SelectItem>
-              <EngineSelectItems extra={value[role]} />
-            </SelectContent>
-          </Select>
-        </div>
+        <RoleRow
+          key={role}
+          role={role}
+          value={value[role]}
+          defaultLabel={settings.data ? label(settings.data.defaultEngines[role]) : null}
+          onChange={(v) => set(role, v)}
+        />
       ))}
+    </div>
+  );
+}
+
+function RoleRow({
+  role,
+  value,
+  defaultLabel,
+  onChange,
+}: {
+  role: AgentRole;
+  value: string | undefined;
+  defaultLabel: string | null;
+  onChange: (v: string) => void;
+}) {
+  const unusable = useUnusableEngine(value);
+  return (
+    <div className="px-4 py-2.5">
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-sm font-medium" id={`role-${role}`}>
+          {ROLE_LABELS[role]}
+        </span>
+        <Select value={value ?? DEFAULT} onValueChange={onChange}>
+          <SelectTrigger
+            size="sm"
+            className={cn('w-52', unusable && 'border-destructive')}
+            aria-labelledby={`role-${role}`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={DEFAULT}>
+              Default{defaultLabel ? ` · ${defaultLabel}` : ''}
+            </SelectItem>
+            <EngineSelectItems extra={value} />
+          </SelectContent>
+        </Select>
+      </div>
+      {unusable && (
+        <p className="text-destructive mt-1 text-right text-xs" role="alert">
+          {unusable} isn’t installed — agents use the next available engine. Pick another one.
+        </p>
+      )}
     </div>
   );
 }

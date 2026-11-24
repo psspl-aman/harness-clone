@@ -1,4 +1,9 @@
-import type { UsageBucket, UsageSummaryDto, UsageWindowStatusDto } from '@agentforge/shared';
+import type {
+  ProjectCostDto,
+  UsageBucket,
+  UsageSummaryDto,
+  UsageWindowStatusDto,
+} from '@agentforge/shared';
 import { and, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { projects, tasks, usageRecords } from '../db/schema';
@@ -145,6 +150,67 @@ export class UsageService {
           avgCostUsd: v.cost / v.tasks,
         }))
         .sort((a, b) => b.avgTokens - a.avgTokens),
+    };
+  }
+
+  /** All-time cost of one project plus a forecast for its open tasks. */
+  projectCost(projectId: string): ProjectCostDto {
+    const now = Date.now();
+    const summary = this.summary({ from: 0, to: now, projectId });
+    const since = now - 30 * 86_400_000;
+    summary.byDay = summary.byDay.filter((b) => new Date(`${b.key}T00:00:00`).getTime() >= since);
+    const rows = this.db
+      .select({
+        id: tasks.id,
+        status: tasks.status,
+        complexity: tasks.complexity,
+        tokens: sql<number>`coalesce(${TOKENS}, 0)`,
+        cost: sql<number>`coalesce(${COST}, 0)`,
+      })
+      .from(tasks)
+      .leftJoin(usageRecords, eq(usageRecords.taskId, tasks.id))
+      .where(eq(tasks.projectId, projectId))
+      .groupBy(tasks.id)
+      .all()
+      .map((r) => ({ ...r, tokens: Number(r.tokens), cost: Number(r.cost) }));
+    const done = rows.filter((r) => r.status === 'DONE');
+    const cancelled = rows.filter((r) => r.status === 'CANCELLED').length;
+    const open = rows.filter((r) => r.status !== 'DONE' && r.status !== 'CANCELLED');
+    const avg = (xs: typeof rows) =>
+      xs.length
+        ? {
+            costUsd: xs.reduce((a, r) => a + r.cost, 0) / xs.length,
+            tokens: xs.reduce((a, r) => a + r.tokens, 0) / xs.length,
+          }
+        : null;
+    const overall = avg(done);
+    let forecast: ProjectCostDto['forecast'] = null;
+    if (overall && open.length) {
+      const bySize = new Map<string, { costUsd: number; tokens: number }>();
+      for (const c of new Set(done.map((r) => r.complexity))) {
+        const a = avg(done.filter((r) => r.complexity === c));
+        if (a) bySize.set(c, a);
+      }
+      let cost = 0;
+      let tokens = 0;
+      let basedOn = 0;
+      for (const t of open) {
+        const typical = bySize.get(t.complexity);
+        if (typical) basedOn++;
+        const ref = typical ?? overall;
+        cost += Math.max(0, ref.costUsd - t.cost);
+        tokens += Math.max(0, ref.tokens - t.tokens);
+      }
+      forecast = { costUsd: cost, tokens: Math.round(tokens), basedOn, open: open.length };
+    }
+    return {
+      projectId,
+      summary,
+      tasks: { total: rows.length, done: done.length, open: open.length, cancelled },
+      perDoneTask: overall
+        ? { costUsd: overall.costUsd, tokens: Math.round(overall.tokens) }
+        : null,
+      forecast,
     };
   }
 

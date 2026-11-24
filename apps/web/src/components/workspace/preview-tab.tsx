@@ -30,6 +30,9 @@ export function PreviewTab({ projectId, onStart }: { projectId: string; onStart:
   const frame = useRef<HTMLIFrameElement>(null);
 
   const live = run?.status === 'running' || run?.status === 'starting';
+  const servers = (run?.services ?? []).filter(
+    (s) => s.url && (s.status === 'running' || s.status === 'starting'),
+  );
   if (!shown) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center">
@@ -92,6 +95,24 @@ export function PreviewTab({ projectId, onStart }: { projectId: string; onStart:
         >
           <RotateCw className="size-3.5" />
         </Button>
+        {servers.length > 1 && (
+          <div className="flex gap-1" role="tablist" aria-label="Server to preview">
+            {servers.map((s) => (
+              <Button
+                key={s.name}
+                type="button"
+                size="sm"
+                role="tab"
+                aria-selected={shown === s.url}
+                variant={shown === s.url ? 'secondary' : 'ghost'}
+                className="h-7 px-2 text-xs"
+                onClick={() => setOverride({ for: detected, url: s.url!, shown: s.url })}
+              >
+                {s.name}
+              </Button>
+            ))}
+          </div>
+        )}
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}

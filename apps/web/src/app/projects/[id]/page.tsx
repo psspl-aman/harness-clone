@@ -283,7 +283,11 @@ export default function ProjectWorkspace() {
             {tab === 'preview' && (
               <PreviewTab
                 projectId={id}
-                onStart={() => (p.commands.run ? start.mutate() : setTab('overview'))}
+                onStart={() =>
+                  p.commands.run || p.commands.services?.length
+                    ? start.mutate()
+                    : setTab('overview')
+                }
               />
             )}
             {tab === 'docs' && <DocsTab projectId={id} />}

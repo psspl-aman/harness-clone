@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { EngineSelectItems } from '@/components/engines/engine-select-items';
+import { EngineSelectItems, useUnusableEngine } from '@/components/engines/engine-select-items';
 
 function Row({
   id,
@@ -138,10 +138,27 @@ export function EngineField(props: {
   value: string;
   onChange: (v: string) => void;
 }) {
+  const unusable = useUnusableEngine(props.value);
   return (
-    <Row id={props.id} label={props.label} hint={props.hint}>
+    <Row
+      id={props.id}
+      label={props.label}
+      hint={
+        unusable ? (
+          <span className="text-destructive">
+            {unusable} isn’t installed — pick an installed engine.
+          </span>
+        ) : (
+          props.hint
+        )
+      }
+    >
       <Select value={props.value} onValueChange={props.onChange}>
-        <SelectTrigger id={props.id} size="sm" className="w-52">
+        <SelectTrigger
+          id={props.id}
+          size="sm"
+          className={unusable ? 'border-destructive w-52' : 'w-52'}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -1,21 +1,16 @@
 'use client';
 
-import {
-  COMMAND_KEYS,
-  type ProjectCommandsDto,
-  type ProjectDetail,
-  type RoleEngines,
-} from '@agentforge/shared';
+import type { ProjectDetail, RoleEngines } from '@agentforge/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   FileLock2,
+  FileSpreadsheet,
   GitBranch,
   GitCommitHorizontal,
   Loader2,
   RefreshCw,
   Save,
-  Wand2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
@@ -37,15 +32,10 @@ import { Input } from '@/components/ui/input';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { SheetSourcesSection } from '@/components/integrations/sheet-sources';
+import { CommandsCard } from './commands-card';
+import { ProjectCostCard } from './project-cost';
 import { TrackerLinksCard } from './tracker-links';
-
-const COMMAND_LABELS: Record<(typeof COMMAND_KEYS)[number], string> = {
-  install: 'Install',
-  run: 'Run (dev server)',
-  build: 'Build',
-  test: 'Test',
-  lint: 'Lint / check',
-};
 
 const errMsg = (e: unknown) => (e instanceof ApiClientError ? e.message : String(e));
 
@@ -108,85 +98,6 @@ function OnboardingBanner({ project, onRetry }: { project: ProjectDetail; onRetr
     );
   }
   return null;
-}
-
-function CommandsCard({ project }: { project: ProjectDetail }) {
-  const queryClient = useQueryClient();
-  const [edits, setEdits] = useState<ProjectCommandsDto | null>(null);
-  const values = edits ?? project.commands;
-  const detected = project.onboardingReport?.commands ?? {};
-  const dirty =
-    edits !== null && COMMAND_KEYS.some((k) => (edits[k] ?? '') !== (project.commands[k] ?? ''));
-  const save = useMutation({
-    mutationFn: () =>
-      api.projects.update(project.id, {
-        commands: Object.fromEntries(COMMAND_KEYS.map((k) => [k, values[k] ?? null])),
-      }),
-    onSuccess: (p) => {
-      queryClient.setQueryData(qk.project(p.id), p);
-      setEdits(null);
-      toast.success('Commands saved');
-    },
-    onError: (e) => toast.error('Could not save commands', { description: errMsg(e) }),
-  });
-  return (
-    <Section
-      title="Commands"
-      description="Used to install, run, build and test the project. Confirm or edit what was detected."
-      icon={<Wand2 className="text-primary size-4" />}
-      action={
-        dirty && (
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setEdits(null)}>
-              Discard
-            </Button>
-            <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-              {save.isPending ? <Loader2 className="animate-spin" /> : <Save />} Save
-            </Button>
-          </div>
-        )
-      }
-    >
-      <div className="space-y-3">
-        {COMMAND_KEYS.map((k) => {
-          const d = detected[k];
-          const differs = d && d.command !== (values[k] ?? '');
-          return (
-            <div key={k} className="grid items-center gap-1.5 sm:grid-cols-[150px_1fr]">
-              <label htmlFor={`cmd-${k}`} className="text-sm font-medium">
-                {COMMAND_LABELS[k]}
-              </label>
-              <div>
-                <Input
-                  id={`cmd-${k}`}
-                  value={values[k] ?? ''}
-                  placeholder="Not set"
-                  onChange={(e) => setEdits({ ...values, [k]: e.target.value })}
-                  className="h-8 font-mono text-xs"
-                />
-                {d && (
-                  <p className="text-muted-foreground mt-1 text-[11px]">
-                    Detected from {d.source}
-                    {differs && (
-                      <>
-                        {' · '}
-                        <button
-                          className="text-primary hover:underline"
-                          onClick={() => setEdits({ ...values, [k]: d.command })}
-                        >
-                          use <code>{d.command}</code>
-                        </button>
-                      </>
-                    )}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Section>
-  );
 }
 
 function EnginesCard({ project }: { project: ProjectDetail }) {
@@ -432,10 +343,18 @@ export function ProjectOverview({ project: p }: { project: ProjectDetail }) {
         </Section>
       )}
       <CommandsCard key={`cmd-${p.onboardedAt}`} project={p} />
+      <ProjectCostCard projectId={p.id} />
       <AnalysisCards project={p} />
       <EnginesCard project={p} />
       <PipelineSettingsCard project={p} />
       <TrackerLinksCard projectId={p.id} />
+      <Section
+        title="Spreadsheets"
+        description="Rows of a Google Sheet or Excel file become tasks of this project, in priority order."
+        icon={<FileSpreadsheet className="size-4" />}
+      >
+        <SheetSourcesSection projectId={p.id} />
+      </Section>
     </div>
   );
 }
