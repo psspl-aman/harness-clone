@@ -1,6 +1,8 @@
 import type { AgentEvent, EngineCapabilities, EngineError, UsageDelta } from '@agentforge/shared';
 import { execa } from 'execa';
+import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { isWindows } from '../lib/platform';
 import { firstSemver, which } from './binary';
 import { classifyEngineError } from './errors';
 import type {
@@ -191,10 +193,36 @@ export abstract class CliAdapter implements AgentEngineAdapter {
       env: { ...this.apiKeyEnv(), ...cmd.env, NO_COLOR: '1', FORCE_COLOR: '0' },
       reject: false,
       buffer: false,
-      cancelSignal: input.signal,
+      // On Windows we own cancellation below (execa would kill only cmd.exe and
+      // orphan the real engine); elsewhere execa's signal reaches the process.
+      cancelSignal: isWindows ? undefined : input.signal,
       timeout: input.timeoutMs,
       forceKillAfterDelay: 5000,
     });
+
+    // On Windows an npm CLI shim is a `.cmd`, so the engine runs as a grandchild
+    // (cmd.exe → node). Killing only cmd.exe orphans the grandchild, which keeps
+    // the output pipe open so the run can't settle. Own cancellation here: after a
+    // short grace so output already written can be read, kill the whole tree via
+    // `taskkill /t` (cmd.exe must still be alive to enumerate its children). No-op
+    // on POSIX, where the binary is the direct child and execa handles the signal.
+    if (isWindows && input.signal) {
+      input.signal.addEventListener(
+        'abort',
+        () => {
+          const pid = child.pid;
+          if (!pid) return;
+          setTimeout(() => {
+            try {
+              spawnSync('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' });
+            } catch {
+              /* best effort — the tree may already be gone */
+            }
+          }, 200);
+        },
+        { once: true },
+      );
+    }
 
     let stderrTail = '';
     const stdoutDone = new Promise<void>((resolve) => {

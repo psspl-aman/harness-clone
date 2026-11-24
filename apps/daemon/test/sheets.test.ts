@@ -115,7 +115,7 @@ describe('sheet parsing', () => {
         /No worksheet named “Nope”/,
       );
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   });
 });
@@ -150,7 +150,7 @@ describe('sheet sources', () => {
   });
   afterEach(async () => {
     await t.cleanup();
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   });
 
   it('imports rows as approved tasks in priority order and keeps them in sync', async () => {

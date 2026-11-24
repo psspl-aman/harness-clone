@@ -12,7 +12,10 @@ async function git(
   args: string[],
   opts: { allowFail?: boolean; env?: Record<string, string> } = {},
 ) {
-  const r = await execa('git', args, {
+  // Force LF handling for every managed-repo operation. The user's global git may
+  // have core.autocrlf=true (the Windows default), which would rewrite agent-authored
+  // file contents to CRLF on checkout and corrupt diffs/commits across platforms.
+  const r = await execa('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], {
     cwd,
     reject: false,
     env: { GIT_TERMINAL_PROMPT: '0', ...opts.env },

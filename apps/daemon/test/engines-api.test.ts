@@ -39,7 +39,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await t.cleanup();
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 const patch = (id: string, payload: object) =>
