@@ -418,8 +418,12 @@ function ReviewsAndTests({ taskId }: { taskId: string }) {
               ) : (
                 <XCircle className="text-warning size-4" />
               )}
-              {r.reviewer === 'human' ? 'You' : 'Reviewer'}:{' '}
-              {r.verdict === 'APPROVE' ? 'approved' : 'changes requested'}
+              {r.reviewer === 'human'
+                ? 'You'
+                : r.scope === 'tests'
+                  ? 'Reviewer (tests)'
+                  : 'Reviewer'}
+              : {r.verdict === 'APPROVE' ? 'approved' : 'changes requested'}
               <span className="text-muted-foreground ml-auto text-xs font-normal">
                 {timeAgo(r.createdAt)}
               </span>

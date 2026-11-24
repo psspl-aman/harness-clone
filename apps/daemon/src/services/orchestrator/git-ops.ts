@@ -1,7 +1,7 @@
 import type { DiffFileDto, TaskDiffDto } from '@agentforge/shared';
 import { execa } from 'execa';
-import { existsSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { identityConfig, SECRET_FILE_RE } from '../git';
 
 const MAX_PATCH = 400_000;
@@ -257,4 +257,62 @@ export async function isAncestor(repo: string, ancestor: string, of: string): Pr
 export async function mergeBase(dir: string, a: string, b: string): Promise<string | null> {
   const r = await git(dir, ['merge-base', a, b], { allowFail: true });
   return r.code === 0 ? r.out.trim() : null;
+}
+
+export interface ChangedPath {
+  /** A: only in `to`; D: only in `from`; M: in both. Renames count as D + A. */
+  status: 'A' | 'M' | 'D';
+  path: string;
+}
+
+/** Files that differ between two commits, without rename detection. */
+export async function changedPaths(dir: string, from: string, to = 'HEAD'): Promise<ChangedPath[]> {
+  const out = (await git(dir, ['diff', '--name-status', '--no-renames', '-z', from, to])).out;
+  const parts = out.split('\0').filter(Boolean);
+  const files: ChangedPath[] = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const code = parts[i]![0];
+    files.push({ status: code === 'A' ? 'A' : code === 'D' ? 'D' : 'M', path: parts[i + 1]! });
+  }
+  return files;
+}
+
+/** True when tracked files have no uncommitted changes (untracked files are ignored). */
+export async function isClean(dir: string): Promise<boolean> {
+  const r = await git(dir, ['status', '--porcelain', '--untracked-files=no']);
+  return r.out.trim() === '';
+}
+
+/**
+ * Make `paths` in the working tree match `source`: paths that exist there are restored
+ * from it, the rest are deleted. The index is left alone.
+ */
+export async function setPathsTo(dir: string, source: string, paths: string[]): Promise<void> {
+  const present = new Set<string>();
+  for (const chunk of chunks(paths))
+    for (const p of (
+      await git(dir, ['ls-tree', '-r', '-z', '--name-only', source, '--', ...chunk])
+    ).out.split('\0'))
+      if (p) present.add(p);
+  for (const chunk of chunks(paths.filter((p) => present.has(p))))
+    await git(dir, ['restore', `--source=${source}`, '--worktree', '--', ...chunk]);
+  for (const p of paths) if (!present.has(p)) rmSync(join(dir, p), { force: true });
+}
+
+/** Split long path lists so git's argv stays well under OS limits. */
+function chunks<T>(items: T[], size = 200): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Keep only the files of a unified diff whose (new) path matches `keep`. */
+export function filterPatch(patch: string, keep: (path: string) => boolean): string {
+  return patch
+    .split(/^(?=diff --git )/m)
+    .filter((part) => {
+      const m = /^diff --git a\/.+? b\/(.+)$/m.exec(part);
+      return !!m && keep(m[1]!);
+    })
+    .join('');
 }

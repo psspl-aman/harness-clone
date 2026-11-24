@@ -9,7 +9,7 @@ import {
   type ProjectSummary,
   type RequirementDto,
 } from '@agentforge/shared';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -64,6 +64,25 @@ export class ProjectService {
     return this.summarize(rows);
   }
 
+  /** Archived projects, most recently archived first. */
+  listArchived(): ProjectSummary[] {
+    const rows = this.db
+      .select()
+      .from(projects)
+      .where(isNotNull(projects.archivedAt))
+      .orderBy(desc(projects.archivedAt))
+      .all();
+    return this.summarize(rows);
+  }
+
+  isArchived(id: string): boolean {
+    return !!this.db
+      .select({ a: projects.archivedAt })
+      .from(projects)
+      .where(eq(projects.id, id))
+      .get()?.a;
+  }
+
   get(id: string): ProjectDetail {
     const row = this.db.select().from(projects).where(eq(projects.id, id)).get();
     if (!row) throw notFound('Project');
@@ -98,10 +117,10 @@ export class ProjectService {
     };
   }
 
-  findByPath(path: string): { id: string; localPath: string } | null {
+  findByPath(path: string): { id: string; localPath: string; archivedAt: number | null } | null {
     return (
       this.db
-        .select({ id: projects.id, localPath: projects.localPath })
+        .select({ id: projects.id, localPath: projects.localPath, archivedAt: projects.archivedAt })
         .from(projects)
         .where(eq(projects.localPath, path))
         .get() ?? null
@@ -298,7 +317,38 @@ export class ProjectService {
     return this.get(id);
   }
 
-  /** Removes the project from AgentForge. Files on disk are never touched. */
+  /**
+   * Hides the project from the dashboard and stops everything it runs, keeping all its
+   * data so it can be restored. Callers stop running agents (see Orchestrator.suspendProject).
+   */
+  archive(id: string): ProjectDetail {
+    this.assertExists(id);
+    if (!this.isArchived(id)) {
+      this.db.update(projects).set({ archivedAt: Date.now() }).where(eq(projects.id, id)).run();
+      this.deps.bus.emit('project.archived', { projectId: id }, [
+        Topics.global,
+        Topics.project(id),
+      ]);
+    }
+    return this.get(id);
+  }
+
+  /** Brings an archived project back; its tasks continue where they stopped. */
+  restore(id: string): ProjectDetail {
+    this.assertExists(id);
+    if (!this.isArchived(id)) return this.get(id);
+    // No other project can hold its folder meanwhile: local paths are unique, and attaching
+    // an archived project's folder is refused with a pointer to Restore.
+    this.db
+      .update(projects)
+      .set({ archivedAt: null, lastActivityAt: Date.now() })
+      .where(eq(projects.id, id))
+      .run();
+    this.emitUpdated(id);
+    return this.get(id);
+  }
+
+  /** Deletes the project and all its data from AgentForge for good. Files on disk are never touched. */
   delete(id: string): void {
     this.assertExists(id);
     this.db.delete(projects).where(eq(projects.id, id)).run();
@@ -549,6 +599,7 @@ export class ProjectService {
         },
         openErrorCount: Number(errMap.get(p.id) ?? 0),
         lastActivityAt: p.lastActivityAt,
+        archivedAt: p.archivedAt,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
       };

@@ -296,7 +296,8 @@ describe('usage analytics', () => {
     await t.app.inject({
       method: 'PATCH',
       url: '/api/settings',
-      payload: { pricing: { 'gpt-x': { input: 2, output: 10 } } },
+      // The test review adds a run; these totals are about pricing, not the pipeline.
+      payload: { pricing: { 'gpt-x': { input: 2, output: 10 } }, pipeline: { reviewTests: false } },
     });
     agent.setResponses([
       ...base(),

@@ -13,20 +13,23 @@ import {
   type AgentRunResultDto,
   type CheckpointDto,
   type DocOutput,
+  type FixSource,
   type PermissionProfile,
   type PipelineState,
   type PipelineStatusDto,
   type ReviewDto,
   type ReviewOutput,
+  type ReviewScope,
   type RoutingRule,
   type RunSummaryDto,
   type TaskDiffDto,
   type TaskReportDto,
   type TaskStatus,
   type TaskStatusChangeDto,
+  type TaskType,
   type TestResultDto,
 } from '@agentforge/shared';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ZodType } from 'zod';
@@ -63,15 +66,24 @@ import {
   parseSubtasksDone,
   reviewerPrompt,
   testerPrompt,
+  testReviewerPrompt,
   type FixInput,
   type RoleContext,
 } from './prompts';
+import {
+  checkTestsCatchChange,
+  formatTestsCatchChange,
+  isTestPath,
+  type TestsCatchChangeResult,
+} from './tests-catch-change';
 import { formatChecks, runProjectChecks } from './verify';
 
 type TaskRow = typeof tasks.$inferSelect;
 type ProjectRow = typeof projects.$inferSelect;
 
 const STEP_TIMEOUT_MS = 45 * 60_000;
+/** Task types with no behaviour of their own to test, so their tests aren't reviewed. */
+const NO_TEST_REVIEW_TYPES: ReadonlySet<TaskType> = new Set(['docs', 'chore']);
 const MAX_JSON_ATTEMPTS = 3;
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 } as const;
 
@@ -139,33 +151,15 @@ export class Orchestrator {
   start(): void {
     // Nothing is running right after boot: clear stale "active run" markers, and
     // checkpoint runs cut off by the shutdown/crash so their CLI session continues.
-    for (const t of this.d.db
-      .select({ id: tasks.id, s: tasks.pipelineState })
-      .from(tasks)
-      .where(inArray(tasks.status, [...ACTIVE_STATUSES]))
-      .all()) {
-      const last = this.d.db
-        .select({ id: agentRuns.id })
-        .from(agentRuns)
-        .where(eq(agentRuns.taskId, t.id))
-        .orderBy(desc(agentRuns.startedAt))
-        .get();
-      const hint = !t.s.resumeHint && last ? this.restartHint(t.id, last.id) : null;
-      if (!t.s.activeRunId && !hint) continue;
+    this.checkpointInterrupted(
       this.d.db
-        .update(tasks)
-        .set({
-          pipelineState: {
-            ...t.s,
-            activeRole: null,
-            activeEngine: null,
-            activeRunId: null,
-            ...(hint ? { resumeHint: hint } : {}),
-          },
-        })
-        .where(eq(tasks.id, t.id))
-        .run();
-    }
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(inArray(tasks.status, [...ACTIVE_STATUSES]))
+        .all()
+        .map((t) => t.id),
+      'Interrupted by a daemon restart',
+    );
     if (this.d.autoStart === false) return;
     this.d.bus.subscribe((e) => {
       if (
@@ -194,6 +188,67 @@ export class Orchestrator {
     await this.ticking;
   }
 
+  /**
+   * Stop a project's running agents (it was archived or is being deleted). Each task keeps
+   * its step and a checkpoint, so it continues where it stopped once the project is back.
+   */
+  async suspendProject(projectId: string): Promise<void> {
+    const mine = [...this.drivers].filter(([, d]) => d.projectId === projectId);
+    if (!mine.length) return;
+    for (const [, d] of mine) d.controller.abort();
+    await Promise.allSettled(mine.map(([, d]) => d.promise));
+    this.checkpointInterrupted(
+      mine.map(([id]) => id),
+      'Interrupted because the project was archived',
+    );
+    this.emitStatus(projectId);
+  }
+
+  /** Clear "active run" markers and checkpoint each task's cut-off run so its session continues. */
+  private checkpointInterrupted(taskIds: string[], reason: string) {
+    for (const id of taskIds) {
+      const t = this.d.db
+        .select({ s: tasks.pipelineState })
+        .from(tasks)
+        .where(eq(tasks.id, id))
+        .get();
+      if (!t) continue;
+      const last = this.d.db
+        .select({ id: agentRuns.id })
+        .from(agentRuns)
+        .where(eq(agentRuns.taskId, id))
+        .orderBy(desc(agentRuns.startedAt))
+        .get();
+      const hint = !t.s.resumeHint && last ? this.restartHint(id, last.id, reason) : null;
+      if (!t.s.activeRunId && !hint) continue;
+      this.d.db
+        .update(tasks)
+        .set({
+          pipelineState: {
+            ...t.s,
+            activeRole: null,
+            activeEngine: null,
+            activeRunId: null,
+            ...(hint ? { resumeHint: hint } : {}),
+          },
+        })
+        .where(eq(tasks.id, id))
+        .run();
+    }
+  }
+
+  /** Archived projects: nothing of theirs is scheduled, resumed or recovered. */
+  private archivedProjectIds(): Set<string> {
+    return new Set(
+      this.d.db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(isNotNull(projects.archivedAt))
+        .all()
+        .map((r) => r.id),
+    );
+  }
+
   private schedule() {
     if (this.stopped || this.debounce) return;
     this.debounce = setTimeout(() => {
@@ -213,12 +268,14 @@ export class Orchestrator {
     this.ticking = (async () => {
       do {
         this.tickAgain = false;
+        const archived = this.archivedProjectIds();
         const projectIds = this.d.db
           .selectDistinct({ id: tasks.projectId })
           .from(tasks)
           .where(inArray(tasks.status, ['APPROVED', 'BLOCKED', 'QUEUED', ...ACTIVE_STATUSES]))
           .all()
-          .map((r) => r.id);
+          .map((r) => r.id)
+          .filter((id) => !archived.has(id));
         await this.resumePaused();
         for (const pid of projectIds) {
           try {
@@ -374,7 +431,9 @@ export class Orchestrator {
       })
       .finally(() => {
         this.drivers.delete(taskId);
-        this.patchState(taskId, { activeRole: null, activeEngine: null, activeRunId: null }, false);
+        // Emit: the task's final status update went out while this role was still set, so
+        // without a fresh task.updated clients keep showing e.g. "Documenting" on a DONE task.
+        this.patchState(taskId, { activeRole: null, activeEngine: null, activeRunId: null });
         this.emitStatus(projectId);
         this.schedule();
       });
@@ -515,6 +574,15 @@ export class Orchestrator {
 
   private async test(task: TaskRow, driver: Driver) {
     const project = this.project(task.projectId);
+    const cfg = this.projectConfig(task.projectId);
+    const reviewTests = cfg.reviewTests && !NO_TEST_REVIEW_TYPES.has(task.type);
+    // Resuming after a restart or pause during the test review: the tests already passed
+    // every check at this exact commit, so go straight back to reviewing them.
+    const head = await gitops.revParse(task.worktreePath!, 'HEAD');
+    if (reviewTests && head && task.pipelineState.testsPassedAt === head) {
+      await this.reviewTests(task, driver, project);
+      return;
+    }
     const d = await this.taskDiff(task, project);
     const out = await this.runRole(
       task,
@@ -533,16 +601,38 @@ export class Orchestrator {
     if (signal.aborted) return;
     const ranChecks = checks.steps.length > 0;
     const passed = agent.passed && agent.buildPassed !== false && (!ranChecks || checks.ok);
+    // Only worth asking whether the tests catch the change once they pass at all.
+    const failBefore: TestsCatchChangeResult | null =
+      passed && cfg.checkTestsFailWithoutChange
+        ? await checkTestsCatchChange(
+            {
+              worktree: task.worktreePath!,
+              baseCommit: d.base ?? task.pipelineState.baseCommit,
+              testCommand: project.commands.test,
+              taskType: task.type,
+            },
+            { signal },
+          )
+        : null;
+    if (signal.aborted) return;
+    const missed = failBefore?.kind === 'missed';
     const log = [
       ranChecks
         ? `## AgentForge checks\n${formatChecks(checks.steps)}`
         : '## AgentForge checks\nNo build/test commands are configured for this project — relying on the Tester’s report.',
+      failBefore ? formatTestsCatchChange(failBefore) : '',
       agent.failures.length
         ? `## Failures reported by the Tester\n${agent.failures.map((f) => `- ${f}`).join('\n')}`
         : '',
     ]
       .filter(Boolean)
       .join('\n\n');
+    const summary =
+      ranChecks && !checks.ok && agent.passed
+        ? `${agent.summary}\n\nAgentForge's own checks failed: \`${checks.steps.at(-1)!.command}\` exited ${checks.steps.at(-1)!.exitCode}.`
+        : missed
+          ? `${agent.summary}\n\nThe tests also pass without this task's change, so they don't test it.`
+          : agent.summary;
     const id = newId('test');
     this.d.db
       .insert(testResults)
@@ -550,24 +640,19 @@ export class Orchestrator {
         id,
         taskId: task.id,
         runId: out.runId,
-        passed,
+        passed: passed && !missed,
         total: agent.total ?? null,
         failed: agent.failed ?? null,
         skipped: agent.skipped ?? null,
         buildPassed:
           agent.buildPassed ?? (checks.steps.some((s) => s.name === 'build') ? checks.ok : null),
         commands: [...agent.commands, ...checks.steps.map((s) => s.command)],
-        summary:
-          ranChecks && !checks.ok && agent.passed
-            ? `${agent.summary}\n\nAgentForge's own checks failed: \`${checks.steps.at(-1)!.command}\` exited ${checks.steps.at(-1)!.exitCode}.`
-            : agent.summary,
+        summary,
         log,
       })
       .run();
     this.patchState(task.id, { lastTestResultId: id });
-    if (passed) {
-      this.advance(task.id, 'DOCUMENTING', 'Tests passed');
-    } else {
+    if (!passed) {
       this.patchState(task.id, { fixSource: 'tests' });
       this.advance(task.id, 'FIXING', 'Tests or build failed');
       this.notify(
@@ -576,7 +661,65 @@ export class Orchestrator {
         `Tests failed on ${task.key}`,
         agent.failures[0] ?? agent.summary,
       );
+      return;
     }
+    if (missed) {
+      this.patchState(task.id, { fixSource: 'test_quality' });
+      this.advance(task.id, 'FIXING', 'Tests pass without the change — they need to test it');
+      this.notify(
+        task,
+        'warning',
+        `Tests on ${task.key} don't test the change`,
+        'They pass even with the change reverted.',
+      );
+      return;
+    }
+    if (!reviewTests) {
+      this.advance(task.id, 'DOCUMENTING', 'Tests passed');
+      return;
+    }
+    this.patchState(task.id, {
+      testsPassedAt: await gitops.revParse(task.worktreePath!, 'HEAD'),
+    });
+    await this.reviewTests(this.row(task.id), driver, project);
+  }
+
+  /** The Reviewer checks the passing tests themselves: do they really test the task? */
+  private async reviewTests(task: TaskRow, driver: Driver, project: ProjectRow) {
+    const d = await this.taskDiff(task, project);
+    const tests = this.latestTests(task.id);
+    const failBefore =
+      /## Fail-before check\n(.+)/.exec(tests?.log ?? '')?.[1] ??
+      'Not run (turned off in Settings).';
+    const out = await this.runRole(
+      task,
+      driver,
+      'reviewer',
+      testReviewerPrompt(this.context(task, project), {
+        files: d.files,
+        testPatch: gitops.filterPatch(d.patch, isTestPath),
+        testerSummary: tests?.summary ?? '',
+        failBefore,
+      }),
+      task.worktreePath!,
+      'readonly',
+      ReviewOutputSchema,
+    );
+    if (!out) return;
+    const r = out.value!;
+    const reviewId = this.saveReview(task.id, out.runId, 'agent', r, 'tests');
+    this.patchState(task.id, { lastReviewId: reviewId, testsPassedAt: null });
+    if (r.verdict === 'APPROVE') {
+      this.advance(task.id, 'DOCUMENTING', 'Tests passed and the test review approved them');
+      return;
+    }
+    this.patchState(task.id, { fixSource: 'test_review' });
+    this.advance(
+      task.id,
+      'FIXING',
+      `Test review requested changes (${r.comments.length} comment${r.comments.length === 1 ? '' : 's'})`,
+    );
+    this.notify(task, 'warning', `Test review requested changes on ${task.key}`, r.summary);
   }
 
   private async fix(task: TaskRow, driver: Driver) {
@@ -616,17 +759,13 @@ export class Orchestrator {
       .set({ fixLoopCount: task.fixLoopCount + 1 })
       .where(eq(tasks.id, task.id))
       .run();
-    this.advance(
-      task.id,
-      source === 'tests' ? 'IN_TESTING' : 'IN_REVIEW',
-      `Fix ${task.fixLoopCount + 1} committed`,
-    );
+    this.advance(task.id, fixReturnsTo(source), `Fix ${task.fixLoopCount + 1} committed`);
   }
 
   private async document(task: TaskRow, driver: Driver) {
     const project = this.project(task.projectId);
     const d = await this.taskDiff(task, project);
-    const review = this.latestReview(task.id);
+    const review = this.latestReview(task.id, 'code');
     const tests = this.latestTests(task.id);
     const out = await this.runRole(
       task,
@@ -867,7 +1006,9 @@ export class Orchestrator {
         .where(eq(agentRuns.taskId, t.id))
         .orderBy(desc(agentRuns.startedAt))
         .get();
-      const hint = last ? this.restartHint(t.id, last.id) : null;
+      const hint = last
+        ? this.restartHint(t.id, last.id, 'Interrupted by cancelling the task')
+        : null;
       this.patchState(t.id, { lastError: null, ...(hint ? { resumeHint: hint } : {}) }, false);
       this.d.tasks.transition(t.id, step, 'Resumed by you', 'user');
     } else {
@@ -1088,6 +1229,7 @@ export class Orchestrator {
     return rows.map((r) => ({
       id: r.id,
       reviewer: r.reviewer,
+      scope: r.scope,
       verdict: r.verdict,
       summary: r.summary,
       createdAt: r.createdAt,
@@ -1470,7 +1612,7 @@ export class Orchestrator {
   }
 
   /** Resume hint (and checkpoint) for a run interrupted by a daemon restart. */
-  private restartHint(taskId: string, runId: string): PipelineState['resumeHint'] {
+  private restartHint(taskId: string, runId: string, reason: string): PipelineState['resumeHint'] {
     let detail;
     try {
       detail = this.d.runs.get(runId);
@@ -1499,7 +1641,7 @@ export class Orchestrator {
         branchName: t.branchName,
         lastCompletedStep: null,
         notes: summary,
-        data: { reason: 'Interrupted by a daemon restart' },
+        data: { reason },
       })
       .run();
     return { role: run.role, sessionId: run.sessionId, summary };
@@ -1507,11 +1649,13 @@ export class Orchestrator {
 
   /** Resume quota pauses whose time has come (re-checking the engine) and auth pauses whose engine is active again. */
   private async resumePaused(): Promise<void> {
+    const archived = this.archivedProjectIds();
     const paused = this.d.db
       .select()
       .from(tasks)
       .where(inArray(tasks.status, ['PAUSED_QUOTA', 'PAUSED_AUTH']))
-      .all();
+      .all()
+      .filter((t) => !archived.has(t.projectId));
     for (const t of paused) {
       const step = t.resumeToStatus;
       if (!step) continue;
@@ -1708,14 +1852,14 @@ export class Orchestrator {
     };
   }
 
-  private fixInput(task: TaskRow, source: 'review' | 'tests' | 'human' | 'failure'): FixInput {
+  private fixInput(task: TaskRow, source: FixSource): FixInput {
     if (source === 'failure')
       return { source, failure: task.pipelineState.failureNote ?? undefined };
-    if (source === 'tests') {
+    if (source === 'tests' || source === 'test_quality') {
       const t = this.latestTests(task.id);
       return { source, testSummary: t?.summary, failures: t ? [t.summary] : [], checkLog: t?.log };
     }
-    const r = this.latestReview(task.id);
+    const r = this.latestReview(task.id, source === 'test_review' ? 'tests' : 'code');
     if (source === 'human') return { source, humanComments: r?.summary };
     return {
       source,
@@ -1734,13 +1878,19 @@ export class Orchestrator {
   }
 
   private lastProblem(task: TaskRow): string {
-    if (task.pipelineState.fixSource === 'tests')
+    const source = task.pipelineState.fixSource;
+    if (source === 'tests' || source === 'test_quality')
       return this.latestTests(task.id)?.summary.slice(0, 300) ?? 'tests failing';
-    return this.latestReview(task.id)?.summary.slice(0, 300) ?? 'review still requesting changes';
+    return (
+      this.latestReview(task.id, source === 'test_review' ? 'tests' : 'code')?.summary.slice(
+        0,
+        300,
+      ) ?? 'review still requesting changes'
+    );
   }
 
-  private latestReview(taskId: string): ReviewDto | null {
-    return this.reviewsOf(taskId).at(-1) ?? null;
+  private latestReview(taskId: string, scope: ReviewScope): ReviewDto | null {
+    return this.reviewsOf(taskId).findLast((r) => r.scope === scope) ?? null;
   }
 
   private latestTests(taskId: string): TestResultDto | null {
@@ -1769,11 +1919,12 @@ export class Orchestrator {
     runId: string | null,
     reviewer: 'agent' | 'human',
     r: ReviewOutput,
+    scope: ReviewScope = 'code',
   ): string {
     const id = newId('rev');
     this.d.db.transaction((tx) => {
       tx.insert(reviews)
-        .values({ id, taskId, runId, reviewer, verdict: r.verdict, summary: r.summary })
+        .values({ id, taskId, runId, reviewer, scope, verdict: r.verdict, summary: r.summary })
         .run();
       for (const c of r.comments)
         tx.insert(reviewComments)
@@ -1813,7 +1964,7 @@ export class Orchestrator {
       doc.docsUpdated.length
         ? `## Documentation updated\n${doc.docsUpdated.map((f) => `- \`${f}\``).join('\n')}`
         : '',
-      `## Review\n${revs.map((r, i) => `${i + 1}. ${r.reviewer === 'human' ? 'You' : 'Reviewer'}: **${r.verdict === 'APPROVE' ? 'approved' : 'changes requested'}** — ${r.summary}`).join('\n') || 'No reviews.'}`,
+      `## Review\n${revs.map((r, i) => `${i + 1}. ${r.reviewer === 'human' ? 'You' : r.scope === 'tests' ? 'Reviewer (tests)' : 'Reviewer'}: **${r.verdict === 'APPROVE' ? 'approved' : 'changes requested'}** — ${r.summary}`).join('\n') || 'No reviews.'}`,
       `## Tests\n${tests ? `${tests.passed ? '✅ Passed' : '❌ Failed'}${tests.total !== null ? ` — ${tests.total} tests, ${tests.failed ?? 0} failed` : ''}. ${tests.summary}` : 'No test results.'}`,
       `## Token usage\n| Role | Runs | Tokens | Cost |\n|---|---|---|---|\n${[...byRole].map(([role, u]) => `| ${role} | ${u.runs} | ${u.tokens.toLocaleString()} | $${u.cost.toFixed(4)} |`).join('\n')}`,
       doc.limitations.length
@@ -1994,6 +2145,8 @@ export class Orchestrator {
       maxFixLoops: ps?.maxFixLoops ?? s.pipeline.maxFixLoops,
       requireHumanReview: ps?.requireHumanReview ?? s.pipeline.requireHumanReviewBeforeMerge,
       mergeStrategy: ps?.mergeStrategy ?? s.pipeline.mergeStrategy,
+      checkTestsFailWithoutChange: s.pipeline.checkTestsFailWithoutChange,
+      reviewTests: s.pipeline.reviewTests,
     };
   }
 
@@ -2027,4 +2180,11 @@ export class Orchestrator {
     if (!p) throw notFound('Project');
     return p;
   }
+}
+
+/** Where a fix goes next: back to the step that found the problem. */
+function fixReturnsTo(source: FixSource): TaskStatus {
+  return source === 'tests' || source === 'test_quality' || source === 'test_review'
+    ? 'IN_TESTING'
+    : 'IN_REVIEW';
 }

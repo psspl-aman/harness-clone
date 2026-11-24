@@ -37,6 +37,7 @@ import type {
   ProjectOrigin,
   ProjectSource,
   RequirementIntent,
+  ReviewScope,
   RoleEngines,
   RoleModels,
   Routing,
@@ -407,6 +408,8 @@ export const reviews = sqliteTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     runId: text('run_id').references(() => agentRuns.id, { onDelete: 'set null' }),
     reviewer: text('reviewer').$type<'agent' | 'human'>().notNull().default('agent'),
+    /** 'code' reviews gate testing; 'tests' reviews check the tests after they pass. */
+    scope: text('scope').$type<ReviewScope>().notNull().default('code'),
     verdict: text('verdict').$type<'APPROVE' | 'CHANGES_REQUESTED'>().notNull(),
     summary: text('summary').notNull().default(''),
     createdAt: createdAt(),

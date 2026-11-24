@@ -11,7 +11,6 @@
  * Each helper takes the platform and environment as arguments (defaulting to
  * the live process) so the behaviour is pure and testable on any host.
  */
-import { delimiter } from 'node:path';
 
 type Env = Record<string, string | undefined>;
 
@@ -80,8 +79,9 @@ export function pathExts(
   env: Env = process.env,
 ): string[] {
   if (platform !== 'win32') return [];
+  // %PATHEXT% is always ';'-separated; path.delimiter is the host's (':' on POSIX).
   return (env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
-    .split(delimiter)
+    .split(';')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 }

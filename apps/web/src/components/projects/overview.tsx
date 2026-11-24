@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Save,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { EngineRoles } from '@/components/projects/engine-roles';
@@ -20,15 +19,6 @@ import { PipelineSettingsCard } from '@/components/projects/pipeline-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -282,59 +272,6 @@ function AnalysisCards({ project }: { project: ProjectDetail }) {
         </Section>
       </div>
     </>
-  );
-}
-
-export function RemoveDialog({
-  project,
-  open,
-  onOpenChange,
-}: {
-  project: ProjectDetail;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-}) {
-  const router = useRouter();
-  const [confirm, setConfirm] = useState('');
-  const remove = useMutation({
-    mutationFn: () => api.projects.remove(project.id),
-    onSuccess: () => {
-      toast.success(`Removed ${project.name}`, { description: 'Files on disk were not touched.' });
-      router.push('/');
-    },
-    onError: (e) => toast.error('Could not remove project', { description: errMsg(e) }),
-  });
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Remove {project.name} from AgentForge?</DialogTitle>
-          <DialogDescription>
-            Its plans, tasks, run history and memory are deleted from AgentForge. The folder{' '}
-            <code className="font-mono">{project.localPath}</code> and its git history stay exactly
-            as they are.
-          </DialogDescription>
-        </DialogHeader>
-        <Input
-          placeholder={`Type ${project.name} to confirm`}
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          aria-label="Confirm project name"
-        />
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={confirm !== project.name || remove.isPending}
-            onClick={() => remove.mutate()}
-          >
-            {remove.isPending && <Loader2 className="animate-spin" />} Remove project
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

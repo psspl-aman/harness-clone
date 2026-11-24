@@ -102,7 +102,11 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     workspaceRoot,
     projectAtPath: (p) =>
       dbHandle.db
-        .select({ id: projectsTable.id, localPath: projectsTable.localPath })
+        .select({
+          id: projectsTable.id,
+          localPath: projectsTable.localPath,
+          archivedAt: projectsTable.archivedAt,
+        })
         .from(projectsTable)
         .where(eq(projectsTable.localPath, p))
         .get() ?? null,
@@ -336,7 +340,6 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     await pms.stop();
     await orchestrator.stop();
     await mcp.stop();
-    memory.stop();
     handoff.stop();
     safety.stop();
     await planner.stop();
@@ -344,6 +347,8 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     runner.stopAll();
     terminals.closeAll();
     await projects.drain();
+    // Last before the DB closes: the planner and onboarding above can still write memory.
+    memory.stop();
     dbHandle.close();
   });
   return { app, ctx, dbHandle };

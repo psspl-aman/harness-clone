@@ -1,4 +1,4 @@
-import type { TaskDiffDto, TaskDto } from '@agentforge/shared';
+import type { FixSource, TaskDiffDto, TaskDto } from '@agentforge/shared';
 
 export interface RoleContext {
   project: {
@@ -134,6 +134,51 @@ ${JSON_ONLY}
 }`;
 }
 
+export interface TestReviewInput {
+  /** Changed files of the whole task. */
+  files: TaskDiffDto['files'];
+  /** Patch of the test files only. */
+  testPatch: string;
+  testerSummary: string;
+  /** One line on the fail-before check, e.g. "Passed: …" or "Skipped: …". */
+  failBefore: string;
+}
+
+/** Reviews the tests after they pass: do they really check the task? */
+export function testReviewerPrompt(ctx: RoleContext, t: TestReviewInput): string {
+  return `# Role: Reviewer (tests)
+The tests for task ${ctx.task.key} pass. Your job is to check that they really test the task, so that passing them means it works. You may read files in the repository; do not modify anything.
+
+${contextBlock(ctx)}
+
+## Tester's summary
+${t.testerSummary || '(none)'}
+
+## Fail-before check
+${t.failBefore}
+
+## Changed files (${t.files.length})
+${t.files.map((f) => `- ${f.status} ${f.path} (+${f.additions} −${f.deletions})`).join('\n') || '(none)'}
+
+## Diff of the test files
+${clip(t.testPatch, 60_000) || '(no test files changed)'}
+
+Check that:
+- every acceptance criterion is covered by at least one test that would fail if it were broken;
+- assertions check real outcomes (not just "no error thrown", snapshots of nothing, or always-true conditions);
+- tests exercise the real code: mocks don't replace the very thing under test;
+- important edge cases and error paths of this change are tested;
+- tests are deterministic (no reliance on timing, order, network or random data without control).
+If the change has behaviour but no tests cover it, request changes. Request changes only for gaps that matter; use "info"/"minor" for suggestions.
+
+${JSON_ONLY}
+{
+  "verdict": "APPROVE" | "CHANGES_REQUESTED",
+  "summary": "One paragraph on how well the tests verify the task",
+  "comments": [{ "file": "test/x.test.ts", "line": 12, "severity": "info" | "minor" | "major" | "blocker", "body": "What is missing or wrong and what test to add or change" }]
+}`;
+}
+
 export function testerPrompt(ctx: RoleContext, d: TaskDiffDto): string {
   return `# Role: Tester
 You verify task ${ctx.task.key}. Make sure tests cover its acceptance criteria (write or update tests if they're missing or weak), then run the project's tests and build.
@@ -160,7 +205,7 @@ ${JSON_ONLY}
 }
 
 export interface FixInput {
-  source: 'review' | 'tests' | 'human' | 'error' | 'failure';
+  source: FixSource | 'error';
   failure?: string;
   review?: {
     summary: string;
@@ -182,7 +227,11 @@ export function fixerPrompt(ctx: RoleContext, fix: FixInput): string {
           ? 'The error described in the task above was detected while running the project. Reproduce it if you can (use the project commands), find the root cause and fix it.'
           : fix.source === 'human'
             ? `The user reviewed the change and asked for:\n${fix.humanComments ?? ''}`
-            : `Tests or the build failed:\n${fix.testSummary ?? ''}\n${(fix.failures ?? []).map((f) => `- ${f}`).join('\n')}${fix.checkLog ? `\n\nOutput of AgentForge's own checks:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`;
+            : fix.source === 'test_quality'
+              ? `The tests pass, but they also pass when this task's source changes are put back to how they were before the task. So they don't test the change.\n\nAdd or strengthen tests for the acceptance criteria so they fail without the change and pass with it. Change only test files — do NOT change application code.${fix.checkLog ? `\n\nDetails:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`
+              : fix.source === 'test_review'
+                ? `The Reviewer checked the tests and asked for better ones:\n${fix.review?.summary ?? ''}\n\n${(fix.review?.comments ?? []).map((c) => `- [${c.severity}] ${c.file ?? ''}${c.line ? `:${c.line}` : ''} ${c.body}`).join('\n')}\n\nImprove the tests as asked. Change application code only if a better test reveals a real bug in it.`
+                : `Tests or the build failed:\n${fix.testSummary ?? ''}\n${(fix.failures ?? []).map((f) => `- ${f}`).join('\n')}${fix.checkLog ? `\n\nOutput of AgentForge's own checks:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`;
   return `# Role: Fixer
 You fix problems found in task ${ctx.task.key}'s change.
 

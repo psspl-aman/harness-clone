@@ -182,6 +182,20 @@ export default function SettingsPage() {
               onChange={(v) => set('pipeline', { requireHumanReviewBeforeMerge: v })}
             />
             <SwitchField
+              id="checkTestsFailWithoutChange"
+              label="Check that tests fail without the change"
+              hint="For features and bug fixes, AgentForge runs the tests again with the task's code changes reverted. If they still pass, they don't test the change and go back to be improved. Needs a Test command; uses no AI tokens."
+              checked={draft.pipeline.checkTestsFailWithoutChange}
+              onChange={(v) => set('pipeline', { checkTestsFailWithoutChange: v })}
+            />
+            <SwitchField
+              id="reviewTests"
+              label="Review the tests"
+              hint="After the tests pass, the Reviewer checks that they really cover the task. Adds one Reviewer run per test round."
+              checked={draft.pipeline.reviewTests}
+              onChange={(v) => set('pipeline', { reviewTests: v })}
+            />
+            <SwitchField
               id="autoApprovePlans"
               label="Approve plans automatically"
               hint="Tasks the Planner drafts start building right away, without waiting for you to review them. Agents still review and test every change."

@@ -21,6 +21,8 @@ export const ProjectSummarySchema = z.object({
   }),
   openErrorCount: z.number().int(),
   lastActivityAt: Timestamp.nullable(),
+  /** Set while the project is archived: hidden from the dashboard, nothing runs, restorable. */
+  archivedAt: Timestamp.nullable(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });
