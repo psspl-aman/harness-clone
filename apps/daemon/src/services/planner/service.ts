@@ -2,6 +2,7 @@ import {
   RegenerateInputSchema,
   SendMessageInputSchema,
   Topics,
+  type AgentRole,
   type AgentRunResultDto,
   type AttachmentDto,
   type ChatMessageDto,
@@ -522,7 +523,30 @@ export class PlannerService {
     });
   }
 
+  /** Only engines that can actually run: installed and enabled. */
+  private usableEngines(): Set<string> {
+    return new Set(
+      this.d.engines
+        .list()
+        .filter((e) => e.enabled && e.installed)
+        .map((e) => e.id),
+    );
+  }
+
   private apply(job: Job, entry: Running, out: PlannerOutput): void {
+    // Drop engine suggestions that can't run here (e.g. a CLI that isn't installed).
+    const suggested =
+      out.type === 'plan' || out.type === 'tasks'
+        ? out.tasks
+        : out.type === 'task'
+          ? [out.task]
+          : [];
+    if (suggested.length) {
+      const usable = this.usableEngines();
+      for (const t of suggested)
+        for (const [role, id] of Object.entries(t.suggestedEngines))
+          if (!id || !usable.has(id)) delete t.suggestedEngines[role as AgentRole];
+    }
     switch (out.type) {
       case 'questions':
         return this.finishMessage(entry.messageId, {
@@ -653,10 +677,7 @@ export class PlannerService {
       referencedFiles: job.references.files,
       referencedTasks,
       attachments: job.attachments,
-      engines: this.d.engines
-        .list()
-        .filter((e) => e.enabled)
-        .map((e) => e.id),
+      engines: [...this.usableEngines()],
       allowQuestions: job.allowQuestions,
     };
   }
@@ -667,7 +688,11 @@ export class PlannerService {
       .from(projectSettings)
       .where(eq(projectSettings.projectId, projectId))
       .get();
-    return ps?.r.planner ?? this.d.settings.get().defaultEngines.planner;
+    const set = [ps?.r.planner, this.d.settings.get().defaultEngines.planner].filter(
+      (x): x is string => !!x,
+    );
+    const usable = this.usableEngines();
+    return set.find((id) => usable.has(id)) ?? set[0]!;
   }
 
   private async extractReferences(

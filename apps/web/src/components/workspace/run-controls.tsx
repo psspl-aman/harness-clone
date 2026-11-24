@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectDetail, ProjectRunDto } from '@agentforge/shared';
+import type { ProjectDetail, ProjectRunDto, ServiceRunDto } from '@agentforge/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
@@ -12,6 +12,7 @@ import {
   PackageOpen,
   Play,
   RotateCw,
+  Server,
   Square,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,6 +37,71 @@ export function useProjectRun(projectId: string) {
     queryKey: qk.projectRun(projectId),
     queryFn: () => api.runtime.run(projectId),
   });
+}
+
+const DOT: Record<ServiceRunDto['status'], string> = {
+  running: 'bg-success',
+  starting: 'bg-warning animate-pulse',
+  crashed: 'bg-destructive',
+  stopped: 'bg-muted-foreground/40',
+};
+
+/** Per-server status for multi-server projects: URL, port, errors and a jump to its terminal. */
+function ServicesMenu({ run }: { run: ProjectRunDto }) {
+  const showTerminal = useWorkspaceUi((s) => s.showTerminal);
+  const up = run.services.filter((s) => s.status === 'running').length;
+  const failed = run.services.filter((s) => s.status === 'crashed' || s.error).length;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className={cn('h-7 gap-1.5 px-2 text-xs', failed && 'text-destructive')}
+          data-testid="run-services"
+        >
+          {failed ? <CircleAlert className="size-3.5" /> : <Server className="size-3.5" />}
+          {up}/{run.services.length} servers
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+          Servers
+        </DropdownMenuLabel>
+        {run.services.map((s) => (
+          <DropdownMenuItem
+            key={s.name}
+            className="flex-col items-stretch gap-0.5"
+            disabled={!s.terminalId}
+            onSelect={() => s.terminalId && showTerminal(s.terminalId)}
+          >
+            <span className="flex items-center gap-2">
+              <span className={cn('size-2 shrink-0 rounded-full', DOT[s.status])} />
+              <span className="font-medium">{s.name}</span>
+              <span className="text-muted-foreground text-[11px] capitalize">{s.status}</span>
+              {s.port && (
+                <span className="text-muted-foreground ml-auto font-mono text-[11px]">
+                  :{s.port}
+                </span>
+              )}
+            </span>
+            {s.url && (s.status === 'running' || s.status === 'starting') && (
+              <a
+                href={s.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-primary truncate pl-4 font-mono text-[11px] hover:underline"
+              >
+                {s.url}
+              </a>
+            )}
+            {s.error && <span className="text-destructive pl-4 text-[11px]">{s.error}</span>}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function RunStatus({ run }: { run: ProjectRunDto }) {
@@ -112,6 +178,7 @@ export function RunControls({
   const live = r?.status === 'running' || r?.status === 'starting';
   const busy = start.isPending || stop.isPending || restart.isPending;
   const cmds = project.commands;
+  const canRun = !!cmds.run || !!cmds.services?.length;
   const oneShots = [
     { kind: 'build' as const, label: 'Build', icon: Hammer },
     { kind: 'test' as const, label: 'Run tests', icon: FlaskConical },
@@ -121,6 +188,7 @@ export function RunControls({
   return (
     <div className="flex items-center gap-2">
       {r && <RunStatus run={r} />}
+      {r && r.services.length > 1 && <ServicesMenu run={r} />}
       {r?.previewUrl && live && (
         <a
           href={r.previewUrl}
@@ -159,9 +227,15 @@ export function RunControls({
           <Button
             size="sm"
             className="rounded-r-none"
-            onClick={() => (cmds.run ? start.mutate() : onConfigure())}
+            onClick={() => (canRun ? start.mutate() : onConfigure())}
             disabled={busy}
-            title={cmds.run ? `Runs: ${cmds.run}` : 'Set a run command first'}
+            title={
+              cmds.services?.length
+                ? `Starts ${cmds.services.map((x) => x.name).join(', ')}`
+                : cmds.run
+                  ? `Runs: ${cmds.run}`
+                  : 'Set a run command first'
+            }
           >
             {start.isPending ? <Loader2 className="animate-spin" /> : <Play />} Run
           </Button>

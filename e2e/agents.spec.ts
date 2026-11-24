@@ -68,6 +68,8 @@ test('shows install and sign-in status for every engine', async ({ page }) => {
   await page.goto('/agents');
   const claude = page.getByRole('article', { name: 'Claude Code' });
   await expect(claude.getByText('Active', { exact: true })).toBeVisible();
+  // Already signed in: no Login button.
+  await expect(claude.getByRole('button', { name: 'Login' })).toHaveCount(0);
   await expect(claude.getByText('e2e@example.com')).toBeVisible();
   await expect(claude.getByText('v2.1.327')).toBeVisible();
   const codex = page.getByRole('article', { name: 'OpenAI Codex' });
@@ -93,7 +95,10 @@ test('test run streams events and shows usage windows', async ({ page }) => {
   );
 });
 
-test('login runs the CLI in an embedded terminal', async ({ page }) => {
+test('login runs the CLI in an embedded terminal', async ({ page, request }) => {
+  // Signed out: the Login button appears.
+  fakeCli('claude', claudeResponses({ loggedIn: false }));
+  await request.post(`${E2E.daemonUrl}/api/engines/claude-code/refresh`);
   await page.goto('/agents');
   await page
     .getByRole('article', { name: 'Claude Code' })
@@ -104,6 +109,8 @@ test('login runs the CLI in an embedded terminal', async ({ page }) => {
   await expect(dialog.locator('.xterm-rows')).toContainText('enter code E2E-OK');
   await expect(dialog.getByText('Login finished — status refreshed.')).toBeVisible();
   await dialog.getByRole('button', { name: 'Done' }).click();
+  fakeCli('claude', claudeResponses(OK));
+  await request.post(`${E2E.daemonUrl}/api/engines/claude-code/refresh`);
 });
 
 test('an expired session raises a global banner with re-login', async ({ page, request }) => {

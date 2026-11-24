@@ -13,7 +13,7 @@ import {
   type FakeResponse,
 } from './fake-cli';
 import { HandoffService } from '../src/services/handoff';
-import { createTestApp, GIT_ID, tempDir, type TestApp } from './helpers';
+import { createTestApp, GIT_ID, installFakeEngine, tempDir, type TestApp } from './helpers';
 
 let t: TestApp;
 let root: string;
@@ -767,6 +767,10 @@ describe('pipeline: failures and pauses', () => {
   });
 
   it('lets you switch a role’s engine while the task runs', async () => {
+    // Codex is installed but its runs fail, so the switch is visible in the error.
+    await installFakeEngine(t, 'codex', [
+      { match: 'exec', stdout: '{"type":"error","message":"codex is broken here"}\n', exitCode: 1 },
+    ]);
     script(developer('SA-1', {}, { sleepMs: 1500 }), reviewer(), tester(), documenter());
     const { planId, tasks } = plan(pt('T1', 'A'));
     await approveAll(planId);
@@ -787,8 +791,21 @@ describe('pipeline: failures and pauses', () => {
       ).statusCode,
     ).toBe(409);
     await t.ctx.orchestrator.idle();
-    expect(task(tasks[0]!.id).status).toBe('FAILED'); // codex isn't installed in tests
+    expect(task(tasks[0]!.id).status).toBe('FAILED');
     expect(task(tasks[0]!.id).pipeline.lastError).toMatch(/reviewer failed on OpenAI Codex/);
+  });
+
+  it('skips an engine that is no longer installed and uses the next one', async () => {
+    script(developer('SA-1', { 'src/a.txt': 'a\n' }), reviewer(), tester(), documenter());
+    const { planId, tasks } = plan(pt('T1', 'A'));
+    // Set before it was uninstalled (the API refuses it now): the service has no check.
+    t.ctx.tasks.update(tasks[0]!.id, { roleEngines: { reviewer: 'codex', tester: 'gemini-cli' } });
+    await approveAll(planId);
+    await t.ctx.orchestrator.tick();
+    await t.ctx.orchestrator.idle();
+    expect(task(tasks[0]!.id).status).toBe('DONE');
+    const runs = t.ctx.db.select().from(agentRuns).where(eq(agentRuns.taskId, tasks[0]!.id)).all();
+    expect(new Set(runs.map((r) => r.engineId))).toEqual(new Set(['claude-code']));
   });
 });
 

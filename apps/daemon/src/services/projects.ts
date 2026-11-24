@@ -260,6 +260,15 @@ export class ProjectService {
           const v = input.commands[k];
           if (v !== undefined) next[k] = v?.trim() ? v.trim() : null;
         }
+        if (input.commands.services !== undefined)
+          next.services = input.commands.services?.length
+            ? input.commands.services.map((s) => ({
+                name: s.name,
+                command: s.command,
+                cwd: s.cwd?.replace(/^\.\/?/, '').replace(/\/+$/, '') || null,
+                port: s.port ?? null,
+              }))
+            : null;
         patch.commands = next;
       }
       if (Object.keys(patch).length)

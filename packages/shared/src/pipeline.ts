@@ -268,6 +268,24 @@ export interface UsageSummaryDto {
   byTaskType: { type: string; tasks: number; avgTokens: number; avgCostUsd: number }[];
 }
 
+/** Everything a project has cost so far, and what finishing its open tasks will likely cost. */
+export interface ProjectCostDto {
+  projectId: string;
+  /** All-time usage for the project (byDay covers the last 30 days). */
+  summary: UsageSummaryDto;
+  tasks: { total: number; done: number; open: number; cancelled: number };
+  /** Average per finished task (null until one is done). */
+  perDoneTask: { costUsd: number; tokens: number } | null;
+  /** Likely remaining cost for open tasks: typical cost of their size minus what they've used. */
+  forecast: {
+    costUsd: number;
+    tokens: number;
+    /** How many open tasks the forecast covers (sizes with finished examples). */
+    basedOn: number;
+    open: number;
+  } | null;
+}
+
 export interface UsageWindowStatusDto {
   engineId: string;
   displayName: string;

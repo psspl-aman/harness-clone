@@ -118,15 +118,73 @@ export type CreateProjectInput = z.input<typeof CreateProjectInputSchema>;
 
 // ─── Onboarding analysis ─────────────────────────────────────────────────────
 
+/**
+ * One long-running process of the app (frontend, API, worker…). Projects with
+ * several servers list them here; Run starts them all, each in its own terminal.
+ */
+export const ProjectServiceSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .regex(/^[\w .-]+$/, 'Letters, numbers, spaces, dots, dashes and underscores only'),
+  command: z.string().trim().min(1).max(500),
+  /** Folder relative to the project root ("" or omitted = the root). */
+  cwd: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((v) => !v.startsWith('/') && !v.split(/[\\/]/).includes('..'), {
+      message: 'Must be a folder inside the project',
+    })
+    .nullable()
+    .optional(),
+  /** The port it listens on: checked before starting and passed as PORT. */
+  port: z.number().int().min(1).max(65535).nullable().optional(),
+});
+export type ProjectServiceDto = z.infer<typeof ProjectServiceSchema>;
+
 export const ProjectCommandsSchema = z.object({
   install: z.string().max(500).nullable().optional(),
   run: z.string().max(500).nullable().optional(),
   build: z.string().max(500).nullable().optional(),
   test: z.string().max(500).nullable().optional(),
   lint: z.string().max(500).nullable().optional(),
+  /** When set (non-empty), Run starts these instead of the single run command. */
+  services: z
+    .array(ProjectServiceSchema)
+    .max(8)
+    .refine((s) => new Set(s.map((x) => x.name.toLowerCase())).size === s.length, {
+      message: 'Service names must be unique',
+    })
+    .refine(
+      (s) => {
+        const ports = s.map((x) => x.port).filter((p): p is number => !!p);
+        return new Set(ports).size === ports.length;
+      },
+      { message: 'Two services can’t use the same port' },
+    )
+    .nullable()
+    .optional(),
 });
 export type ProjectCommandsDto = z.infer<typeof ProjectCommandsSchema>;
 export const COMMAND_KEYS = ['install', 'run', 'build', 'test', 'lint'] as const;
+
+/** What an agent proposes after reading the project (nothing is saved until you apply it). */
+export interface CommandSuggestionDto {
+  projectId: string;
+  status: 'running' | 'done' | 'failed';
+  engineId: string;
+  runId: string | null;
+  startedAt: number;
+  finishedAt: number | null;
+  error: string | null;
+  commands: Partial<Record<(typeof COMMAND_KEYS)[number], string | null>>;
+  services: ProjectServiceDto[];
+  /** Short explanation: prerequisites, env vars, how the pieces fit. */
+  notes: string[];
+}
 
 export interface DetectedCommand {
   command: string;

@@ -234,7 +234,8 @@ export interface PmsConflictDto {
 
 export interface TaskExternalDto {
   connectionId: string;
-  provider: PmsProvider | null;
+  /** 'sheet' for rows imported from a spreadsheet. */
+  provider: PmsProvider | 'sheet' | null;
   id: string;
   url: string | null;
   updatedAt: number | null;

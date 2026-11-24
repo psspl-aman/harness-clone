@@ -657,8 +657,8 @@ export class TaskService {
     return dto;
   }
 
-  approve(taskId: string): TaskDto {
-    const dto = this.transition(taskId, 'APPROVED', 'Approved by you', 'user');
+  approve(taskId: string, by = { reason: 'Approved by you', actor: 'user' }): TaskDto {
+    const dto = this.transition(taskId, 'APPROVED', by.reason, by.actor);
     if (dto.planId) this.syncPlanApproval(dto.planId);
     return dto;
   }
@@ -749,6 +749,9 @@ export class TaskService {
       externalId: string;
       externalUrl: string | null;
       externalUpdatedAt: number | null;
+      priority?: TaskDto['priority'];
+      complexity?: TaskDto['complexity'];
+      acceptanceCriteria?: string[];
     },
   ): TaskDto {
     const plan = this.latestPlan(projectId);
@@ -760,9 +763,9 @@ export class TaskService {
         title: v.title,
         description: v.description,
         type: v.type,
-        priority: 'medium',
-        complexity: 'm',
-        acceptanceCriteria: [],
+        priority: v.priority ?? 'medium',
+        complexity: v.complexity ?? 'm',
+        acceptanceCriteria: v.acceptanceCriteria ?? [],
         affectedAreas: [],
         roleEngines: {},
         orderIndex: this.maxOrder(projectId) + 1,
@@ -795,7 +798,19 @@ export class TaskService {
   /** Apply PMS-side fields (and pipeline-state patch) to an imported task without status checks. */
   updateImported(
     taskId: string,
-    v: Partial<Pick<TaskRow, 'title' | 'description' | 'externalUrl' | 'externalUpdatedAt'>>,
+    v: Partial<
+      Pick<
+        TaskRow,
+        | 'title'
+        | 'description'
+        | 'externalUrl'
+        | 'externalUpdatedAt'
+        | 'priority'
+        | 'complexity'
+        | 'type'
+        | 'acceptanceCriteria'
+      >
+    >,
     state?: Partial<TaskRow['pipelineState']>,
   ): TaskDto {
     const row = this.row(taskId);
@@ -1118,7 +1133,9 @@ export class TaskService {
         r.pmsConnectionId && r.externalId
           ? {
               connectionId: r.pmsConnectionId,
-              provider: providers.get(r.pmsConnectionId) ?? null,
+              provider: r.pmsConnectionId.startsWith('sht_')
+                ? ('sheet' as const)
+                : (providers.get(r.pmsConnectionId) ?? null),
               id: r.externalId,
               url: r.externalUrl,
               updatedAt: r.externalUpdatedAt,

@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context';
 import { badRequest } from '../http/errors';
+import { assertUsableEngines } from './engine-guard';
 
 const Id = z.object({ id: z.string().min(1).max(64) });
 const id = (req: FastifyRequest) => Id.parse(req.params).id;
@@ -57,7 +58,11 @@ export function registerPlanningRoutes(app: FastifyInstance, ctx: AppContext): v
 
   // ── Tasks
   app.get('/api/tasks/:id', async (req) => ctx.tasks.get(id(req)));
-  app.patch('/api/tasks/:id', async (req) => ctx.tasks.update(id(req), req.body));
+  app.patch('/api/tasks/:id', async (req) => {
+    const body = req.body as { roleEngines?: unknown } | null;
+    assertUsableEngines(ctx, body?.roleEngines, ctx.tasks.get(id(req)).roleEngines);
+    return ctx.tasks.update(id(req), req.body);
+  });
   app.delete('/api/tasks/:id', async (req, reply) => {
     ctx.tasks.delete(id(req));
     return reply.status(204).send();

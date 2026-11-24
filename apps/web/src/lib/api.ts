@@ -1,5 +1,12 @@
 import type {
   ApiError,
+  CommandSuggestionDto,
+  ProjectCostDto,
+  SheetPreviewDto,
+  SheetPreviewInput,
+  SheetSourceDto,
+  SheetSourceInput,
+  SheetSyncResultDto,
   AppSettings,
   CreateProjectInput,
   DeepPartial,
@@ -134,6 +141,16 @@ export const api = {
     analyze: (id: string) => request<{ ok: true }>('POST', `/api/projects/${id}/analyze`),
     requirements: (id: string) =>
       request<RequirementDto[]>('GET', `/api/projects/${id}/requirements`),
+    suggestion: (id: string) =>
+      request<{ suggestion: CommandSuggestionDto | null }>(
+        'GET',
+        `/api/projects/${id}/commands/suggestion`,
+      ),
+    suggestCommands: (id: string) =>
+      request<CommandSuggestionDto>('POST', `/api/projects/${id}/commands/suggest`),
+    dismissSuggestion: (id: string) =>
+      request<void>('DELETE', `/api/projects/${id}/commands/suggestion`),
+    cost: (id: string) => request<ProjectCostDto>('GET', `/api/projects/${id}/cost`),
   },
   fs: {
     browse: (path?: string, hidden = false) =>
@@ -385,6 +402,23 @@ export const api = {
     resolveConflict: (taskId: string, action: 'apply' | 'dismiss') =>
       request<TaskDto>('POST', `/api/tasks/${taskId}/pms-conflict`, { action }),
   },
+  sheets: {
+    list: () => request<SheetSourceDto[]>('GET', '/api/sheets'),
+    preview: (v: SheetPreviewInput) => request<SheetPreviewDto>('POST', '/api/sheets/preview', v),
+    create: (projectId: string, v: SheetSourceInput) =>
+      request<SheetSourceDto>('POST', `/api/projects/${projectId}/sheets`, v),
+    update: (
+      id: string,
+      v: Partial<
+        Pick<
+          SheetSourceDto,
+          'name' | 'sheet' | 'columns' | 'pollingIntervalSec' | 'autoStart' | 'autoEnrich'
+        >
+      >,
+    ) => request<SheetSourceDto>('PATCH', `/api/sheets/${id}`, v),
+    remove: (id: string) => request<void>('DELETE', `/api/sheets/${id}`),
+    sync: (id: string) => request<SheetSyncResultDto>('POST', `/api/sheets/${id}/sync`),
+  },
   terminals: {
     list: (projectId: string) =>
       request<TerminalInfo[]>('GET', `/api/terminals?${new URLSearchParams({ projectId })}`),
@@ -446,6 +480,9 @@ export const qk = {
   pmsProviders: ['pms', 'providers'] as const,
   pmsConnections: ['pms', 'connections'] as const,
   pmsMappings: (projectId: string) => ['pms', 'mappings', projectId] as const,
+  sheets: ['sheets'] as const,
+  commandSuggestion: (projectId: string) => ['projects', projectId, 'command-suggestion'] as const,
+  projectCost: (projectId: string) => ['projects', projectId, 'cost'] as const,
   references: (projectId: string, q: string) => ['references', projectId, q] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,

@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { tasks as tasksTable } from '../src/db/schema';
-import { createTestApp, tempDir, type TestApp } from './helpers';
+import { createTestApp, installFakeEngine, tempDir, type TestApp } from './helpers';
 
 let t: TestApp;
 let root: string;
@@ -99,6 +99,13 @@ describe('plans and tasks', () => {
 
   it('edits tasks and plans, validating input', async () => {
     const { plan, created } = seed();
+    // Only installed engines can be assigned.
+    const refused = await api('PATCH', `/api/tasks/${created[0]!.id}`, {
+      roleEngines: { developer: 'gemini-cli' },
+    });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.message).toMatch(/Gemini CLI isn’t installed/);
+    await installFakeEngine(t, 'codex');
     const res = await api('PATCH', `/api/tasks/${created[0]!.id}`, {
       title: 'Set up the API',
       priority: 'high',
