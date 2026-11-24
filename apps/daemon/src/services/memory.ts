@@ -53,6 +53,7 @@ export interface PromptMemory {
  */
 export class MemoryService {
   private readonly pendingMirror = new Map<string, NodeJS.Timeout>();
+  private stopped = false;
 
   constructor(
     private readonly db: Db,
@@ -243,6 +244,7 @@ export class MemoryService {
   }
 
   stop(): void {
+    this.stopped = true;
     for (const [id, t] of this.pendingMirror) {
       clearTimeout(t);
       this.writeMirror(id);
@@ -251,6 +253,8 @@ export class MemoryService {
   }
 
   private scheduleMirror(projectId: string) {
+    // Shutting down: write now, a timer could fire after the database has closed.
+    if (this.stopped) return this.writeMirror(projectId);
     clearTimeout(this.pendingMirror.get(projectId));
     this.pendingMirror.set(
       projectId,

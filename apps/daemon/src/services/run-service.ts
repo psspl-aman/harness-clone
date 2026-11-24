@@ -42,11 +42,12 @@ export class RunService {
     this.bus.subscribe((e) => {
       if (e.type === 'terminal.output') this.onOutput(e.payload.terminalId, e.payload.data);
       if (e.type === 'terminal.exit') this.onExit(e.payload.terminalId, e.payload.exitCode);
-      if (e.type === 'project.deleted') this.forget(e.payload.projectId);
+      if (e.type === 'project.deleted' || e.type === 'project.archived')
+        this.forget(e.payload.projectId);
     });
   }
 
-  /** A removed project's processes are stopped (its files are left alone). */
+  /** An archived or removed project's processes are stopped (its files are left alone). */
   private forget(projectId: string) {
     clearTimeout(this.settle.get(projectId));
     this.runs.delete(projectId);
@@ -73,7 +74,7 @@ export class RunService {
   }
 
   start(projectId: string): ProjectRunDto {
-    const p = this.project(projectId);
+    const p = this.runnable(projectId);
     const current = this.runs.get(projectId);
     if (current && (current.status === 'running' || current.status === 'starting'))
       throw conflict('The project is already running — stop or restart it');
@@ -133,7 +134,7 @@ export class RunService {
 
   /** One-shot build/test/install in a fresh terminal; errors are detected like any run output. */
   oneShot(projectId: string, kind: Exclude<RunKind, 'run'>): TerminalInfo {
-    const p = this.project(projectId);
+    const p = this.runnable(projectId);
     const command = p.commands[kind]?.trim();
     if (!command)
       throw badRequest(`No ${kind} command configured — set one under Overview → Commands`);
@@ -142,7 +143,7 @@ export class RunService {
 
   /** Interactive shell in the project folder. */
   shell(projectId: string, title?: string): TerminalInfo {
-    const p = this.project(projectId);
+    const p = this.runnable(projectId);
     const n = this.terminals.list({ projectId, kind: 'shell' }).length + 1;
     return this.terminals.create({
       kind: 'shell',
@@ -214,6 +215,13 @@ export class RunService {
   private project(id: string) {
     const p = this.db.select().from(projects).where(eq(projects.id, id)).get();
     if (!p) throw notFound('Project');
+    return p;
+  }
+
+  /** The project to start processes for; archived projects can't run anything. */
+  private runnable(id: string) {
+    const p = this.project(id);
+    if (p.archivedAt) throw conflict('This project is archived — restore it to run it');
     return p;
   }
 }

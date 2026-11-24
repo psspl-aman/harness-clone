@@ -30,6 +30,14 @@ export const AppSettingsSchema = z.object({
     mergeStrategy: z.enum(['merge', 'pull_request']),
     /** Approve the Planner's tasks automatically so building starts without waiting for you. */
     autoApprovePlans: z.boolean(),
+    /**
+     * Feature and bug tasks: run the tests with the task's source changes reverted. If they
+     * still pass, they don't test the change and go back to be strengthened. Costs one extra
+     * run of the test command per test round; no AI tokens.
+     */
+    checkTestsFailWithoutChange: z.boolean(),
+    /** After tests pass, the Reviewer checks the tests themselves. One extra agent run per round. */
+    reviewTests: z.boolean(),
   }),
   health: z.object({
     engineCheckIntervalSec: z.number().int().min(15).max(3600),
@@ -79,6 +87,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     requireHumanReviewBeforeMerge: false,
     mergeStrategy: 'merge',
     autoApprovePlans: false,
+    checkTestsFailWithoutChange: true,
+    reviewTests: true,
   },
   health: { engineCheckIntervalSec: 120 },
   quota: { probeInitialBackoffSec: 300, probeMaxBackoffSec: 3 * 3600, fallbackEnabled: false },

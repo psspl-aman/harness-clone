@@ -45,7 +45,9 @@ export interface FsServiceDeps {
   agentforgeHome: string;
   workspaceRoot: () => string;
   /** Returns the id of the project already registered at `path`, if any. */
-  projectAtPath: (path: string) => { id: string; localPath: string } | null;
+  projectAtPath: (
+    path: string,
+  ) => { id: string; localPath: string; archivedAt: number | null } | null;
   allProjectPaths: () => { id: string; localPath: string }[];
 }
 
@@ -139,7 +141,11 @@ export class FsService {
     const existing = this.deps.projectAtPath(path);
     if (existing) {
       result.existingProjectId = existing.id;
-      return fail('This folder is already an AgentForge project');
+      return fail(
+        existing.archivedAt
+          ? 'This folder is an archived AgentForge project — restore it from Archived projects on the dashboard'
+          : 'This folder is already an AgentForge project',
+      );
     }
     for (const p of this.deps.allProjectPaths()) {
       if (isWithin(p.localPath, path))

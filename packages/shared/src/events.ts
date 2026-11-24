@@ -26,6 +26,7 @@ export const EventPayloads = {
   'project.created': z.object({ project: ProjectSummarySchema }),
   'project.updated': z.object({ project: ProjectSummarySchema }),
   'project.deleted': z.object({ projectId: z.string() }),
+  'project.archived': z.object({ projectId: z.string() }),
   'project.onboarding': z.object({
     projectId: z.string(),
     status: z.enum(['pending', 'running', 'done', 'failed', 'skipped']),

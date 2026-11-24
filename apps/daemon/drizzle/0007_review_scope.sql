@@ -1,0 +1,1 @@
+ALTER TABLE `reviews` ADD `scope` text DEFAULT 'code' NOT NULL;

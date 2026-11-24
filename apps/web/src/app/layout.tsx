@@ -18,7 +18,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
       className={`${GeistSans.variable} ${GeistMono.variable}`}
     >
-      <body>
+      {/* Browser extensions (e.g. ColorZilla's `cz-shortcut-listen`, Grammarly) add attributes
+          to <body> before React hydrates. This only silences mismatches on <body>'s own
+          attributes, one level deep — children still report real hydration bugs. */}
+      <body suppressHydrationWarning>
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

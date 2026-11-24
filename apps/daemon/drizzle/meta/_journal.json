@@ -50,6 +50,13 @@
       "when": 1795071693105,
       "tag": "0006_pms_mapping_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795521315906,
+      "tag": "0007_review_scope",
+      "breakpoints": true
     }
   ]
 }

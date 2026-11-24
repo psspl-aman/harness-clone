@@ -9,8 +9,8 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  Archive,
   ScanSearch,
-  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -20,7 +20,8 @@ import { ChatPanel } from '@/components/chat/chat-panel';
 import { GithubIcon } from '@/components/icons';
 import { useLiveTopic } from '@/components/live-provider';
 import { PlanTab } from '@/components/plan/plan-tab';
-import { ProjectOverview, RemoveDialog } from '@/components/projects/overview';
+import { ArchiveDialog, ArchivedProjectNotice } from '@/components/projects/archive';
+import { ProjectOverview } from '@/components/projects/overview';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,7 +45,7 @@ export default function ProjectWorkspace() {
   const [tab, setTab] = useState<Tab>('plan');
   const [chatOpen, setChatOpen] = useState(true);
   const [openTask, setOpenTask] = useState<string | null>(null);
-  const [removeOpen, setRemoveOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [code, setCode] = useState<{ path: string | null; line: number | null }>({
     path: null,
     line: null,
@@ -104,6 +105,7 @@ export default function ProjectWorkspace() {
     );
   }
   const p = project.data;
+  if (p.archivedAt) return <ArchivedProjectNotice project={p} />;
   const analysing =
     p.onboardingStatus === 'running' || p.onboardingStatus === 'pending' || analyze.isPending;
   const openTaskInPlan = (taskId: string) => {
@@ -173,13 +175,8 @@ export default function ProjectWorkspace() {
           <Button variant="outline" size="sm" onClick={() => analyze.mutate()} disabled={analysing}>
             {analysing ? <Loader2 className="animate-spin" /> : <ScanSearch />} Re-analyse
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setRemoveOpen(true)}
-          >
-            <Trash2 /> Remove
+          <Button variant="ghost" size="sm" onClick={() => setArchiveOpen(true)}>
+            <Archive /> Archive
           </Button>
         </div>
       </header>
@@ -304,7 +301,7 @@ export default function ProjectWorkspace() {
           <BottomPanel projectId={id} onOpenTask={openTaskInPlan} onOpenFile={openFile} />
         </section>
       </div>
-      <RemoveDialog project={p} open={removeOpen} onOpenChange={setRemoveOpen} />
+      <ArchiveDialog project={p} open={archiveOpen} onOpenChange={setArchiveOpen} />
     </div>
   );
 }

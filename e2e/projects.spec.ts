@@ -56,7 +56,10 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   await expect(page.getByRole('heading', { name })).toBeVisible();
 });
 
-test('attach an existing folder, confirm commands, then remove it', async ({ page, request }) => {
+test('attach an existing folder, confirm commands, archive, restore and delete it', async ({
+  page,
+  request,
+}) => {
   const dir = join(WORK, `legacy-${uid()}`);
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(
@@ -106,13 +109,30 @@ test('attach an existing folder, confirm commands, then remove it', async ({ pag
   const id = page.url().split('/').pop()!;
   const projectName = (await (await request.get(`${E2E.daemonUrl}/api/projects/${id}`)).json())
     .name as string;
-  await page.getByRole('button', { name: 'Remove' }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('button', { name: 'Remove project' })).toBeDisabled();
-  await dialog.getByLabel('Confirm project name').fill(projectName);
-  await dialog.getByRole('button', { name: 'Remove project' }).click();
+  // Archive: off the dashboard, but kept and restorable.
+  await page.getByRole('button', { name: 'Archive' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Archive project' }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: projectName })).toBeHidden();
+  const archived = page.getByRole('region', { name: 'Archived projects' });
+  await archived.getByRole('button', { name: /Archived projects/ }).click();
+  const row = archived.getByRole('listitem').filter({ hasText: projectName });
+  await row.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByRole('heading', { name: projectName })).toBeVisible();
+
+  // Archive again, then delete for good from the archived list.
+  await page.goto(`/projects/${id}`);
+  await page.getByRole('button', { name: 'Archive' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Archive project' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await archived.getByRole('button', { name: /Archived projects/ }).click();
+  await row.getByRole('button', { name: `Delete ${projectName} permanently` }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+  await dialog.getByLabel('Confirm project name').fill(projectName);
+  await dialog.getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(archived).toBeHidden();
+  expect((await request.get(`${E2E.daemonUrl}/api/projects/${id}`)).status()).toBe(404);
   expect(existsSync(join(dir, 'src/main.js'))).toBe(true);
 });
 
