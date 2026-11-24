@@ -146,11 +146,13 @@ function modeInstructions(ctx: PlannerContext): string {
 }
 
 const RULES = `Planning rules:
-- Each task must be small enough for one agent session to implement and for a reviewer to check in one pass (roughly ≤ 300 changed lines). Split anything bigger.
+- Prefer the fewest tasks that deliver the requirement. A small or self-contained request should be a SINGLE task — do not split a simple ask into separate setup, implementation, test and documentation tasks. Decompose into several tasks only when the work genuinely spans independent pieces, has real ordering dependencies, or is too large for one agent session to implement and one reviewer to check in a pass (roughly ≤ 300 changed lines each). Split anything bigger.
+- Match the solution to the request. For a trivial ask (a single page, a small script, a one-off), choose the simplest implementation that satisfies it — a single static file with no framework, build step or dependencies when that is enough. Reserve frameworks and build tooling for requests that actually need them.
+- Size each task honestly with complexity: a trivial one-file change is xs or s; reserve l/xl for genuinely large work. This drives how much pipeline a task gets.
 - Order tasks so dependencies come first; express ordering with dependsOn. No cycles.
 - Acceptance criteria must be objectively verifiable (behaviour, tests passing, commands succeeding).
 - Include tests in the same task as the code they cover; add separate test tasks only for broad test suites.
-- For an empty repository, start with a scaffolding task that sets up the stack, tooling, a test runner and run/build/test scripts.
+- For an empty repository that needs a project structure, start with a scaffolding task that sets up the stack, tooling, a test runner and run/build/test scripts — but a trivial single-file requirement needs no scaffolding, framework or build step.
 - Respect the existing stack, conventions and commands. Never plan to commit secrets or .env files.
 - You may read files in the repository to ground the plan, but you must not modify anything.`;
 

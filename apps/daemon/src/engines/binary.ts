@@ -2,6 +2,7 @@ import { constants, existsSync, readdirSync, statSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { delimiter, isAbsolute, join } from 'node:path';
+import { pathExts } from '../lib/platform';
 
 const isExecutable = (p: string) =>
   access(p, constants.X_OK).then(
@@ -23,15 +24,33 @@ export function extraBinDirs(): string[] {
   ];
 }
 
-/** Locate an executable by name on PATH (+ extra dirs), or verify an absolute path. */
+/**
+ * Locate an executable by name on PATH (+ extra dirs), or verify an absolute path.
+ *
+ * On Windows a bare name like `claude` lives on disk as `claude.cmd` (the POSIX
+ * `claude` shim beside it cannot be launched directly), so for names without an
+ * executable extension we try each %PATHEXT% variant *first* and only then the
+ * bare file. On POSIX `exts` is empty and this behaves exactly as before.
+ */
 export async function which(nameOrPath: string, extra: string[] = []): Promise<string | null> {
-  if (isAbsolute(nameOrPath)) return (await isExecutable(nameOrPath)) ? nameOrPath : null;
+  const exts = pathExts();
+  const hasExt = (p: string) => exts.some((e) => p.toLowerCase().endsWith(e));
+  const probe = async (base: string): Promise<string | null> => {
+    if (exts.length && !hasExt(base)) {
+      for (const e of exts) {
+        const candidate = base + e;
+        if (await isExecutable(candidate)) return candidate;
+      }
+    }
+    return (await isExecutable(base)) ? base : null;
+  };
+  if (isAbsolute(nameOrPath)) return probe(nameOrPath);
   const dirs = [...extra, ...(process.env.PATH ?? '').split(delimiter), ...extraBinDirs()].filter(
     Boolean,
   );
   for (const dir of dirs) {
-    const candidate = join(dir, nameOrPath);
-    if (await isExecutable(candidate)) return candidate;
+    const found = await probe(join(dir, nameOrPath));
+    if (found) return found;
   }
   return null;
 }
@@ -56,14 +75,23 @@ export function newestExtensionBinary(
   prefix: string,
   relPath: string,
 ): string | null {
+  const exts = pathExts();
+  // On Windows the native image is e.g. `claude.exe`; `relPath` names it without
+  // an extension, so try each %PATHEXT% variant before the bare path.
+  const resolve = (base: string): string | null => {
+    if (exts.length && !exts.some((e) => base.toLowerCase().endsWith(e))) {
+      for (const e of exts) if (existsSync(base + e)) return base + e;
+    }
+    return existsSync(base) ? base : null;
+  };
   let best: { version: string; path: string } | null = null;
   for (const dir of extensionsDirs) {
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) {
       if (!name.startsWith(prefix)) continue;
       const version = name.slice(prefix.length).match(/^(\d+(?:\.\d+)+)/)?.[1];
-      const path = join(dir, name, relPath);
-      if (version && existsSync(path) && (!best || compareVersions(version, best.version) > 0))
+      const path = resolve(join(dir, name, relPath));
+      if (version && path && (!best || compareVersions(version, best.version) > 0))
         best = { version, path };
     }
   }

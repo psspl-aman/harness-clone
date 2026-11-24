@@ -36,15 +36,19 @@ The daemon listens on `http://127.0.0.1:4317` by default.
 
 ## Projects
 
-| Method | Path                             | Description                                                                                                                              |
-| ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/projects`                  | Dashboard summaries                                                                                                                      |
-| POST   | `/api/projects`                  | Creates a project; the body is a `CreateProjectInput` (shape below). Returns 201 with `ProjectDetail` and starts the onboarding analysis |
-| GET    | `/api/projects/:id`              | `ProjectDetail`, including the onboarding report and the per-role engine overrides                                                       |
-| PATCH  | `/api/projects/:id`              | `{ name?, description?, stackPreferences?, commands?, roleEngines? }`. Unknown keys are rejected                                         |
-| DELETE | `/api/projects/:id`              | Removes the project from AgentForge. Files on disk are untouched                                                                         |
-| POST   | `/api/projects/:id/analyze`      | Re-runs the onboarding analysis (202)                                                                                                    |
-| GET    | `/api/projects/:id/requirements` | Requirement messages for the project                                                                                                     |
+| Method | Path                                    | Description                                                                                                                                                   |
+| ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/projects`                         | Dashboard summaries                                                                                                                                           |
+| POST   | `/api/projects`                         | Creates a project; the body is a `CreateProjectInput` (shape below). Returns 201 with `ProjectDetail` and starts the onboarding analysis                      |
+| GET    | `/api/projects/:id`                     | `ProjectDetail`, including the onboarding report and the per-role engine overrides                                                                            |
+| PATCH  | `/api/projects/:id`                     | `{ name?, description?, stackPreferences?, commands?, roleEngines? }`. `commands.services` lists servers that run together (below). Unknown keys are rejected |
+| DELETE | `/api/projects/:id`                     | Removes the project from AgentForge. Files on disk are untouched                                                                                              |
+| POST   | `/api/projects/:id/analyze`             | Re-runs the onboarding analysis (202)                                                                                                                         |
+| POST   | `/api/projects/:id/commands/suggest`    | A read-only agent run that proposes the project's commands (202, `CommandSuggestionDto` with `status: running`). 409 while one runs                           |
+| GET    | `/api/projects/:id/commands/suggestion` | `{ suggestion }`: the latest `CommandSuggestionDto` (`commands`, `services`, `notes`, `status`, `error`) or null. Nothing is saved                            |
+| DELETE | `/api/projects/:id/commands/suggestion` | Cancel or dismiss the suggestion                                                                                                                              |
+| GET    | `/api/projects/:id/cost`                | `ProjectCostDto`: all-time `summary` (a `UsageSummaryDto`, `byDay` limited to 30 days), task counts, `perDoneTask` and a `forecast` for open tasks            |
+| GET    | `/api/projects/:id/requirements`        | Requirement messages for the project                                                                                                                          |
 
 `CreateProjectInput` takes one of two shapes:
 
@@ -160,22 +164,24 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 
 ## Run, terminals, errors and files
 
-| Method | Path                                            | Description                                                                                                        |
-| ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/api/projects/:id/run`                         | `ProjectRunDto`: `status` (stopped, starting, running, crashed), `command`, `terminalId`, `previewUrl`, `exitCode` |
-| POST   | `/api/projects/:id/run/start`                   | Start the project's run command in a PTY (409 if already running, 400 if no run command)                           |
-| POST   | `/api/projects/:id/run/stop`                    | Stop it (waits up to 5 s for the process to exit)                                                                  |
-| POST   | `/api/projects/:id/run/restart`                 | Stop, then start                                                                                                   |
-| POST   | `/api/projects/:id/run/:kind`                   | One-shot `build`, `test` or `install` in a new terminal; returns the `TerminalInfo`                                |
-| POST   | `/api/projects/:id/terminals`                   | New interactive shell in the project folder (`{ title? }`)                                                         |
-| GET    | `/api/projects/:id/errors?status=`              | Detected errors, newest first; `status` is a comma list of `open`, `fixing`, `resolved`, `ignored`                 |
-| POST   | `/api/errors/:id/fix`                           | Create a fix task for the error (409 while one is already fixing it)                                               |
-| POST   | `/api/errors/:id/ignore` · `resolve` · `reopen` | Change the error's status                                                                                          |
-| GET    | `/api/projects/:id/activity`                    | The latest 100 task status changes in the project                                                                  |
-| GET    | `/api/projects/:id/files`                       | `{ files, truncated }`: tracked and untracked, non-ignored files                                                   |
-| GET    | `/api/projects/:id/file?path=`                  | `FileContentDto` (first 1 MB). 403 for secret files, 400 for `.git/` or invalid paths                              |
+| Method | Path                                            | Description                                                                                                                                                                                                                                         |
+| ------ | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/projects/:id/run`                         | `ProjectRunDto`: overall `status` (stopped, starting, running, crashed), `command`, `terminalId`, `previewUrl`, `exitCode`, and `services` (one `ServiceRunDto` per process: `name`, `status`, `port`, `url`, `terminalId`, `error`)                |
+| POST   | `/api/projects/:id/run/start`                   | Start the run command, or every entry of `commands.services`, each in its own PTY. Declared ports are checked first; a busy one marks that service crashed with an `error` (409 if already running, 400 if nothing to run or every service clashes) |
+| POST   | `/api/projects/:id/run/stop`                    | Stop every service (waits up to 5 s for each to exit)                                                                                                                                                                                               |
+| POST   | `/api/projects/:id/run/restart`                 | Stop, then start                                                                                                                                                                                                                                    |
+| POST   | `/api/projects/:id/run/:kind`                   | One-shot `build`, `test` or `install` in a new terminal; returns the `TerminalInfo`                                                                                                                                                                 |
+| POST   | `/api/projects/:id/terminals`                   | New interactive shell in the project folder (`{ title? }`)                                                                                                                                                                                          |
+| GET    | `/api/projects/:id/errors?status=`              | Detected errors, newest first; `status` is a comma list of `open`, `fixing`, `resolved`, `ignored`                                                                                                                                                  |
+| POST   | `/api/errors/:id/fix`                           | Create a fix task for the error (409 while one is already fixing it)                                                                                                                                                                                |
+| POST   | `/api/errors/:id/ignore` · `resolve` · `reopen` | Change the error's status                                                                                                                                                                                                                           |
+| GET    | `/api/projects/:id/activity`                    | The latest 100 task status changes in the project                                                                                                                                                                                                   |
+| GET    | `/api/projects/:id/files`                       | `{ files, truncated }`: tracked and untracked, non-ignored files                                                                                                                                                                                    |
+| GET    | `/api/projects/:id/file?path=`                  | `FileContentDto` (first 1 MB). 403 for secret files, 400 for `.git/` or invalid paths                                                                                                                                                               |
 
-Live events: `project.run` (run state changes) and `error.updated` (an error was recorded or changed status).
+`commands.services` is a list of up to 8 `{ name, command, cwd?, port? }`. `cwd` is a folder inside the project; `port` must be unique, is checked before starting (and must not be 4317/4318), and is passed to the process as `PORT`. When the list is set, Run starts all of them instead of `commands.run`; the preview is the service named web/frontend/client/app, else the first one with a URL.
+
+Live events: `project.run` (run state changes), `error.updated` (an error was recorded or changed status) and `project.command_suggestion`.
 
 ## MCP servers and issue trackers
 
@@ -202,7 +208,21 @@ Live events: `project.run` (run state changes) and `error.updated` (an error was
 
 Tool-map argument templates: a string that is exactly `{{var}}` is replaced by the raw value (`{{var|number}}` converts to a number), and `{{var}}` inside a longer string is interpolated. Arguments that render empty are dropped. Variables: `project`, `owner` and `repo` (from `owner/repo`), `limit`, `filters.assignee`, `filters.sprint`, `filters.labels`, `filters.status`, plus `issueId`, `status` and `body` for write-back.
 
-`TaskDto.external` is set for imported tasks: `connectionId`, `provider`, `id`, `url`, `updatedAt` and `conflict`. Live events: `mcp.updated`, `mcp.removed`, `pms.connections_changed`, `pms.mapping` and `pms.mapping_removed`.
+## Spreadsheets (Google Sheets, Excel, CSV)
+
+| Method | Path                       | Description                                                                                                                                                                                                                                                                |
+| ------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/sheets`              | Every linked sheet (`SheetSourceDto[]`)                                                                                                                                                                                                                                    |
+| POST   | `/api/sheets/preview`      | `{ kind, location, sheet?, columns? }` → `SheetPreviewDto` (`headers`, detected `columns`, worksheet names, first 50 `rows`, `warnings`)                                                                                                                                   |
+| GET    | `/api/projects/:id/sheets` | The project's sheets                                                                                                                                                                                                                                                       |
+| POST   | `/api/projects/:id/sheets` | Link: `name`, `kind` (`google` = a sheet link or CSV URL, `file` = an absolute `.xlsx`/`.csv`/`.tsv` path), `sheet?`, `columns?`, `pollingIntervalSec` (null = manual), `autoStart`, `autoEnrich`. 201, then the first sync runs in the background (409 if already linked) |
+| PATCH  | `/api/sheets/:id`          | Update `name`, `sheet`, `columns`, `pollingIntervalSec`, `autoStart` or `autoEnrich`                                                                                                                                                                                       |
+| DELETE | `/api/sheets/:id`          | Unlink (imported tasks stay)                                                                                                                                                                                                                                               |
+| POST   | `/api/sheets/:id/sync`     | Sync now → `SheetSyncResultDto` (`total`, `created`, `updated`, `unchanged`, `skipped`, `conflicts`, `started`, `errors`)                                                                                                                                                  |
+
+Columns are matched by header name (Title/Task/Name, Description/Details, Priority/Prio, ID/Key, Size/Complexity/Points, Type, Status, Acceptance criteria) unless `columns` names them. Priority accepts words (Urgent, High, Medium, Low…), P0–P9 and numbers (1 = most important); rows are imported highest priority first. Rows whose status is done/closed/cancelled/skip are not imported. Google Sheets must be shared as "Anyone with the link" or published to the web. Sheet tasks are resolved with `/api/tasks/:id/pms-conflict` like tracker tickets. Live events: `sheet.source` and `sheet.removed`.
+
+`TaskDto.external` is set for imported tasks: `connectionId`, `provider` (`sheet` for spreadsheet rows), `id`, `url`, `updatedAt` and `conflict`. Live events: `mcp.updated`, `mcp.removed`, `pms.connections_changed`, `pms.mapping` and `pms.mapping_removed`.
 
 ## Memory and docs
 

@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { CancelledActions } from './cancelled-actions';
 import { PriorityLabel, TaskStatusBadge, TaskTypeIcon } from './badges';
+import { RoutingChip } from './routing-badge';
 import { TicketChip } from './external-ticket';
 import { EnginesChip, ErrorsChip } from './task-chips';
 import { TaskProgress } from './pipeline-bits';
@@ -102,6 +103,7 @@ function Row({
           <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-[11px]">
             <PriorityLabel priority={task.priority} />
             <span>· {task.complexity.toUpperCase()}</span>
+            <RoutingChip task={task} className="before:content-['·_']" />
             {task.external && <TicketChip task={task} />}
             <EnginesChip task={task} />
             <ErrorsChip task={task} />
@@ -239,6 +241,7 @@ export function TaskBoard({
                     <span className="font-mono">{t.key}</span>
                     <TicketChip task={t} />
                     <ErrorsChip task={t} />
+                    <RoutingChip task={t} />
                     <span className="ml-auto">
                       <PriorityLabel priority={t.priority} />
                     </span>

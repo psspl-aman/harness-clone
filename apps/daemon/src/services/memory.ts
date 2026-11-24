@@ -253,8 +253,8 @@ export class MemoryService {
   }
 
   private scheduleMirror(projectId: string) {
-    // Shutting down: write now, a timer could fire after the database has closed.
-    if (this.stopped) return this.writeMirror(projectId);
+    // Late changes during shutdown (e.g. a finishing analysis) would fire after the DB closes.
+    if (this.stopped) return;
     clearTimeout(this.pendingMirror.get(projectId));
     this.pendingMirror.set(
       projectId,

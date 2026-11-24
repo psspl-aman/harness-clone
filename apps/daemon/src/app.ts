@@ -18,6 +18,8 @@ import { createRedactor } from './safety/redact';
 import { DocsService } from './services/docs';
 import { registerMemoryDocsRoutes } from './routes/memory-docs';
 import { PmsService } from './services/pms/pms-service';
+import { SheetService } from './services/sheets/sheet-service';
+import { CommandAdvisor } from './services/onboarding/command-advisor';
 import { UsageService } from './services/usage';
 import { Orchestrator } from './services/orchestrator/orchestrator';
 import { PlannerService } from './services/planner/service';
@@ -55,6 +57,7 @@ export interface BuildOptions {
   engines?: { autoRefresh?: boolean; extraPath?: string[] };
   orchestrator?: { autoStart?: boolean };
   pms?: { autoPoll?: boolean };
+  sheets?: { autoPoll?: boolean };
 }
 
 export interface BuiltApp {
@@ -214,6 +217,23 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     autoPoll: opts.pms?.autoPoll ?? process.env.NODE_ENV !== 'test',
   });
   pms.attach();
+  const sheets = new SheetService({
+    db: dbHandle.db,
+    bus,
+    tasks: taskService,
+    planner,
+    log: app.log,
+    autoPoll: opts.sheets?.autoPoll ?? process.env.NODE_ENV !== 'test',
+  });
+  sheets.attach();
+  const commandAdvisor = new CommandAdvisor({
+    db: dbHandle.db,
+    bus,
+    engines: engineRegistry,
+    runs,
+    settings,
+    log: app.log,
+  });
   // Work interrupted by a restart can't be resumed mid-stream: mark it failed.
   runs.failOrphans();
   planner.failOrphans();
@@ -225,6 +245,14 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
       memory.changed(e.payload.projectId);
       // It passed review and tests, so its checklist is complete too.
       taskService.completeSubtasks(e.payload.taskId, 'all');
+      // A project built from scratch had nothing to detect at first: once code lands, look again
+      // so its install/run commands fill in (only empty ones are filled).
+      try {
+        const c = projects.get(e.payload.projectId).commands;
+        if (!c.run && !c.services?.length) void projects.runOnboarding(e.payload.projectId);
+      } catch {
+        /* project removed */
+      }
     }
   });
   // The wizard's initial requirement is planned as soon as onboarding has analysed the folder.
@@ -265,6 +293,8 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     safety,
     mcp,
     pms,
+    sheets,
+    commandAdvisor,
     memory,
     workspaceRoot,
     startedAt: Date.now(),
@@ -305,6 +335,8 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   });
 
   app.addHook('onClose', async () => {
+    sheets.stop();
+    commandAdvisor.stop();
     await pms.stop();
     await orchestrator.stop();
     await mcp.stop();

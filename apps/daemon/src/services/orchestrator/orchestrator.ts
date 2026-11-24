@@ -3,6 +3,9 @@ import {
   DocOutputSchema,
   RequestChangesInputSchema,
   ReviewOutputSchema,
+  resolveRoleModel,
+  resolveRouting,
+  routingRuleFor,
   SteerInputSchema,
   TestOutputSchema,
   Topics,
@@ -17,6 +20,7 @@ import {
   type ReviewDto,
   type ReviewOutput,
   type ReviewScope,
+  type RoutingRule,
   type RunSummaryDto,
   type TaskDiffDto,
   type TaskReportDto,
@@ -506,7 +510,36 @@ export class Orchestrator {
     const role = this.roleFor('IN_DEVELOPMENT', task);
     const out = await this.runRole(task, driver, role, prompt, path, 'full', null, true);
     if (!out) return;
+    // LITE routing: skip Review/Test/Document/checks and go straight to merge.
+    if (this.isLite(task)) return this.mergeLite(task.id);
     this.advance(task.id, 'IN_REVIEW', 'Implementation committed');
+  }
+
+  /**
+   * LITE pipeline (complexity routing): the implementation is committed; merge it
+   * without Review/Test/Document. The merge is still gated on "require my review"
+   * when that is on, so a human can approve or request changes before it lands.
+   */
+  private async mergeLite(taskId: string): Promise<void> {
+    this.patchState(taskId, { lastError: null, quotaProbe: 0 }, false);
+    const task = this.row(taskId);
+    if (this.projectConfig(task.projectId).requireHumanReview) {
+      this.patchState(taskId, { awaitingMergeReview: true });
+      this.d.tasks.transition(
+        taskId,
+        'NEEDS_HUMAN',
+        'Ready to merge — review the changes and approve the merge',
+        'orchestrator',
+      );
+      this.notify(
+        task,
+        'info',
+        `${task.key} is ready for your review`,
+        'Approve the merge or request changes.',
+      );
+      return;
+    }
+    await this.finalize(taskId);
   }
 
   private async review(task: TaskRow, driver: Driver) {
@@ -1331,6 +1364,7 @@ export class Orchestrator {
             prompt: nextPrompt,
             cwd,
             permission,
+            model: this.modelFor(task, role, engineId),
             resumeSessionId: resume,
             timeoutMs: STEP_TIMEOUT_MS,
             signal: runController.signal,
@@ -2035,7 +2069,59 @@ export class Orchestrator {
       .from(projectSettings)
       .where(eq(projectSettings.projectId, task.projectId))
       .get();
-    return task.roleEngines[role] ?? ps?.r[role] ?? this.d.settings.get().defaultEngines[role];
+    // Task override → project override → global default; an engine that isn't installed
+    // (or is disabled) is skipped so a stale choice doesn't fail the step.
+    const chain = [task.roleEngines[role], ps?.r[role], this.d.settings.get().defaultEngines[role]];
+    const set = chain.filter((x): x is string => !!x);
+    const usable = set.find((id) => {
+      const e = this.safeEngine(id);
+      return !!e && e.installed && e.enabled;
+    });
+    return usable ?? set[0]!;
+  }
+
+  /**
+   * The model for a role on a task:
+   *   task.roleModels[role] → project.roleModels[role] → routing-profile model → null.
+   * A null result lets the engine fall back to its own default model (then the CLI default).
+   * The routing-profile model is only used when the chosen engine actually offers it, so a
+   * profile tuned for one engine never hands an unknown model id to another.
+   */
+  private modelFor(task: TaskRow, role: AgentRole, engineId: string): string | null {
+    const ps = this.d.db
+      .select({ m: projectSettings.roleModels })
+      .from(projectSettings)
+      .where(eq(projectSettings.projectId, task.projectId))
+      .get();
+    const explicit = resolveRoleModel(task.roleModels, ps?.m, role);
+    if (explicit) return explicit;
+    const rule = this.routingRule(task);
+    if (rule?.model && this.engineOffersModel(engineId, rule.model)) return rule.model;
+    return null;
+  }
+
+  private engineOffersModel(engineId: string, model: string): boolean {
+    return this.safeEngine(engineId)?.models.some((m) => m.id === model) ?? false;
+  }
+
+  /** The complexity-routing rule for a task, or null when routing is off (full pipeline). */
+  private routingRule(
+    task: Pick<TaskRow, 'projectId' | 'complexity' | 'pipelineState'>,
+  ): RoutingRule | null {
+    // Conflict-resolution tasks always run the full pipeline (merge safety).
+    if (task.pipelineState.conflictOf) return null;
+    const override = this.d.db
+      .select({ r: projectSettings.routing })
+      .from(projectSettings)
+      .where(eq(projectSettings.projectId, task.projectId))
+      .get()?.r;
+    const routing = resolveRouting(this.d.settings.get().routing, override);
+    return routingRuleFor(routing, task.complexity);
+  }
+
+  /** Whether this task should take the LITE pipeline (Develop → Merge, skipping review/test/docs). */
+  private isLite(task: Pick<TaskRow, 'projectId' | 'complexity' | 'pipelineState'>): boolean {
+    return this.routingRule(task)?.pipeline === 'lite';
   }
 
   private engineName(engineId: string): string {

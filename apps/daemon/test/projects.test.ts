@@ -4,7 +4,14 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { memoryEntries } from '../src/db/schema';
-import { createTestApp, GIT_ID, tempDir, writeTree, type TestApp } from './helpers';
+import {
+  createTestApp,
+  GIT_ID,
+  installFakeEngine,
+  tempDir,
+  writeTree,
+  type TestApp,
+} from './helpers';
 
 let t: TestApp;
 let root: string;
@@ -14,7 +21,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await t.cleanup();
-  rmSync(root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 const post = (payload: object) => t.app.inject({ method: 'POST', url: '/api/projects', payload });
@@ -24,6 +31,7 @@ const settle = (id: string) => t.ctx.projects.runOnboarding(id);
 
 describe('create from scratch (local)', () => {
   it('creates the folder, initialises git with a safe .gitignore and stores the requirement', async () => {
+    await installFakeEngine(t, 'codex');
     const events: string[] = [];
     t.ctx.bus.subscribe((e) => events.push(e.type));
     const res = await post({
@@ -196,6 +204,7 @@ describe('attach existing (local)', () => {
   });
 
   it('stores per-project pipeline overrides and fallback engines', async () => {
+    await installFakeEngine(t, 'codex');
     const p = (
       await post({
         mode: 'scratch',

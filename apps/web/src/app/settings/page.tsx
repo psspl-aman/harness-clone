@@ -14,12 +14,14 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
   EngineField,
+  ModelField,
   NumberField,
   SelectField,
   SwitchField,
   TextField,
 } from '@/components/settings/fields';
 import { PricingEditor } from '@/components/settings/pricing';
+import { RoutingEditor } from '@/components/settings/routing-editor';
 import { PageHeader } from '@/components/shell/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,10 +61,14 @@ export default function SettingsPage() {
 
   const patch = useMemo(() => {
     if (!edits || !settings.data) return undefined;
-    const d = diffObjects(settings.data, edits) as DeepPartial<AppSettings> | undefined;
-    // The price table is saved as a whole (so removals stick).
+    let d = diffObjects(settings.data, edits) as DeepPartial<AppSettings> | undefined;
+    // These are saved as a whole so removed keys / toggled profiles stick (a deep merge would keep them).
     if (JSON.stringify(edits.pricing) !== JSON.stringify(settings.data.pricing))
-      return { ...d, pricing: edits.pricing };
+      d = { ...d, pricing: edits.pricing };
+    if (JSON.stringify(edits.roleModels) !== JSON.stringify(settings.data.roleModels))
+      d = { ...d, roleModels: edits.roleModels };
+    if (JSON.stringify(edits.routing) !== JSON.stringify(settings.data.routing))
+      d = { ...d, routing: edits.routing };
     return d;
   }, [edits, settings.data]);
   const dirty = patch !== undefined;
@@ -91,7 +97,11 @@ export default function SettingsPage() {
       return {
         ...base,
         [key]:
-          typeof value === 'object' && value !== null && key !== 'pricing'
+          typeof value === 'object' &&
+          value !== null &&
+          key !== 'pricing' &&
+          key !== 'roleModels' &&
+          key !== 'routing'
             ? { ...(base[key] as object), ...value }
             : value,
       };
@@ -113,20 +123,42 @@ export default function SettingsPage() {
       ) : (
         <div className="space-y-6">
           <Section
-            title="Default engines"
-            description="Which agent engine runs each role unless a project or task overrides it."
+            title="Default engines & models"
+            description="Which engine and model run each role unless a project or task overrides it. Leave the model on “Engine default” to use the engine’s own default."
           >
             {AGENT_ROLES.map((role) => (
-              <EngineField
-                key={role}
-                id={`engine-${role}`}
-                label={ROLE_LABELS[role]}
-                value={draft.defaultEngines[role]}
-                onChange={(v) =>
-                  set('defaultEngines', { [role]: v as AppSettings['defaultEngines'][typeof role] })
-                }
-              />
+              <div key={role} className="space-y-1 py-1 first:pt-0 last:pb-0">
+                <EngineField
+                  id={`engine-${role}`}
+                  label={ROLE_LABELS[role]}
+                  value={draft.defaultEngines[role]}
+                  onChange={(v) =>
+                    set('defaultEngines', {
+                      [role]: v as AppSettings['defaultEngines'][typeof role],
+                    })
+                  }
+                />
+                <ModelField
+                  id={`model-${role}`}
+                  label={`${ROLE_LABELS[role]} model`}
+                  engineId={draft.defaultEngines[role]}
+                  value={draft.roleModels[role]}
+                  onChange={(v) => {
+                    const next = { ...draft.roleModels };
+                    if (v === undefined) delete next[role];
+                    else next[role] = v;
+                    set('roleModels', next);
+                  }}
+                />
+              </div>
             ))}
+          </Section>
+
+          <Section
+            title="Complexity routing"
+            description="Send simple tasks through a lighter pipeline and a faster model, and hard tasks through the full pipeline with a stronger one. Projects can override this."
+          >
+            <RoutingEditor value={draft.routing} onChange={(r) => set('routing', r)} />
           </Section>
 
           <Section

@@ -10,7 +10,9 @@ const PIPELINE: Record<TaskStatus, readonly TaskStatus[]> = {
   QUEUED: ['IN_DEVELOPMENT', 'BLOCKED', 'APPROVED'],
   // DONE: work merged through a follow-up conflict-resolution task.
   BLOCKED: ['QUEUED', 'APPROVED', 'DONE', 'CANCELLED'],
-  IN_DEVELOPMENT: ['IN_REVIEW'],
+  // DONE / BLOCKED: the LITE pipeline (complexity routing) merges straight after Develop,
+  // skipping Review/Test/Document, so it can finish or hit a merge conflict from here.
+  IN_DEVELOPMENT: ['IN_REVIEW', 'DONE', 'BLOCKED'],
   IN_REVIEW: ['IN_TESTING', 'FIXING'],
   IN_TESTING: ['DOCUMENTING', 'FIXING'],
   FIXING: ['IN_REVIEW', 'IN_TESTING'],

@@ -103,6 +103,7 @@ export class ProjectService {
       onboardedAt: row.onboardedAt,
       onboardingReport: row.onboardingReport ?? null,
       roleEngines: settings?.roleEngines ?? {},
+      roleModels: settings?.roleModels ?? {},
       pipeline: {
         maxConcurrentTasks: settings?.maxConcurrentTasks ?? null,
         maxFixLoops: settings?.maxFixLoops ?? null,
@@ -111,6 +112,7 @@ export class ProjectService {
         fallbackEnabled: settings?.fallbackEnabled ?? false,
         engineFallback: settings?.engineFallback ?? {},
         paused: settings?.pipelinePaused ?? false,
+        routing: settings?.routing ?? null,
       },
     };
   }
@@ -279,6 +281,15 @@ export class ProjectService {
           const v = input.commands[k];
           if (v !== undefined) next[k] = v?.trim() ? v.trim() : null;
         }
+        if (input.commands.services !== undefined)
+          next.services = input.commands.services?.length
+            ? input.commands.services.map((s) => ({
+                name: s.name,
+                command: s.command,
+                cwd: s.cwd?.replace(/^\.\/?/, '').replace(/\/+$/, '') || null,
+                port: s.port ?? null,
+              }))
+            : null;
         patch.commands = next;
       }
       if (Object.keys(patch).length)
@@ -286,6 +297,12 @@ export class ProjectService {
       if (input.roleEngines !== undefined) {
         tx.update(projectSettings)
           .set({ roleEngines: input.roleEngines })
+          .where(eq(projectSettings.projectId, id))
+          .run();
+      }
+      if (input.roleModels !== undefined) {
+        tx.update(projectSettings)
+          .set({ roleModels: input.roleModels })
           .where(eq(projectSettings.projectId, id))
           .run();
       }

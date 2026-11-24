@@ -4,11 +4,12 @@ import { z } from 'zod';
 import { AUTH_STATUSES, TASK_STATUSES } from './enums';
 import { AppSettingsSchema } from './settings';
 import { ProjectSummarySchema } from './entities';
-import type { GithubStatus } from './projects';
+import type { CommandSuggestionDto, GithubStatus } from './projects';
 import type { AgentEvent, AgentRunResultDto, EngineInfo, TerminalInfo } from './engines';
 import type { ChatMessageDto, PlanDto, PlannerState, TaskDto } from './planning';
 import type { PipelineStatusDto } from './pipeline';
 import type { ErrorDto, ProjectRunDto } from './runtime';
+import type { SheetSourceDto } from './sheets';
 
 /**
  * Every event that flows over the EventBus/WebSocket. Add new events here;
@@ -50,6 +51,9 @@ export const EventPayloads = {
   'pms.mapping': z.object({ mapping: z.custom<PmsMappingDto>() }),
   'pms.mapping_removed': z.object({ projectId: z.string(), mappingId: z.string() }),
   'engine.removed': z.object({ engineId: z.string() }),
+  'sheet.source': z.object({ source: z.custom<SheetSourceDto>() }),
+  'sheet.removed': z.object({ projectId: z.string(), sourceId: z.string() }),
+  'project.command_suggestion': z.object({ suggestion: z.custom<CommandSuggestionDto>() }),
   /** High-volume, transient: not kept in the replay buffer. */
   'run.event': z.object({ runId: z.string(), event: z.custom<AgentEvent>() }),
   'run.finished': z.object({ runId: z.string(), result: z.custom<AgentRunResultDto>() }),

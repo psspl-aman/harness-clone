@@ -19,6 +19,8 @@ import type { RunService } from './services/run-service';
 import type { FileService } from './services/files';
 import type { McpService } from './services/mcp/mcp-service';
 import type { PmsService } from './services/pms/pms-service';
+import type { SheetService } from './services/sheets/sheet-service';
+import type { CommandAdvisor } from './services/onboarding/command-advisor';
 import type { MemoryService } from './services/memory';
 import type { DocsService } from './services/docs';
 import type { SafetyService } from './services/safety';
@@ -46,6 +48,8 @@ export interface AppContext {
   files: FileService;
   mcp: McpService;
   pms: PmsService;
+  sheets: SheetService;
+  commandAdvisor: CommandAdvisor;
   memory: MemoryService;
   docs: DocsService;
   safety: SafetyService;
