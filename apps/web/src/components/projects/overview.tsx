@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectDetail, RoleEngines } from '@agentforge/shared';
+import type { ProjectDetail, RoleEngines, RoleModels } from '@agentforge/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -103,21 +103,26 @@ function OnboardingBanner({ project, onRetry }: { project: ProjectDetail; onRetr
 function EnginesCard({ project }: { project: ProjectDetail }) {
   const queryClient = useQueryClient();
   const [edits, setEdits] = useState<Partial<RoleEngines> | null>(null);
+  const [modelEdits, setModelEdits] = useState<RoleModels | null>(null);
   const value = edits ?? project.roleEngines;
-  const dirty = edits !== null && JSON.stringify(edits) !== JSON.stringify(project.roleEngines);
+  const models = modelEdits ?? project.roleModels;
+  const dirty =
+    (edits !== null && JSON.stringify(edits) !== JSON.stringify(project.roleEngines)) ||
+    (modelEdits !== null && JSON.stringify(modelEdits) !== JSON.stringify(project.roleModels));
   const save = useMutation({
-    mutationFn: () => api.projects.update(project.id, { roleEngines: value }),
+    mutationFn: () => api.projects.update(project.id, { roleEngines: value, roleModels: models }),
     onSuccess: (p) => {
       queryClient.setQueryData(qk.project(p.id), p);
       setEdits(null);
+      setModelEdits(null);
       toast.success('Agent engines saved');
     },
     onError: (e) => toast.error('Could not save', { description: errMsg(e) }),
   });
   return (
     <Section
-      title="Agent engines"
-      description="Per-role overrides for this project."
+      title="Agent engines & models"
+      description="Per-role engine and model overrides for this project."
       action={
         dirty && (
           <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
@@ -126,7 +131,12 @@ function EnginesCard({ project }: { project: ProjectDetail }) {
         )
       }
     >
-      <EngineRoles value={value} onChange={setEdits} />
+      <EngineRoles
+        value={value}
+        onChange={setEdits}
+        models={models}
+        onModelsChange={setModelEdits}
+      />
     </Section>
   );
 }

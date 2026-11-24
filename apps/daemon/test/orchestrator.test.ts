@@ -948,3 +948,79 @@ describe('pipeline: restart recovery', () => {
     ]);
   });
 });
+
+describe('pipeline: complexity routing & model selection', () => {
+  const liteRouting = {
+    enabled: true,
+    profiles: {
+      xs: { pipeline: 'lite', model: 'haiku' },
+      s: { pipeline: 'lite', model: 'haiku' },
+      m: { pipeline: 'full', model: null },
+      l: { pipeline: 'full', model: 'opus' },
+      xl: { pipeline: 'full', model: null },
+    },
+  };
+
+  it('routes small tasks through the LITE pipeline (Develop → Merge) with the routed model', async () => {
+    script(developer('SA-1', { 'src/a.txt': 'lite\n' }));
+    await setProject({ pipeline: { routing: liteRouting } });
+    const { planId, tasks } = plan(pt('T1', 'Small feature')); // pt() uses complexity "s" → lite
+    const id = tasks[0]!.id;
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+
+    expect(task(id).status).toBe('DONE');
+    // Review, Test and Document are skipped entirely.
+    expect(statuses(id)).toEqual(['DRAFT', 'APPROVED', 'QUEUED', 'IN_DEVELOPMENT', 'DONE']);
+    const runs = t.ctx.db.select().from(agentRuns).where(eq(agentRuns.taskId, id)).all();
+    expect(runs.map((r) => r.role)).toEqual(['developer']);
+    expect(t.ctx.db.select().from(documents).all()).toHaveLength(0);
+    // The change still merged into the working branch (ignore CRLF on Windows checkouts).
+    expect(readFileSync(join(repo, 'src/a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe('lite\n');
+    // The routing model was handed to the engine (Claude offers "haiku").
+    const dev = agent.calls().find((c) => c.stdin.includes('# Role: Developer'))!;
+    expect(dev.args).toEqual(expect.arrayContaining(['--model', 'haiku']));
+  });
+
+  it('runs the full pipeline for a complexity routed to "full", even with routing enabled', async () => {
+    script(developer('SA-1', { 'src/a.txt': 'full\n' }), reviewer(), tester(), documenter());
+    // Route "s" tasks to the full pipeline while routing is on.
+    await setProject({
+      pipeline: {
+        routing: {
+          ...liteRouting,
+          profiles: { ...liteRouting.profiles, s: { pipeline: 'full', model: null } },
+        },
+      },
+    });
+    const { planId, tasks } = plan(pt('T1', 'Feature'));
+    const id = tasks[0]!.id;
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+
+    expect(task(id).status).toBe('DONE');
+    const roles = t.ctx.db
+      .select()
+      .from(agentRuns)
+      .where(eq(agentRuns.taskId, id))
+      .all()
+      .map((r) => r.role);
+    expect(roles).toEqual(['developer', 'reviewer', 'tester', 'documenter']);
+  });
+
+  it('threads a per-task role model through to the engine, leaving other roles on the default', async () => {
+    script(developer('SA-1', { 'src/a.txt': 'x\n' }), reviewer(), tester(), documenter());
+    const { planId, tasks } = plan(pt('T1', 'Feature'));
+    const id = tasks[0]!.id;
+    t.ctx.tasks.update(id, { roleModels: { developer: 'sonnet' } });
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+
+    expect(task(id).status).toBe('DONE');
+    const dev = agent.calls().find((c) => c.stdin.includes('# Role: Developer'))!;
+    expect(dev.args).toEqual(expect.arrayContaining(['--model', 'sonnet']));
+    // A role without an override uses the engine default — no explicit --model flag.
+    const rev = agent.calls().find((c) => c.stdin.includes('# Role: Reviewer'))!;
+    expect(rev.args).not.toContain('--model');
+  });
+});
