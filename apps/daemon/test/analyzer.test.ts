@@ -11,7 +11,7 @@ const fixture = (files: Record<string, string>) => {
   writeTree(d, files);
   return d;
 };
-afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true })));
+afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })));
 
 describe('onboarding analyzer', () => {
   it('detects a pnpm Next.js monorepo with commands, conventions and env files', async () => {

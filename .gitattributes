@@ -1,0 +1,16 @@
+# Normalize line endings: store text with LF in git, check out native on each OS.
+# Prevents Windows CRLF churn from showing files as modified across platforms.
+* text=auto eol=lf
+
+# Keep Windows batch/launcher scripts as CRLF (some tools require it).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binaries git should never touch.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.db binary

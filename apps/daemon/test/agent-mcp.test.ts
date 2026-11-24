@@ -48,7 +48,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await t.cleanup();
-  rmSync(root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 async function connect(role: string) {
