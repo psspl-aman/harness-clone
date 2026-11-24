@@ -8,6 +8,7 @@ import { terminalSessions } from '../db/schema';
 import type { EventBus } from '../events/bus';
 import { AppError, notFound } from '../http/errors';
 import { newId } from '../lib/id';
+import { ptyCommand } from '../lib/platform';
 
 const SCROLLBACK_BYTES = 256 * 1024;
 const FLUSH_MS = 16;
@@ -68,8 +69,11 @@ export class TerminalService {
       createdAt: Date.now(),
     };
     let proc: pty.IPty;
+    // On Windows a `.cmd`/`.bat` or extensionless npm shim can't be launched
+    // directly (error 193); route it through cmd.exe. No-op on POSIX.
+    const spawn = ptyCommand(input.command, input.args);
     try {
-      proc = pty.spawn(input.command, input.args, {
+      proc = pty.spawn(spawn.file, spawn.args, {
         name: 'xterm-256color',
         cols: input.cols ?? 100,
         rows: input.rows ?? 28,
