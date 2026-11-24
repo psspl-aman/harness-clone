@@ -20,13 +20,12 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
   // Location: use the folder picker to choose the parent.
+  await page.getByPlaceholder('/home/you/code').fill(parent);
   await page.getByRole('button', { name: 'Browse' }).click();
   const picker = page.getByRole('dialog');
-  await picker.getByRole('button', { name: 'Home folder' }).click();
-  await page.getByPlaceholder('/home/you/code').fill(parent); // picker re-opens at typed path
   await picker.getByRole('button', { name: 'Select this folder' }).click();
   await expect(picker).toBeHidden();
-  await page.getByPlaceholder('/home/you/code').fill(parent);
+  await expect(page.getByPlaceholder('/home/you/code')).toHaveValue(parent);
   await expect(page.getByText('Folder will be created')).toBeVisible();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
