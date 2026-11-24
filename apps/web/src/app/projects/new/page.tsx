@@ -82,7 +82,10 @@ const toFolder = (name: string) =>
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
-const basename = (p: string) => p.replace(/\/+$/, '').split('/').pop() ?? '';
+// Last path segment, handling both POSIX (/) and Windows (\) separators.
+const basename = (p: string) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? '';
+// An absolute path on either platform: POSIX "/…" or Windows "C:\…" / "C:/…".
+const isAbsPath = (p: string) => /^(\/|[A-Za-z]:[\\/])/.test(p);
 
 function Field({
   label,
@@ -233,7 +236,7 @@ function Wizard({ mode }: { mode: Mode }) {
   const checkPath =
     mode === 'scratch'
       ? parentDir && effectiveFolder
-        ? `${parentDir.replace(/\/+$/, '')}/${effectiveFolder}`
+        ? `${parentDir.replace(/[\\/]+$/, '')}/${effectiveFolder}`
         : ''
       : existingPath.trim();
   const usesLocal =
@@ -242,7 +245,7 @@ function Wizard({ mode }: { mode: Mode }) {
   const check = useQuery({
     queryKey: qk.fsCheck(debouncedPath, mode),
     queryFn: () => api.fs.check(debouncedPath, mode),
-    enabled: usesLocal && debouncedPath.startsWith('/'),
+    enabled: usesLocal && isAbsPath(debouncedPath),
     retry: false,
   });
   const checkLoading = usesLocal && (checkPath !== debouncedPath || check.isFetching);

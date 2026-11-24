@@ -69,7 +69,15 @@ export function DirectoryPicker({
       toast.error(err instanceof ApiClientError ? err.message : 'Could not create folder'),
   });
 
-  const segments = data ? data.path.split('/').filter(Boolean) : [];
+  // Breadcrumbs for both POSIX (/home/you) and Windows (C:\Users\you) paths.
+  const rawPath = data?.path ?? '';
+  const win = /^[A-Za-z]:[\\/]/.test(rawPath);
+  const sep = win ? '\\' : '/';
+  const segments = rawPath ? rawPath.split(/[\\/]/).filter(Boolean) : [];
+  const crumbTarget = (i: number) => {
+    const parts = segments.slice(0, i + 1);
+    return win ? (i === 0 ? parts[0] + sep : parts.join(sep)) : `/${parts.join('/')}`;
+  };
   // Callback ref in state: the dialog content mounts through a portal after the
   // first render, so a plain ref would still be null when the path loads.
   const [crumbsEl, setCrumbsEl] = useState<HTMLElement | null>(null);
@@ -113,18 +121,17 @@ export function DirectoryPicker({
             ref={setCrumbsEl}
             className="bg-muted/60 flex min-w-0 flex-1 items-center overflow-x-auto rounded-md px-2 py-1.5 font-mono text-xs whitespace-nowrap"
           >
-            <button className="hover:text-primary shrink-0" onClick={() => setPath('/')}>
-              /
-            </button>
+            {!win && (
+              <button className="hover:text-primary shrink-0" onClick={() => setPath('/')}>
+                /
+              </button>
+            )}
             {segments.map((seg, i) => (
               <span key={i} className="flex shrink-0 items-center">
-                <button
-                  className="hover:text-primary"
-                  onClick={() => setPath(`/${segments.slice(0, i + 1).join('/')}`)}
-                >
+                {i > 0 && <span className="text-muted-foreground px-0.5">{sep}</span>}
+                <button className="hover:text-primary" onClick={() => setPath(crumbTarget(i))}>
                   {seg}
                 </button>
-                {i < segments.length - 1 && <span className="text-muted-foreground px-0.5">/</span>}
               </span>
             ))}
           </nav>

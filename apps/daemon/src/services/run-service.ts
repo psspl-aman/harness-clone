@@ -4,6 +4,7 @@ import type { Db } from '../db/client';
 import { projects } from '../db/schema';
 import type { EventBus } from '../events/bus';
 import { badRequest, conflict, notFound } from '../http/errors';
+import { interactiveShell, shellCommand } from '../lib/platform';
 import { stripAnsi } from './errors/matchers';
 import type { ErrorService } from './errors/error-service';
 import type { ProjectService } from './projects';
@@ -144,12 +145,13 @@ export class RunService {
   shell(projectId: string, title?: string): TerminalInfo {
     const p = this.project(projectId);
     const n = this.terminals.list({ projectId, kind: 'shell' }).length + 1;
+    const sh = interactiveShell();
     return this.terminals.create({
       kind: 'shell',
       title: title?.trim() || `Terminal ${n}`,
       cwd: p.localPath,
-      command: process.env.SHELL || 'bash',
-      args: ['-l'],
+      command: sh.file,
+      args: sh.args,
       projectId,
     });
   }
@@ -159,12 +161,13 @@ export class RunService {
   }
 
   private spawn(p: typeof projects.$inferSelect, kind: RunKind, command: string): TerminalInfo {
+    const sh = shellCommand(command);
     return this.terminals.create({
       kind: 'run',
       title: TITLES[kind],
       cwd: p.localPath,
-      command: 'bash',
-      args: ['-lc', command],
+      command: sh.file,
+      args: sh.args,
       projectId: p.id,
       env: { FORCE_COLOR: '1', BROWSER: 'none' },
     });
