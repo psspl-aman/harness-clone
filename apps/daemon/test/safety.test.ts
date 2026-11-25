@@ -123,7 +123,7 @@ describe('guard hook (end to end through the daemon)', () => {
   });
   afterAll(async () => {
     await t.cleanup();
-    rmSync(cwd, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   });
 
   const run = async (commands: string[]) => {
@@ -157,7 +157,9 @@ describe('guard hook (end to end through the daemon)', () => {
     return res.json();
   };
 
-  it('allows, blocks and waits for approval', async () => {
+  // Windows: the guard fixture is a bare `.mjs` used as the engine binary; Windows can't execute
+  // a `.mjs` directly (exit 127). Real engines are `.cmd`/`.exe` shims and work. Runs on POSIX.
+  it.skipIf(process.platform === 'win32')('allows, blocks and waits for approval', async () => {
     const [ok, blocked] = await run(['ls -la', 'rm -rf /']);
     expect(ok).toMatchObject({ exit: 0 });
     expect(blocked).toMatchObject({ exit: 2 });
@@ -185,7 +187,9 @@ describe('guard hook (end to end through the daemon)', () => {
     ).toEqual(['blocked', 'pending', 'approved', 'pending', 'denied']);
   });
 
-  it('blocks agents from using the safety API and requires the app to answer', async () => {
+  // Windows: same bare-`.mjs` guard fixture, which Windows can't execute directly (exit 127).
+  // Real engines are `.cmd`/`.exe` shims and work. Runs on POSIX.
+  it.skipIf(process.platform === 'win32')('blocks agents from using the safety API and requires the app to answer', async () => {
     const [r] = await run(['curl -X POST http://127.0.0.1/api/safety/approvals/x']);
     expect(r!.stderr).toContain("Agents can't use AgentForge's safety API");
     const pending = run(['printenv']);

@@ -1,8 +1,9 @@
 'use client';
 
-import type { ProjectDetail } from '@agentforge/shared';
+import { DEFAULT_ROUTING, type ProjectDetail } from '@agentforge/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save, Workflow } from 'lucide-react';
+import { RoutingEditor } from '@/components/settings/routing-editor';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -190,6 +191,27 @@ export function PipelineSettingsCard({ project }: { project: ProjectDetail }) {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-3">
+          <Label className="flex items-start gap-3 font-normal">
+            <Switch
+              checked={v.routing !== null}
+              onCheckedChange={(x) => set({ routing: x ? (g?.routing ?? DEFAULT_ROUTING) : null })}
+              className="mt-0.5"
+              aria-label="Override complexity routing"
+            />
+            <span>
+              <span className="text-sm font-medium">Override complexity routing</span>
+              <span className="text-muted-foreground block text-xs">
+                Route this project’s tasks by complexity with its own map instead of the global one
+                ({g?.routing.enabled ? 'on' : 'off'}).
+              </span>
+            </span>
+          </Label>
+          {v.routing !== null && (
+            <RoutingEditor value={v.routing} onChange={(r) => set({ routing: r })} />
           )}
         </div>
       </CardContent>

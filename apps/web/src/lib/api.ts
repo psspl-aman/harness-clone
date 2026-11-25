@@ -1,5 +1,19 @@
 import type {
   ApiError,
+  CommandSuggestionDto,
+  GitActionResultDto,
+  GitBranchDetailDto,
+  GitCreateBranchInput,
+  GitDeleteBranchInput,
+  GitMergeInput,
+  GitOverviewDto,
+  GitPullRequestInput,
+  ProjectCostDto,
+  SheetPreviewDto,
+  SheetPreviewInput,
+  SheetSourceDto,
+  SheetSourceInput,
+  SheetSyncResultDto,
   AppSettings,
   CreateProjectInput,
   DeepPartial,
@@ -19,6 +33,7 @@ import type {
   TerminalInfo,
   UpdateEngineInput,
   AttachmentDto,
+  StagedAttachmentDto,
   ChatMessageDto,
   CreateTaskInput,
   PlanBoardDto,
@@ -117,6 +132,30 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+/** POST files as multipart/form-data (one `file` field each). */
+async function uploadFiles<T>(path: string, files: File[]): Promise<T> {
+  const form = new FormData();
+  for (const f of files) form.append('file', f, f.name);
+  let res: Response;
+  try {
+    res = await fetch(`${DAEMON_URL}${path}`, { method: 'POST', body: form });
+  } catch {
+    throw new ApiClientError(
+      0,
+      'DAEMON_UNREACHABLE',
+      `Cannot reach the AgentForge daemon at ${DAEMON_URL}`,
+    );
+  }
+  const data = (await res.json()) as unknown;
+  if (!res.ok) {
+    const err = (data as ApiError).error;
+    throw new ApiClientError(res.status, err?.code ?? 'HTTP_ERROR', err?.message ?? res.statusText);
+  }
+  return data as T;
+}
+const gitAction = (id: string, path: string, body: unknown = {}) =>
+  request<GitActionResultDto>('POST', `/api/projects/${id}/git/${path}`, body);
+
 export const api = {
   system: () => request<SystemInfo>('GET', '/api/system'),
   settings: {
@@ -124,16 +163,34 @@ export const api = {
     update: (patch: DeepPartial<AppSettings>) =>
       request<AppSettings>('PATCH', '/api/settings', patch),
   },
+  attachments: {
+    /** Keep files for a project that's still being created (new-project wizard). */
+    stage: (files: File[]) => uploadFiles<StagedAttachmentDto[]>('/api/attachments/staged', files),
+  },
   projects: {
     list: () => request<ProjectSummary[]>('GET', '/api/projects'),
+    archived: () => request<ProjectSummary[]>('GET', '/api/projects?archived=true'),
     get: (id: string) => request<ProjectDetail>('GET', `/api/projects/${id}`),
     create: (input: CreateProjectInput) => request<ProjectDetail>('POST', '/api/projects', input),
     update: (id: string, input: UpdateProjectInput) =>
       request<ProjectDetail>('PATCH', `/api/projects/${id}`, input),
+    archive: (id: string) => request<ProjectDetail>('POST', `/api/projects/${id}/archive`),
+    restore: (id: string) => request<ProjectDetail>('POST', `/api/projects/${id}/restore`),
+    /** Deletes the project and its data for good. */
     remove: (id: string) => request<void>('DELETE', `/api/projects/${id}`),
     analyze: (id: string) => request<{ ok: true }>('POST', `/api/projects/${id}/analyze`),
     requirements: (id: string) =>
       request<RequirementDto[]>('GET', `/api/projects/${id}/requirements`),
+    suggestion: (id: string) =>
+      request<{ suggestion: CommandSuggestionDto | null }>(
+        'GET',
+        `/api/projects/${id}/commands/suggestion`,
+      ),
+    suggestCommands: (id: string) =>
+      request<CommandSuggestionDto>('POST', `/api/projects/${id}/commands/suggest`),
+    dismissSuggestion: (id: string) =>
+      request<void>('DELETE', `/api/projects/${id}/commands/suggestion`),
+    cost: (id: string) => request<ProjectCostDto>('GET', `/api/projects/${id}/cost`),
   },
   fs: {
     browse: (path?: string, hidden = false) =>
@@ -181,33 +238,8 @@ export const api = {
         'GET',
         `/api/projects/${projectId}/references?${new URLSearchParams({ q })}`,
       ),
-    upload: async (projectId: string, files: File[]): Promise<AttachmentDto[]> => {
-      const form = new FormData();
-      for (const f of files) form.append('file', f, f.name);
-      let res: Response;
-      try {
-        res = await fetch(`${DAEMON_URL}/api/projects/${projectId}/attachments`, {
-          method: 'POST',
-          body: form,
-        });
-      } catch {
-        throw new ApiClientError(
-          0,
-          'DAEMON_UNREACHABLE',
-          `Cannot reach the AgentForge daemon at ${DAEMON_URL}`,
-        );
-      }
-      const data = (await res.json()) as unknown;
-      if (!res.ok) {
-        const err = (data as ApiError).error;
-        throw new ApiClientError(
-          res.status,
-          err?.code ?? 'HTTP_ERROR',
-          err?.message ?? res.statusText,
-        );
-      }
-      return data as AttachmentDto[];
-    },
+    upload: (projectId: string, files: File[]) =>
+      uploadFiles<AttachmentDto[]>(`/api/projects/${projectId}/attachments`, files),
   },
   board: {
     get: (projectId: string) => request<PlanBoardDto>('GET', `/api/projects/${projectId}/board`),
@@ -385,6 +417,47 @@ export const api = {
     resolveConflict: (taskId: string, action: 'apply' | 'dismiss') =>
       request<TaskDto>('POST', `/api/tasks/${taskId}/pms-conflict`, { action }),
   },
+  git: {
+    overview: (id: string) => request<GitOverviewDto>('GET', `/api/projects/${id}/git`),
+    branch: (id: string, name: string, base?: string | null) =>
+      request<GitBranchDetailDto>(
+        'GET',
+        `/api/projects/${id}/git/branch?${new URLSearchParams({
+          name,
+          ...(base === undefined ? {} : { base: base ?? '' }),
+        })}`,
+      ),
+    init: (id: string) => gitAction(id, 'init'),
+    createBranch: (id: string, input: GitCreateBranchInput) => gitAction(id, 'branches', input),
+    deleteBranch: (id: string, input: GitDeleteBranchInput) =>
+      gitAction(id, 'branches/delete', input),
+    checkout: (id: string, branch: string) => gitAction(id, 'checkout', { branch }),
+    merge: (id: string, input: GitMergeInput) => gitAction(id, 'merge', input),
+    setWorkingBranch: (id: string, branch: string) => gitAction(id, 'working-branch', { branch }),
+    commit: (id: string, message: string) => gitAction(id, 'commit', { message }),
+    abort: (id: string) => gitAction(id, 'abort'),
+    fetch: (id: string) => gitAction(id, 'fetch'),
+    pull: (id: string) => gitAction(id, 'pull'),
+    push: (id: string, branch?: string) => gitAction(id, 'push', branch ? { branch } : {}),
+    pullRequest: (id: string, input: GitPullRequestInput) => gitAction(id, 'pull-request', input),
+  },
+  sheets: {
+    list: () => request<SheetSourceDto[]>('GET', '/api/sheets'),
+    preview: (v: SheetPreviewInput) => request<SheetPreviewDto>('POST', '/api/sheets/preview', v),
+    create: (projectId: string, v: SheetSourceInput) =>
+      request<SheetSourceDto>('POST', `/api/projects/${projectId}/sheets`, v),
+    update: (
+      id: string,
+      v: Partial<
+        Pick<
+          SheetSourceDto,
+          'name' | 'sheet' | 'columns' | 'pollingIntervalSec' | 'autoStart' | 'autoEnrich'
+        >
+      >,
+    ) => request<SheetSourceDto>('PATCH', `/api/sheets/${id}`, v),
+    remove: (id: string) => request<void>('DELETE', `/api/sheets/${id}`),
+    sync: (id: string) => request<SheetSyncResultDto>('POST', `/api/sheets/${id}/sync`),
+  },
   terminals: {
     list: (projectId: string) =>
       request<TerminalInfo[]>('GET', `/api/terminals?${new URLSearchParams({ projectId })}`),
@@ -414,6 +487,7 @@ export const qk = {
   settings: ['settings'] as const,
   projects: ['projects'] as const,
   project: (id: string) => ['projects', id] as const,
+  archivedProjects: ['archived-projects'] as const,
   requirements: (id: string) => ['projects', id, 'requirements'] as const,
   fsBrowse: (path: string | undefined, hidden: boolean) =>
     ['fs', 'browse', path ?? '~', hidden] as const,
@@ -446,6 +520,12 @@ export const qk = {
   pmsProviders: ['pms', 'providers'] as const,
   pmsConnections: ['pms', 'connections'] as const,
   pmsMappings: (projectId: string) => ['pms', 'mappings', projectId] as const,
+  sheets: ['sheets'] as const,
+  commandSuggestion: (projectId: string) => ['projects', projectId, 'command-suggestion'] as const,
+  projectCost: (projectId: string) => ['projects', projectId, 'cost'] as const,
+  git: (projectId: string) => ['git', projectId] as const,
+  gitBranch: (projectId: string, name: string, base: string | null | undefined) =>
+    ['git', projectId, 'branch', name, base === undefined ? '~' : (base ?? '')] as const,
   references: (projectId: string, q: string) => ['references', projectId, q] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,

@@ -37,8 +37,15 @@ import type {
   ProjectOrigin,
   ProjectSource,
   RequirementIntent,
+  ReviewScope,
   RoleEngines,
+  RoleModels,
+  Routing,
   RunStatus,
+  ProjectServiceDto,
+  SheetField,
+  SheetKind,
+  SheetSyncResultDto,
   TaskStatus,
   TaskType,
 } from '@agentforge/shared';
@@ -55,6 +62,7 @@ export interface ProjectCommands {
   build?: string | null;
   test?: string | null;
   lint?: string | null;
+  services?: ProjectServiceDto[] | null;
 }
 
 // ─── Projects ────────────────────────────────────────────────────────────────
@@ -110,6 +118,12 @@ export const projectSettings = sqliteTable('project_settings', {
   roleEngines: json<Partial<RoleEngines>>('role_engines')
     .notNull()
     .default(sql`'{}'`),
+  /** Per-role model overrides; missing roles fall back to global roleModels, then the engine default. */
+  roleModels: json<RoleModels>('role_models')
+    .notNull()
+    .default(sql`'{}'`),
+  /** Complexity→pipeline routing override; null falls back to the global routing setting. */
+  routing: json<Routing>('routing'),
   maxConcurrentTasks: integer('max_concurrent_tasks'),
   maxFixLoops: integer('max_fix_loops'),
   requireHumanReview: bool('require_human_review'),
@@ -233,6 +247,9 @@ export const tasks = sqliteTable(
       .notNull()
       .default(sql`'[]'`),
     roleEngines: json<Partial<RoleEngines>>('role_engines')
+      .notNull()
+      .default(sql`'{}'`),
+    roleModels: json<RoleModels>('role_models')
       .notNull()
       .default(sql`'{}'`),
     orderIndex: real('order_index').notNull().default(0),
@@ -391,6 +408,8 @@ export const reviews = sqliteTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     runId: text('run_id').references(() => agentRuns.id, { onDelete: 'set null' }),
     reviewer: text('reviewer').$type<'agent' | 'human'>().notNull().default('agent'),
+    /** 'code' reviews gate testing; 'tests' reviews check the tests after they pass. */
+    scope: text('scope').$type<ReviewScope>().notNull().default('code'),
     verdict: text('verdict').$type<'APPROVE' | 'CHANGES_REQUESTED'>().notNull(),
     summary: text('summary').notNull().default(''),
     createdAt: createdAt(),
@@ -647,6 +666,33 @@ export const pmsMappings = sqliteTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex('pms_mappings_uq').on(t.projectId, t.connectionId, t.externalProject)],
+);
+
+/** A spreadsheet (Google Sheet, Excel or CSV file) whose rows become tasks of a project. */
+export const sheetSources = sqliteTable(
+  'sheet_sources',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind').$type<SheetKind>().notNull(),
+    location: text('location').notNull(),
+    sheet: text('sheet'),
+    columns: json<Partial<Record<SheetField, string>>>('columns')
+      .notNull()
+      .default(sql`'{}'`),
+    pollingIntervalSec: integer('polling_interval_sec'),
+    autoStart: bool('auto_start').notNull().default(true),
+    autoEnrich: bool('auto_enrich').notNull().default(true),
+    lastSyncedAt: integer('last_synced_at'),
+    lastError: text('last_error'),
+    lastResult: json<SheetSyncResultDto>('last_result'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('sheet_sources_uq').on(t.projectId, t.location, t.sheet)],
 );
 
 // ─── Memory & docs ───────────────────────────────────────────────────────────

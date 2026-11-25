@@ -5,11 +5,29 @@ import { MEMORY_KINDS } from './enums';
 
 // ─── Persisted per-task pipeline state (tasks.pipeline_state) ────────────────
 
+/**
+ * What a fix addresses. `test_quality`: the tests still pass with the change reverted;
+ * `test_review`: the Reviewer asked for better tests. Both return to testing.
+ */
+export const FIX_SOURCES = [
+  'review',
+  'tests',
+  'test_quality',
+  'test_review',
+  'human',
+  'failure',
+] as const;
+export type FixSource = (typeof FIX_SOURCES)[number];
+
+/** What a review looked at: the change itself, or (after testing) the tests for it. */
+export const REVIEW_SCOPES = ['code', 'tests'] as const;
+export type ReviewScope = (typeof REVIEW_SCOPES)[number];
+
 export interface PipelineState {
   /** Commit the task branch started from (diff base). */
   baseCommit?: string;
   /** What the next fix addresses and where it returns to. */
-  fixSource?: 'review' | 'tests' | 'human' | 'failure';
+  fixSource?: FixSource;
   /** What failed, for a fix you requested on a failed task. */
   failureNote?: string | null;
   /** Role currently running, if any (also tells the UI what is happening). */
@@ -22,6 +40,11 @@ export interface PipelineState {
   notes?: string[];
   lastReviewId?: string | null;
   lastTestResultId?: string | null;
+  /**
+   * HEAD commit at which the tests last passed every check, while the test review is
+   * pending. A resumed task at this same commit skips straight to the test review.
+   */
+  testsPassedAt?: string | null;
   /** Set while waiting for "require my review before merge". */
   awaitingMergeReview?: boolean;
   /** Why the task is blocked when it isn't about dependencies. */
@@ -152,6 +175,7 @@ export interface RunSummaryDto {
 export interface ReviewDto {
   id: string;
   reviewer: 'agent' | 'human';
+  scope: ReviewScope;
   verdict: 'APPROVE' | 'CHANGES_REQUESTED';
   summary: string;
   comments: {
@@ -266,6 +290,24 @@ export interface UsageSummaryDto {
   byRole: UsageBucket[];
   topTasks: (UsageBucket & { projectId: string | null; taskKey: string })[];
   byTaskType: { type: string; tasks: number; avgTokens: number; avgCostUsd: number }[];
+}
+
+/** Everything a project has cost so far, and what finishing its open tasks will likely cost. */
+export interface ProjectCostDto {
+  projectId: string;
+  /** All-time usage for the project (byDay covers the last 30 days). */
+  summary: UsageSummaryDto;
+  tasks: { total: number; done: number; open: number; cancelled: number };
+  /** Average per finished task (null until one is done). */
+  perDoneTask: { costUsd: number; tokens: number } | null;
+  /** Likely remaining cost for open tasks: typical cost of their size minus what they've used. */
+  forecast: {
+    costUsd: number;
+    tokens: number;
+    /** How many open tasks the forecast covers (sizes with finished examples). */
+    basedOn: number;
+    open: number;
+  } | null;
 }
 
 export interface UsageWindowStatusDto {

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { E2E } from '../playwright.config';
 
@@ -20,13 +20,12 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
   // Location: use the folder picker to choose the parent.
+  await page.getByPlaceholder('/home/you/code').fill(parent);
   await page.getByRole('button', { name: 'Browse' }).click();
   const picker = page.getByRole('dialog');
-  await picker.getByRole('button', { name: 'Home folder' }).click();
-  await page.getByPlaceholder('/home/you/code').fill(parent); // picker re-opens at typed path
   await picker.getByRole('button', { name: 'Select this folder' }).click();
   await expect(picker).toBeHidden();
-  await page.getByPlaceholder('/home/you/code').fill(parent);
+  await expect(page.getByPlaceholder('/home/you/code')).toHaveValue(parent);
   await expect(page.getByText('Folder will be created')).toBeVisible();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
@@ -36,8 +35,26 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click(); // engines: keep defaults
   await page.getByLabel('What should we build?').fill('A meal planner with a shopping list.');
+  // Requirement documents: upload two, remove one.
+  await page.getByLabel('Attach requirement documents').setInputFiles([
+    { name: 'brief.md', mimeType: 'text/markdown', buffer: Buffer.from('# Brief\nWeekly menus') },
+    { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Vegetarian first') },
+  ]);
+  const docs = page.getByRole('list', { name: 'Attached documents' });
+  await expect(docs.getByRole('listitem')).toHaveCount(2);
+  await docs.getByRole('button', { name: 'Remove notes.txt' }).click();
+  await expect(docs.getByRole('listitem')).toHaveCount(1);
+  // The same file again is skipped, not uploaded twice.
+  await page
+    .getByLabel('Attach requirement documents')
+    .setInputFiles([
+      { name: 'brief.md', mimeType: 'text/markdown', buffer: Buffer.from('# Brief\nWeekly menus') },
+    ]);
+  await expect(page.getByText('brief.md is already attached')).toBeVisible();
+  await expect(docs.getByRole('listitem')).toHaveCount(1);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
+  await expect(page.getByText('brief.md')).toBeVisible();
   await expect(page.getByText('Planner decides')).toBeHidden();
   await expect(page.getByText('Next.js, SQLite')).toBeVisible();
   await page.getByRole('button', { name: 'Create project' }).click();
@@ -51,12 +68,22 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   ).toBeVisible();
   const folder = join(parent, name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'));
   expect(existsSync(join(folder, '.git'))).toBe(true);
+  // The document went into the project (git-excluded), attached to the first requirement.
+  const attached = readdirSync(join(folder, '.agentforge/attachments'));
+  expect(attached).toHaveLength(1);
+  expect(existsSync(join(folder, '.agentforge/attachments', attached[0]!, 'brief.md'))).toBe(true);
 
-  await page.getByRole('link', { name: 'Projects' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Projects' })
+    .click();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 });
 
-test('attach an existing folder, confirm commands, then remove it', async ({ page, request }) => {
+test('attach an existing folder, confirm commands, archive, restore and delete it', async ({
+  page,
+  request,
+}) => {
   const dir = join(WORK, `legacy-${uid()}`);
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(
@@ -106,13 +133,30 @@ test('attach an existing folder, confirm commands, then remove it', async ({ pag
   const id = page.url().split('/').pop()!;
   const projectName = (await (await request.get(`${E2E.daemonUrl}/api/projects/${id}`)).json())
     .name as string;
-  await page.getByRole('button', { name: 'Remove' }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('button', { name: 'Remove project' })).toBeDisabled();
-  await dialog.getByLabel('Confirm project name').fill(projectName);
-  await dialog.getByRole('button', { name: 'Remove project' }).click();
+  // Archive: off the dashboard, but kept and restorable.
+  await page.getByRole('button', { name: 'Archive' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Archive project' }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: projectName })).toBeHidden();
+  const archived = page.getByRole('region', { name: 'Archived projects' });
+  await archived.getByRole('button', { name: /Archived projects/ }).click();
+  const row = archived.getByRole('listitem').filter({ hasText: projectName });
+  await row.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByRole('heading', { name: projectName })).toBeVisible();
+
+  // Archive again, then delete for good from the archived list.
+  await page.goto(`/projects/${id}`);
+  await page.getByRole('button', { name: 'Archive' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Archive project' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await archived.getByRole('button', { name: /Archived projects/ }).click();
+  await row.getByRole('button', { name: `Delete ${projectName} permanently` }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+  await dialog.getByLabel('Confirm project name').fill(projectName);
+  await dialog.getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(archived).toBeHidden();
+  expect((await request.get(`${E2E.daemonUrl}/api/projects/${id}`)).status()).toBe(404);
   expect(existsSync(join(dir, 'src/main.js'))).toBe(true);
 });
 

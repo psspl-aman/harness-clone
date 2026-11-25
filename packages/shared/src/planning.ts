@@ -16,7 +16,7 @@ import {
   type TaskStatus,
   type TaskType,
 } from './enums';
-import { EngineIdSchema, type RoleEngines } from './settings';
+import { EngineIdSchema, ModelIdSchema, type RoleEngines, type RoleModels } from './settings';
 import type { TaskPipelineDto } from './pipeline';
 import type { TaskTimingDto } from './estimate';
 
@@ -105,6 +105,16 @@ export interface AttachmentDto {
   size: number;
   /** Absolute path agents can read. */
   path: string;
+  /** Plain-text copy for formats agents can't read directly (Word), when one was made. */
+  textPath?: string | null;
+}
+
+/** An upload kept for a project that doesn't exist yet (new-project wizard). */
+export interface StagedAttachmentDto {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
 }
 
 export interface ChatMessageDto {
@@ -189,6 +199,7 @@ export interface TaskDto {
   acceptanceCriteria: string[];
   affectedAreas: string[];
   roleEngines: Partial<RoleEngines>;
+  roleModels: RoleModels;
   orderIndex: number;
   dependsOn: string[];
   subtasks: SubtaskDto[];
@@ -235,6 +246,7 @@ const editable = {
   acceptanceCriteria: strList(20),
   affectedAreas: strList(30, 300),
   roleEngines: z.partialRecord(z.enum(AGENT_ROLES), EngineIdSchema),
+  roleModels: z.partialRecord(z.enum(AGENT_ROLES), ModelIdSchema),
 };
 
 export const UpdateTaskInputSchema = z.object(editable).partial().strict();
@@ -249,6 +261,7 @@ export const CreateTaskInputSchema = z.object({
   acceptanceCriteria: editable.acceptanceCriteria.default([]),
   affectedAreas: editable.affectedAreas.default([]),
   roleEngines: editable.roleEngines.default({}),
+  roleModels: editable.roleModels.default({}),
   dependsOn: z.array(z.string().max(64)).max(20).default([]),
   subtasks: strList(15, 300).default([]),
 });

@@ -59,7 +59,7 @@ export function BottomPanel({
 
   return (
     <div
-      className="bg-background flex shrink-0 flex-col border-t"
+      className="bg-card flex shrink-0 flex-col border-t"
       style={{ height: panelOpen ? panelHeight : undefined }}
     >
       {panelOpen && (
@@ -80,7 +80,11 @@ export function BottomPanel({
           onPointerUp={() => (drag.current = null)}
         />
       )}
-      <div className="flex items-center gap-1 px-2" role="tablist" aria-label="Bottom panel">
+      <div
+        className="flex items-center gap-1 overflow-x-auto px-2"
+        role="tablist"
+        aria-label="Bottom panel"
+      >
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -94,7 +98,7 @@ export function BottomPanel({
               )
             }
             className={cn(
-              'flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium',
+              'flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium whitespace-nowrap',
               panelOpen && panelTab === t.id
                 ? 'text-foreground bg-accent'
                 : 'text-muted-foreground hover:text-foreground',

@@ -32,6 +32,11 @@ export class CodexAdapter extends CliAdapter {
     resume: true,
     modelList: false,
   };
+  override readonly staticModels = [
+    { id: 'gpt-5-codex', label: 'GPT-5 Codex' },
+    { id: 'gpt-5', label: 'GPT-5' },
+    { id: 'o4-mini', label: 'o4-mini' },
+  ];
   protected override apiKeyEnvVar = 'CODEX_API_KEY';
 
   protected binaryCandidates(): string[] {

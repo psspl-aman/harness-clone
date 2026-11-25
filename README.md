@@ -51,6 +51,7 @@ The daemon creates its data directory on first start. It applies database migrat
 5. **Optional connections (Integrations):**
    - A GitHub token, to create or clone repositories and open pull requests.
    - Issue trackers through MCP.
+   - Spreadsheets (Google Sheets, Excel, CSV) as a task list.
 6. **Create a project.**
    - **Projects → New project.** Start from scratch in a local folder or a GitHub repository, or attach an existing project.
    - Describe what you want in the chat, review the plan and tasks, and approve them.
@@ -129,7 +130,7 @@ Open **Agents & Accounts** to see each supported agent CLI: whether it's install
 | Antigravity  | `agy` (not the `antigravity` IDE launcher)                                                  | `agy -p … --output-format stream-json --mode …`                     | `agy models` (also lists available models) |
 | Custom CLI   | any executable                                                                              | argument template + text or JSON-lines parser, configured in the UI | optional auth-check command                |
 
-- **Login** runs the CLI's own login command in an embedded terminal (xterm.js + node-pty). AgentForge never sees your credentials; they stay with the CLI.
+- **Login** runs the CLI's own login command in an embedded terminal (xterm.js + node-pty). AgentForge never sees your credentials; they stay with the CLI. The button only appears when the CLI isn't signed in (or its session expired). To switch accounts, use **Configure → Log out** first.
 - **API keys** are an alternative for Claude Code, Codex, Gemini and custom CLIs. They're stored encrypted and passed to the CLI only through its environment (`ANTHROPIC_API_KEY`, `CODEX_API_KEY`, `GEMINI_API_KEY`, or the variable you configure).
 - **Health checks** run every _Settings → Engine health check interval_. Status changes stream to the UI live. When an engine your default roles depend on has expired or hit its usage limit, a banner appears with a Re-login link or a reset countdown.
 - **Usage windows** come from Claude Code's rate-limit events: how much of the 5-hour and 7-day windows you've used, and when each resets.
@@ -214,6 +215,9 @@ Approved tasks are built automatically. Each one goes through these steps:
 ## Running the project, terminals and errors
 
 - **Run.** The project header has **Run**, which starts the project's run command (Overview → Commands) in a terminal. While it runs you get **Stop** and **Restart**. The menu next to it runs **Build**, **Run tests** and **Install dependencies** once each.
+- **Suggested commands.** **Overview → Commands → Suggest with AI** has an agent read the project (read-only) and propose install, run, build, test and lint commands, with notes such as env vars to set first. Nothing changes until you click **Use these**. Projects built from scratch also get their commands re-detected automatically once code lands.
+- **Several servers.** Apps that need more than one process (say a frontend, an API and a worker) list each under **Overview → Commands → Several servers?** with a name, command, folder and port. **Run** starts them all, each in its own terminal, with `PORT` set. The header shows **2/3 servers** with each one's status and URL. Ports are checked before starting, so a port that's already taken (by another app, an earlier run, or AgentForge itself on 4317/4318) is reported on that server instead of crashing it. The Preview tab switches between the servers' URLs.
+- **Cost.** **Overview → Cost & token usage** shows what agents have spent on the project: total cost, input and output tokens, runs, agent time, cost per day, and breakdowns by role, engine and model and the most expensive tasks. Once a task is finished it also forecasts what the open tasks will likely cost.
 - **Preview.** The local URL your dev server prints is picked up and shown in the **Preview** tab. You can type another URL or open it in a new browser tab.
 - **Code.** A read-only browser of the project's files (respecting `.gitignore`) with syntax highlighting. Files that may contain secrets, such as `.env`, are never shown.
 - **Agents.** The bottom panel's **Agents** tab streams the live output of every agent working on the project.
@@ -232,6 +236,26 @@ AgentForge reads and updates Jira, Linear, GitHub Issues, Asana, ClickUp, Azure 
 4. **Sync now** (or wait for polling). Open tickets become **draft tasks** with a link back to the ticket. With _Planner adds criteria and subtasks_ on, the Planner fills in acceptance criteria, affected areas and subtasks for you to review. Nothing is built until you approve.
 5. **Write-back.** As a task moves through the pipeline, its ticket moves to the mapped status. When the task is done, AgentForge comments with a summary, the PR or branch, and the tokens, cost and time used.
 6. **Changes during work.** If a ticket is edited or closed after you approved its task, the task shows the change. **Apply** updates the task and tells the agent (or cancels the task if the ticket was closed), or keep the task as it is.
+
+## Spreadsheets (Google Sheets, Excel, CSV)
+
+Keep your task list in a spreadsheet and AgentForge works through it.
+
+1. **Integrations → Spreadsheets → Connect sheet** (or **Project → Overview → Spreadsheets**). Choose the project, then paste a Google Sheets link or the path to an `.xlsx`, `.csv` or `.tsv` file. A Google Sheet must be shared as _Anyone with the link — Viewer_ (or published to the web); AgentForge only reads it.
+2. **Columns.** Put each task in a **Title** column and its **Priority** next to it: High / Medium / Low, Urgent, P0–P3, or 1, 2, 3 (1 = most important). Optional columns: Description, ID (keeps a task linked when you rename it), Size (XS–XL or story points), Type (feature, bug, docs…), Status (rows marked Done, Closed, Cancelled or Skip are left out), Acceptance criteria. **Preview** shows which column feeds what and the order agents will pick tasks up; you can override any column. **Download a template** gives you a starter file.
+3. **Start working automatically** (on by default) approves new rows straight away, so agents build them highest priority first with no waiting for you. Turn it off to review each task first. **Let the Planner detail each task** adds acceptance criteria and subtasks before building, keeping your title and priority.
+4. **New rows are picked up** every few minutes (or press **Sync**). Editing a row updates its task while it's still a draft. If a task is already being built, the change is shown on the task to apply or dismiss.
+
+## Git: branches and the work on each
+
+Open a project's **Git** tab (or click the branch name under the project title).
+
+- **Status:** the branch the project folder is on, uncommitted changes, the remote and how far you are ahead or behind it, with **Fetch**, **Pull** and **Push**. **Agents branch from and merge into** picks the working branch for new tasks.
+- **Branches:** every local branch (remote ones with the **Remote** switch) with its last commit, how many commits it is ahead of or behind the working branch, and badges for _current_, _working_, _merged_, _agent_ (an agent is working in it) and the tasks on it. Select a branch to see its commits (linked to their tasks), its tasks and the diff against any other branch. The **⋯** menu switches to it, merges it, makes it the working branch, pushes it, opens a GitHub pull request, starts a new branch from it or deletes it. A merge that would conflict changes nothing and tells you which files conflict.
+- **Work by branch:** for each branch, the tasks whose work was merged into it (with the merge commit), is waiting in a pull request, or is still in progress on its own branch.
+- **Changes:** uncommitted files with a box to commit them. Secret files (.env, keys) are never committed.
+
+If the folder isn't a git repository (or has no commits yet), the tab offers to initialise it or make the first commit, since agents need a commit to branch from.
 
 ## Memory and documentation
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { buildApp, type BuildOptions, type BuiltApp } from '../src/app';
 import { loadConfig } from '../src/config';
+import { makeFakeCli, type FakeCli, type FakeResponse } from './fake-cli';
 
 export interface TestApp extends BuiltApp {
   home: string;
@@ -30,7 +31,9 @@ export async function createTestApp(
     home,
     async cleanup() {
       await built.app.close();
-      rmSync(home, { recursive: true, force: true });
+      // On Windows a just-killed child process can still hold a handle to the
+      // temp dir for a moment, so rmSync throws EPERM; retry briefly. No-op on POSIX.
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     },
   };
 }
@@ -50,3 +53,28 @@ export function writeTree(root: string, files: Record<string, string>): void {
 }
 
 export const GIT_ID = ['-c', 'user.name=Test', '-c', 'user.email=test@example.com'];
+
+/**
+ * Make an engine "installed" (and signed in) with a fake CLI, so it can be assigned to roles.
+ * `responses` are tried before the version/login answers.
+ */
+export async function installFakeEngine(
+  t: TestApp,
+  id: 'codex' | 'gemini-cli',
+  responses: FakeResponse[] = [],
+): Promise<FakeCli> {
+  const dir = mkdtempSync(join(t.home, `fake-${id}-`));
+  const cli = makeFakeCli(dir, id === 'codex' ? 'codex' : 'gemini');
+  cli.setResponses([
+    ...responses,
+    { match: '--version', stdout: `${id} 1.0.0` },
+    { match: 'login status', stdout: 'Logged in using ChatGPT' },
+  ]);
+  await t.app.inject({
+    method: 'PATCH',
+    url: `/api/engines/${id}`,
+    payload: { binaryPath: cli.path, enabled: true },
+  });
+  await t.ctx.engines.refresh(id);
+  return cli;
+}

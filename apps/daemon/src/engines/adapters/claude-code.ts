@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { newestExtensionBinary } from '../binary';
 import { classifyEngineError } from '../errors';
+import { gitBashPath } from '../../lib/platform';
 import { CliAdapter, num, truncate, type BuiltCommand, type RunState } from '../cli-adapter';
 import type { AgentRunInput, AuthStatusResult, LoginFlow } from '../types';
 
@@ -113,8 +114,15 @@ export class ClaudeCodeAdapter extends CliAdapter {
           },
         }),
       );
+    // On Windows, Claude Code runs its PreToolUse hooks (AgentForge's safety
+    // guard included) and its Bash tool through Git Bash; point it at a detected
+    // install so hooks don't fail with "Git Bash wasn't found" and block every
+    // tool call. No-op on POSIX and when an install can't be located.
+    const env: Record<string, string> = { ...input.guard?.env };
+    const bash = gitBashPath();
+    if (bash) env.CLAUDE_CODE_GIT_BASH_PATH = bash;
     // Prompt goes through stdin: no argv size limits, nothing visible in `ps`.
-    return { args, stdin: input.prompt, env: input.guard?.env };
+    return { args, stdin: input.prompt, env };
   }
 
   protected parseLine(line: string, state: RunState): AgentEvent[] {

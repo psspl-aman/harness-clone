@@ -25,7 +25,11 @@ describe('SecretStore', () => {
 
   it('keeps the key file private and survives re-instantiation', () => {
     t.ctx.secrets.set('a', 'value');
-    expect(statSync(join(t.home, 'secret.key')).mode & 0o777).toBe(0o600);
+    // Unix file modes don't exist on Windows (chmod is a no-op there, so the key
+    // reads back as 0o666); the 0o600 guarantee only applies on POSIX.
+    if (process.platform !== 'win32') {
+      expect(statSync(join(t.home, 'secret.key')).mode & 0o777).toBe(0o600);
+    }
     expect(new SecretStore(t.ctx.db, t.home).get('a')).toBe('value');
   });
 

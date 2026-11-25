@@ -375,7 +375,7 @@ Read the task file first when earlier agents have already worked on this task.`)
             .join('\n\n')}`
         : '## Agent runs\n\nNo agent has worked on this task yet.',
       review
-        ? `## Latest review — ${review.verdict === 'APPROVE' ? 'approved' : 'changes requested'} (${review.reviewer}, ${when(review.createdAt)})\n\n${clip(review.summary, 1500)}${
+        ? `## Latest ${review.scope === 'tests' ? 'test review' : 'review'} — ${review.verdict === 'APPROVE' ? 'approved' : 'changes requested'} (${review.reviewer}, ${when(review.createdAt)})\n\n${clip(review.summary, 1500)}${
             review.comments.filter((c) => !c.resolved).length
               ? `\n\n${review.comments
                   .filter((c) => !c.resolved)

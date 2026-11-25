@@ -19,9 +19,13 @@ import type { RunService } from './services/run-service';
 import type { FileService } from './services/files';
 import type { McpService } from './services/mcp/mcp-service';
 import type { PmsService } from './services/pms/pms-service';
+import type { SheetService } from './services/sheets/sheet-service';
+import type { CommandAdvisor } from './services/onboarding/command-advisor';
+import type { AttachmentStore } from './services/attachments';
 import type { MemoryService } from './services/memory';
 import type { DocsService } from './services/docs';
 import type { SafetyService } from './services/safety';
+import type { GitManager } from './services/git-manager';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -38,6 +42,7 @@ export interface AppContext {
   terminals: TerminalService;
   tasks: TaskService;
   planner: PlannerService;
+  attachments: AttachmentStore;
   runs: RunRecorder;
   orchestrator: Orchestrator;
   usage: UsageService;
@@ -46,9 +51,12 @@ export interface AppContext {
   files: FileService;
   mcp: McpService;
   pms: PmsService;
+  sheets: SheetService;
+  commandAdvisor: CommandAdvisor;
   memory: MemoryService;
   docs: DocsService;
   safety: SafetyService;
+  git: GitManager;
   workspaceRoot: () => string;
   startedAt: number;
 }

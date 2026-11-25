@@ -283,7 +283,7 @@ export function Composer({ projectId, hasPlan, busy, initial }: Props) {
           <div
             role="radiogroup"
             aria-label="What should the Planner do?"
-            className="bg-muted flex rounded-lg p-0.5"
+            className="bg-muted flex max-w-full flex-wrap rounded-md border p-0.5"
           >
             {INTENTS.map((i) => (
               <button
@@ -299,7 +299,7 @@ export function Composer({ projectId, hasPlan, busy, initial }: Props) {
                 className={cn(
                   'rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-40',
                   effectiveIntent === i.value
-                    ? 'bg-background shadow-xs'
+                    ? 'bg-card shadow-xs'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >

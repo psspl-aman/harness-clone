@@ -1,6 +1,7 @@
 import type { Redactor } from '../safety/redact';
 import { Topics, type TerminalInfo } from '@agentforge/shared';
 import { eq } from 'drizzle-orm';
+import { spawnSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import * as pty from 'node-pty';
 import type { Db } from '../db/client';
@@ -8,10 +9,31 @@ import { terminalSessions } from '../db/schema';
 import type { EventBus } from '../events/bus';
 import { AppError, notFound } from '../http/errors';
 import { newId } from '../lib/id';
+import { isWindows, ptyCommand } from '../lib/platform';
 
 const SCROLLBACK_BYTES = 256 * 1024;
 const FLUSH_MS = 16;
 const MAX_EXITED = 20;
+
+/**
+ * Kill a PTY process. On Windows a dev server is usually a cmd.exe wrapping an
+ * npm/npx `.cmd` shim (→ node → the server); `pty.kill()` kills only cmd.exe,
+ * which leaves a blocking "Terminate batch job (Y/N)?" prompt and a spurious
+ * exit code 1. `taskkill /t /f` tears down the whole tree with no prompt.
+ * No-op shape on POSIX, where `pty.kill()` already signals the process.
+ */
+function killProc(proc: pty.IPty | null): void {
+  if (!proc) return;
+  if (isWindows && proc.pid) {
+    try {
+      spawnSync('taskkill', ['/pid', String(proc.pid), '/t', '/f'], { stdio: 'ignore' });
+      return;
+    } catch {
+      /* best effort — fall back to the PTY's own kill */
+    }
+  }
+  proc.kill();
+}
 
 interface Session {
   info: TerminalInfo;
@@ -68,8 +90,11 @@ export class TerminalService {
       createdAt: Date.now(),
     };
     let proc: pty.IPty;
+    // On Windows a `.cmd`/`.bat` or extensionless npm shim can't be launched
+    // directly (error 193); route it through cmd.exe. No-op on POSIX.
+    const spawn = ptyCommand(input.command, input.args);
     try {
-      proc = pty.spawn(input.command, input.args, {
+      proc = pty.spawn(spawn.file, spawn.args, {
         name: 'xterm-256color',
         cols: input.cols ?? 100,
         rows: input.rows ?? 28,
@@ -176,14 +201,13 @@ export class TerminalService {
   }
 
   kill(id: string): void {
-    const s = this.require(id);
-    s.proc?.kill();
+    killProc(this.require(id).proc);
   }
 
   /** Remove a terminal entirely (killing it first if needed). */
   remove(id: string): void {
     const s = this.require(id);
-    s.proc?.kill();
+    killProc(s.proc);
     if (s.flushTimer) clearTimeout(s.flushTimer);
     this.sessions.delete(id);
   }
@@ -192,7 +216,7 @@ export class TerminalService {
     this.closed = true;
     for (const s of this.sessions.values()) {
       if (s.flushTimer) clearTimeout(s.flushTimer);
-      s.proc?.kill();
+      killProc(s.proc);
     }
     this.sessions.clear();
   }

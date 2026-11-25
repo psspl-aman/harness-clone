@@ -4,7 +4,14 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { memoryEntries } from '../src/db/schema';
-import { createTestApp, GIT_ID, tempDir, writeTree, type TestApp } from './helpers';
+import {
+  createTestApp,
+  GIT_ID,
+  installFakeEngine,
+  tempDir,
+  writeTree,
+  type TestApp,
+} from './helpers';
 
 let t: TestApp;
 let root: string;
@@ -14,7 +21,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await t.cleanup();
-  rmSync(root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 const post = (payload: object) => t.app.inject({ method: 'POST', url: '/api/projects', payload });
@@ -24,6 +31,7 @@ const settle = (id: string) => t.ctx.projects.runOnboarding(id);
 
 describe('create from scratch (local)', () => {
   it('creates the folder, initialises git with a safe .gitignore and stores the requirement', async () => {
+    await installFakeEngine(t, 'codex');
     const events: string[] = [];
     t.ctx.bus.subscribe((e) => events.push(e.type));
     const res = await post({
@@ -196,6 +204,7 @@ describe('attach existing (local)', () => {
   });
 
   it('stores per-project pipeline overrides and fallback engines', async () => {
+    await installFakeEngine(t, 'codex');
     const p = (
       await post({
         mode: 'scratch',
@@ -258,5 +267,65 @@ describe('attach existing (local)', () => {
       payload: { localPath: '/etc' },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('archive and restore', () => {
+  const attach = async (path: string, name?: string) => {
+    const res = await post({ mode: 'existing', name, location: { kind: 'local', path } });
+    expect(res.statusCode).toBe(201);
+    return res.json().id as string;
+  };
+  const inject = (method: 'GET' | 'POST' | 'DELETE', url: string) => t.app.inject({ method, url });
+  const names = async (url: string) =>
+    (await inject('GET', url)).json().map((p: { name: string }) => p.name);
+
+  it('hides an archived project from the dashboard, keeps its data and restores it', async () => {
+    const dir = join(root, 'shop');
+    writeTree(dir, { 'index.js': 'x' });
+    const id = await attach(dir, 'Shop');
+    await settle(id);
+    const events: string[] = [];
+    t.ctx.bus.subscribe((e) => events.push(e.type));
+
+    const archived = await inject('POST', `/api/projects/${id}/archive`);
+    expect(archived.statusCode).toBe(200);
+    expect(archived.json().archivedAt).toEqual(expect.any(Number));
+    expect(events).toContain('project.archived');
+    expect(await names('/api/projects')).toEqual([]);
+    expect(await names('/api/projects?archived=true')).toEqual(['Shop']);
+    // Still readable, but it can't run anything.
+    expect((await inject('GET', `/api/projects/${id}`)).json().name).toBe('Shop');
+    const run = await inject('POST', `/api/projects/${id}/run/start`);
+    expect(run.statusCode).toBe(409);
+    expect(run.json().error.message).toMatch(/archived/);
+    // Archiving twice is harmless.
+    expect((await inject('POST', `/api/projects/${id}/archive`)).statusCode).toBe(200);
+
+    const restored = await inject('POST', `/api/projects/${id}/restore`);
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json().archivedAt).toBeNull();
+    expect(await names('/api/projects')).toEqual(['Shop']);
+    expect(await names('/api/projects?archived=true')).toEqual([]);
+    expect(existsSync(join(dir, 'index.js'))).toBe(true);
+  });
+
+  it('points to Restore when the folder is archived, and can still delete for good', async () => {
+    const dir = join(root, 'shop');
+    writeTree(dir, { 'index.js': 'x' });
+    const id = await attach(dir, 'Shop');
+    await inject('POST', `/api/projects/${id}/archive`);
+    const again = await post({ mode: 'existing', location: { kind: 'local', path: dir } });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.message).toMatch(/archived AgentForge project — restore it/);
+
+    // Delete-forever still works for archived projects; the folder stays.
+    const other = join(root, 'blog');
+    writeTree(other, { 'index.js': 'x' });
+    const blog = await attach(other, 'Blog');
+    await inject('POST', `/api/projects/${blog}/archive`);
+    expect((await inject('DELETE', `/api/projects/${blog}`)).statusCode).toBe(204);
+    expect((await inject('GET', `/api/projects/${blog}`)).statusCode).toBe(404);
+    expect(existsSync(join(other, 'index.js'))).toBe(true);
   });
 });

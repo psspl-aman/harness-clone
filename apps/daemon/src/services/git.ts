@@ -1,7 +1,26 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { simpleGit, type SimpleGit } from 'simple-git';
+
+/**
+ * Compare two filesystem paths for identity across platforms. `git` reports paths
+ * with forward slashes (and sometimes a different case or 8.3 short form than Node),
+ * so a raw `===` against a Node path wrongly fails on Windows. Canonicalise both
+ * (real path, then normalise separators/case on Windows) before comparing.
+ */
+function samePath(a: string, b: string): boolean {
+  const canon = (p: string) => {
+    let out = p;
+    try {
+      out = realpathSync.native(p);
+    } catch {
+      /* path may not exist yet; fall back to the raw value */
+    }
+    return process.platform === 'win32' ? out.replace(/\\/g, '/').toLowerCase() : out;
+  };
+  return canon(a) === canon(b);
+}
 
 /** Patterns AgentForge always keeps out of git. */
 export const SECRET_IGNORE_PATTERNS = [
@@ -23,7 +42,17 @@ const HEAVY_DIRS = [
   'dist',
   'build',
 ];
-export const SECRET_FILE_RE = /(^|\/)(\.env(\..+)?|.+\.(pem|key|p12)|\.npmrc)$/;
+const SECRET_FILE_RE = /(^|\/)(\.env(\..+)?|.+\.(pem|key|p12)|\.npmrc)$/;
+/**
+ * Config templates that document variables with placeholder values. Projects are expected
+ * to commit these (reviewers check for them), so they are not treated as secrets.
+ */
+const ENV_TEMPLATE_RE = /(^|\/)\.env\.(example|sample|template|dist)$/;
+
+/** True for paths that may hold real secrets and must never be committed or displayed. */
+export function isSecretFile(path: string): boolean {
+  return SECRET_FILE_RE.test(path) && !ENV_TEMPLATE_RE.test(path);
+}
 
 const FALLBACK_IDENTITY = ['user.name=AgentForge', 'user.email=agentforge@localhost'];
 
@@ -36,7 +65,7 @@ export async function isRepoRoot(dir: string): Promise<boolean> {
   if (!existsSync(join(dir, '.git'))) return false;
   try {
     const top = (await git(dir).revparse(['--show-toplevel'])).trim();
-    return top === dir;
+    return samePath(top, dir);
   } catch {
     return false;
   }
@@ -84,7 +113,7 @@ export async function initRepo(
   if (opts.commitExisting) {
     await g.add(['-A']);
     const staged = (await g.diff(['--cached', '--name-only'])).split('\n').filter(Boolean);
-    const leaked = staged.filter((f) => SECRET_FILE_RE.test(f));
+    const leaked = staged.filter((f) => isSecretFile(f));
     if (leaked.length) await g.raw(['rm', '--cached', '--quiet', '--', ...leaked]);
   } else {
     await g.add(['.gitignore']);

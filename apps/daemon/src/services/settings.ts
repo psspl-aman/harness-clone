@@ -47,9 +47,11 @@ export class SettingsService {
       throw badRequest('Settings patch must be a JSON object');
     }
     const merged = deepMerge(this.get(), patch);
-    // The price table is replaced as a whole so removed models really go away.
-    const p = patch as { pricing?: unknown };
+    // These maps are replaced as a whole so removed keys really go away (a deep
+    // merge would keep them). The price table and the per-role model overrides.
+    const p = patch as { pricing?: unknown; roleModels?: unknown };
     if (p.pricing !== undefined) merged.pricing = p.pricing as typeof merged.pricing;
+    if (p.roleModels !== undefined) merged.roleModels = p.roleModels as typeof merged.roleModels;
     const next = AppSettingsSchema.parse(merged);
     this.db
       .insert(settings)

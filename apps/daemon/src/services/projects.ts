@@ -9,7 +9,7 @@ import {
   type ProjectSummary,
   type RequirementDto,
 } from '@agentforge/shared';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -27,6 +27,7 @@ import type { EventBus } from '../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../http/errors';
 import { newId } from '../lib/id';
 import { normalizePath, slugify } from '../lib/paths';
+import type { AttachmentStore } from './attachments';
 import type { FsService } from './fs';
 import { currentBranch, initRepo, isRepoRoot } from './git';
 import type { GithubService } from './github';
@@ -34,11 +35,15 @@ import { analyzeProject, stackFromReport } from './onboarding/analyzer';
 
 type ProjectRow = typeof projects.$inferSelect;
 
+/** The requirement text when the wizard got files but no description. */
+const ATTACHMENTS_ONLY_REQUIREMENT = 'Build what the attached documents describe.';
+
 export interface ProjectServiceDeps {
   db: Db;
   bus: EventBus;
   fs: FsService;
   github: GithubService;
+  attachments: AttachmentStore;
   workspaceRoot: () => string;
   log: { warn: (o: unknown, m: string) => void; error: (o: unknown, m: string) => void };
 }
@@ -64,6 +69,25 @@ export class ProjectService {
     return this.summarize(rows);
   }
 
+  /** Archived projects, most recently archived first. */
+  listArchived(): ProjectSummary[] {
+    const rows = this.db
+      .select()
+      .from(projects)
+      .where(isNotNull(projects.archivedAt))
+      .orderBy(desc(projects.archivedAt))
+      .all();
+    return this.summarize(rows);
+  }
+
+  isArchived(id: string): boolean {
+    return !!this.db
+      .select({ a: projects.archivedAt })
+      .from(projects)
+      .where(eq(projects.id, id))
+      .get()?.a;
+  }
+
   get(id: string): ProjectDetail {
     const row = this.db.select().from(projects).where(eq(projects.id, id)).get();
     if (!row) throw notFound('Project');
@@ -84,6 +108,7 @@ export class ProjectService {
       onboardedAt: row.onboardedAt,
       onboardingReport: row.onboardingReport ?? null,
       roleEngines: settings?.roleEngines ?? {},
+      roleModels: settings?.roleModels ?? {},
       pipeline: {
         maxConcurrentTasks: settings?.maxConcurrentTasks ?? null,
         maxFixLoops: settings?.maxFixLoops ?? null,
@@ -92,14 +117,15 @@ export class ProjectService {
         fallbackEnabled: settings?.fallbackEnabled ?? false,
         engineFallback: settings?.engineFallback ?? {},
         paused: settings?.pipelinePaused ?? false,
+        routing: settings?.routing ?? null,
       },
     };
   }
 
-  findByPath(path: string): { id: string; localPath: string } | null {
+  findByPath(path: string): { id: string; localPath: string; archivedAt: number | null } | null {
     return (
       this.db
-        .select({ id: projects.id, localPath: projects.localPath })
+        .select({ id: projects.id, localPath: projects.localPath, archivedAt: projects.archivedAt })
         .from(projects)
         .where(eq(projects.localPath, path))
         .get() ?? null
@@ -136,6 +162,9 @@ export class ProjectService {
 
   async create(raw: unknown): Promise<ProjectDetail> {
     const input = CreateProjectInputSchema.parse(raw);
+    // Check wizard uploads before creating folders or repos, so a stale one fails cleanly.
+    const stagedIds = input.mode === 'scratch' ? input.initialAttachmentIds : [];
+    this.deps.attachments.assertStaged(stagedIds);
     let localPath: string;
     let githubRepo: string | null = null;
     let defaultBranch: string | null = null;
@@ -192,6 +221,11 @@ export class ProjectService {
       defaultBranch = repo.defaultBranch;
     }
 
+    const files = await this.deps.attachments.claim(localPath, stagedIds);
+    const requirementText =
+      input.mode === 'scratch'
+        ? input.initialRequirement?.trim() || (files.length ? ATTACHMENTS_ONLY_REQUIREMENT : '')
+        : '';
     const name = input.name ?? (githubRepo ? githubRepo.split('/')[1]! : basename(localPath));
     const id = newId('prj');
     const now = Date.now();
@@ -217,14 +251,21 @@ export class ProjectService {
       tx.insert(projectSettings)
         .values({ projectId: id, roleEngines: input.roleEngines ?? {} })
         .run();
-      if (input.mode === 'scratch' && input.initialRequirement?.trim()) {
+      if (requirementText) {
         tx.insert(requirements)
           .values({
             id: newId('req'),
             projectId: id,
             author: 'user',
-            content: input.initialRequirement.trim(),
+            content: requirementText,
             intent: 'generate_plan',
+            attachments: files.map((f) => ({
+              id: f.id,
+              name: f.name,
+              mime: f.mime,
+              size: f.size,
+              storagePath: f.path,
+            })),
           })
           .run();
       }
@@ -260,6 +301,15 @@ export class ProjectService {
           const v = input.commands[k];
           if (v !== undefined) next[k] = v?.trim() ? v.trim() : null;
         }
+        if (input.commands.services !== undefined)
+          next.services = input.commands.services?.length
+            ? input.commands.services.map((s) => ({
+                name: s.name,
+                command: s.command,
+                cwd: s.cwd?.replace(/^\.\/?/, '').replace(/\/+$/, '') || null,
+                port: s.port ?? null,
+              }))
+            : null;
         patch.commands = next;
       }
       if (Object.keys(patch).length)
@@ -267,6 +317,12 @@ export class ProjectService {
       if (input.roleEngines !== undefined) {
         tx.update(projectSettings)
           .set({ roleEngines: input.roleEngines })
+          .where(eq(projectSettings.projectId, id))
+          .run();
+      }
+      if (input.roleModels !== undefined) {
+        tx.update(projectSettings)
+          .set({ roleModels: input.roleModels })
           .where(eq(projectSettings.projectId, id))
           .run();
       }
@@ -281,7 +337,38 @@ export class ProjectService {
     return this.get(id);
   }
 
-  /** Removes the project from AgentForge. Files on disk are never touched. */
+  /**
+   * Hides the project from the dashboard and stops everything it runs, keeping all its
+   * data so it can be restored. Callers stop running agents (see Orchestrator.suspendProject).
+   */
+  archive(id: string): ProjectDetail {
+    this.assertExists(id);
+    if (!this.isArchived(id)) {
+      this.db.update(projects).set({ archivedAt: Date.now() }).where(eq(projects.id, id)).run();
+      this.deps.bus.emit('project.archived', { projectId: id }, [
+        Topics.global,
+        Topics.project(id),
+      ]);
+    }
+    return this.get(id);
+  }
+
+  /** Brings an archived project back; its tasks continue where they stopped. */
+  restore(id: string): ProjectDetail {
+    this.assertExists(id);
+    if (!this.isArchived(id)) return this.get(id);
+    // No other project can hold its folder meanwhile: local paths are unique, and attaching
+    // an archived project's folder is refused with a pointer to Restore.
+    this.db
+      .update(projects)
+      .set({ archivedAt: null, lastActivityAt: Date.now() })
+      .where(eq(projects.id, id))
+      .run();
+    this.emitUpdated(id);
+    return this.get(id);
+  }
+
+  /** Deletes the project and all its data from AgentForge for good. Files on disk are never touched. */
   delete(id: string): void {
     this.assertExists(id);
     this.db.delete(projects).where(eq(projects.id, id)).run();
@@ -431,6 +518,20 @@ export class ProjectService {
     this.emitUpdated(id);
   }
 
+  /** Record the repository's default/working branch (git init, the Git tab). */
+  setBranches(
+    id: string,
+    b: { defaultBranch?: string | null; workingBranch?: string | null },
+  ): void {
+    this.assertExists(id);
+    const patch: Partial<typeof projects.$inferInsert> = {};
+    if (b.defaultBranch !== undefined) patch.defaultBranch = b.defaultBranch;
+    if (b.workingBranch !== undefined) patch.workingBranch = b.workingBranch;
+    if (!Object.keys(patch).length) return;
+    this.db.update(projects).set(patch).where(eq(projects.id, id)).run();
+    this.emitUpdated(id);
+  }
+
   /** Re-broadcast a project after another service changed it. */
   touch(id: string): void {
     this.emitUpdated(id);
@@ -532,6 +633,7 @@ export class ProjectService {
         },
         openErrorCount: Number(errMap.get(p.id) ?? 0),
         lastActivityAt: p.lastActivityAt,
+        archivedAt: p.archivedAt,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
       };

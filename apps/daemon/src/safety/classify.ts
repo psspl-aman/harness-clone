@@ -17,7 +17,9 @@ const within = (root: string, p: string) => {
   const r = relative(root, abs);
   return r === '' || (!r.startsWith('..') && !isAbsolute(r));
 };
-const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, process.env.HOME ?? '/home');
+// %USERPROFILE% on Windows, $HOME on POSIX.
+const homeDir = () => process.env.HOME || process.env.USERPROFILE || '/home';
+const expandHome = (p: string) => p.replace(/^~(?=$|[\\/])/, homeDir());
 
 const allow = (summary: string): GuardVerdict => ({ level: 'allow', reason: '', summary });
 
@@ -36,7 +38,9 @@ export function classifyCommand(command: string, root: string): GuardVerdict {
   if (/:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/.test(cmd)) return deny('Fork bomb');
   if (/\bmkfs(\.\w+)?\b|\bdd\b[^\n]*\bof=\/dev\/(sd|nvme|disk|hd)/.test(cmd))
     return deny('Writes to a disk device');
-  if (/\b(shutdown|reboot|halt|poweroff)\b/.test(cmd)) return deny('Shuts down the machine');
+  if (/\bformat\s+[A-Za-z]:|\bFormat-Volume\b/i.test(cmd)) return deny('Formats a disk');
+  if (/\b(shutdown|reboot|halt|poweroff|Stop-Computer|Restart-Computer)\b/i.test(cmd))
+    return deny('Shuts down the machine');
 
   // rm -r / -f with dangerous targets.
   for (const m of cmd.matchAll(/\brm\s+((?:-[a-zA-Z]+\s+|--[a-z-]+\s+)*)([^;&|\n]+)/g)) {
@@ -53,8 +57,9 @@ export function classifyCommand(command: string, root: string): GuardVerdict {
         (p === '/' ||
           p === '/*' ||
           p === '~' ||
-          p === process.env.HOME ||
+          p === homeDir() ||
           /^\$\{?HOME\}?\/?\*?$/.test(t) ||
+          /^[A-Za-z]:[\\/]?\*?$/.test(p) ||
           p === '..' ||
           p.startsWith('../') ||
           p === '.' ||

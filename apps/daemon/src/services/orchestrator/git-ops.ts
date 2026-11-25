@@ -1,8 +1,8 @@
 import type { DiffFileDto, TaskDiffDto } from '@agentforge/shared';
 import { execa } from 'execa';
-import { existsSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { identityConfig, SECRET_FILE_RE } from '../git';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { identityConfig, isSecretFile } from '../git';
 
 const MAX_PATCH = 400_000;
 
@@ -12,7 +12,10 @@ async function git(
   args: string[],
   opts: { allowFail?: boolean; env?: Record<string, string> } = {},
 ) {
-  const r = await execa('git', args, {
+  // Force LF handling for every managed-repo operation. The user's global git may
+  // have core.autocrlf=true (the Windows default), which would rewrite agent-authored
+  // file contents to CRLF on checkout and corrupt diffs/commits across platforms.
+  const r = await execa('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], {
     cwd,
     reject: false,
     env: { GIT_TERMINAL_PROMPT: '0', ...opts.env },
@@ -90,6 +93,15 @@ export async function mergeBranchesInto(worktree: string, branches: string[]): P
   }
 }
 
+/**
+ * Secret-looking files in the working tree that `commitAll` keeps out of git: untracked
+ * and not covered by .gitignore. Derived from the worktree, so it survives restarts.
+ */
+export async function withheldSecrets(worktree: string): Promise<string[]> {
+  const out = (await git(worktree, ['ls-files', '--others', '--exclude-standard', '-z'])).out;
+  return out.split('\0').filter((f) => f && isSecretFile(f));
+}
+
 /** Stage everything, never secrets, and commit. Returns the new commit or null when nothing changed. */
 export async function commitAll(
   worktree: string,
@@ -99,7 +111,7 @@ export async function commitAll(
   const staged = (await git(worktree, ['diff', '--cached', '--name-only'])).out
     .split('\n')
     .filter(Boolean);
-  const secrets = staged.filter((f) => SECRET_FILE_RE.test(f));
+  const secrets = staged.filter((f) => isSecretFile(f));
   if (secrets.length) await git(worktree, ['rm', '--cached', '--quiet', '--', ...secrets]);
   const files = staged.filter((f) => !secrets.includes(f));
   if (!files.length) return { commit: null, files: [], skippedSecrets: secrets };
@@ -254,4 +266,62 @@ export async function isAncestor(repo: string, ancestor: string, of: string): Pr
 export async function mergeBase(dir: string, a: string, b: string): Promise<string | null> {
   const r = await git(dir, ['merge-base', a, b], { allowFail: true });
   return r.code === 0 ? r.out.trim() : null;
+}
+
+export interface ChangedPath {
+  /** A: only in `to`; D: only in `from`; M: in both. Renames count as D + A. */
+  status: 'A' | 'M' | 'D';
+  path: string;
+}
+
+/** Files that differ between two commits, without rename detection. */
+export async function changedPaths(dir: string, from: string, to = 'HEAD'): Promise<ChangedPath[]> {
+  const out = (await git(dir, ['diff', '--name-status', '--no-renames', '-z', from, to])).out;
+  const parts = out.split('\0').filter(Boolean);
+  const files: ChangedPath[] = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const code = parts[i]![0];
+    files.push({ status: code === 'A' ? 'A' : code === 'D' ? 'D' : 'M', path: parts[i + 1]! });
+  }
+  return files;
+}
+
+/** True when tracked files have no uncommitted changes (untracked files are ignored). */
+export async function isClean(dir: string): Promise<boolean> {
+  const r = await git(dir, ['status', '--porcelain', '--untracked-files=no']);
+  return r.out.trim() === '';
+}
+
+/**
+ * Make `paths` in the working tree match `source`: paths that exist there are restored
+ * from it, the rest are deleted. The index is left alone.
+ */
+export async function setPathsTo(dir: string, source: string, paths: string[]): Promise<void> {
+  const present = new Set<string>();
+  for (const chunk of chunks(paths))
+    for (const p of (
+      await git(dir, ['ls-tree', '-r', '-z', '--name-only', source, '--', ...chunk])
+    ).out.split('\0'))
+      if (p) present.add(p);
+  for (const chunk of chunks(paths.filter((p) => present.has(p))))
+    await git(dir, ['restore', `--source=${source}`, '--worktree', '--', ...chunk]);
+  for (const p of paths) if (!present.has(p)) rmSync(join(dir, p), { force: true });
+}
+
+/** Split long path lists so git's argv stays well under OS limits. */
+function chunks<T>(items: T[], size = 200): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Keep only the files of a unified diff whose (new) path matches `keep`. */
+export function filterPatch(patch: string, keep: (path: string) => boolean): string {
+  return patch
+    .split(/^(?=diff --git )/m)
+    .filter((part) => {
+      const m = /^diff --git a\/.+? b\/(.+)$/m.exec(part);
+      return !!m && keep(m[1]!);
+    })
+    .join('');
 }

@@ -378,6 +378,7 @@ export class TaskService {
         acceptanceCriteria: input.acceptanceCriteria,
         affectedAreas: input.affectedAreas,
         roleEngines: input.roleEngines,
+        roleModels: input.roleModels,
         orderIndex: this.maxOrder(projectId) + 1,
         origin: 'manual',
       });
@@ -399,9 +400,9 @@ export class TaskService {
 
   update(taskId: string, raw: unknown): TaskDto {
     const input = UpdateTaskInputSchema.parse(raw);
-    // Reassigning engines is allowed at any time (it applies from the next step);
+    // Reassigning engines or models is allowed at any time (it applies from the next step);
     // the task definition is locked while an agent works on it.
-    const onlyEngines = Object.keys(input).every((k) => k === 'roleEngines');
+    const onlyEngines = Object.keys(input).every((k) => k === 'roleEngines' || k === 'roleModels');
     const row = onlyEngines ? this.row(taskId) : this.editableRow(taskId);
     if (Object.keys(input).length)
       this.db.update(tasks).set(input).where(eq(tasks.id, row.id)).run();
@@ -657,8 +658,8 @@ export class TaskService {
     return dto;
   }
 
-  approve(taskId: string): TaskDto {
-    const dto = this.transition(taskId, 'APPROVED', 'Approved by you', 'user');
+  approve(taskId: string, by = { reason: 'Approved by you', actor: 'user' }): TaskDto {
+    const dto = this.transition(taskId, 'APPROVED', by.reason, by.actor);
     if (dto.planId) this.syncPlanApproval(dto.planId);
     return dto;
   }
@@ -749,6 +750,9 @@ export class TaskService {
       externalId: string;
       externalUrl: string | null;
       externalUpdatedAt: number | null;
+      priority?: TaskDto['priority'];
+      complexity?: TaskDto['complexity'];
+      acceptanceCriteria?: string[];
     },
   ): TaskDto {
     const plan = this.latestPlan(projectId);
@@ -760,9 +764,9 @@ export class TaskService {
         title: v.title,
         description: v.description,
         type: v.type,
-        priority: 'medium',
-        complexity: 'm',
-        acceptanceCriteria: [],
+        priority: v.priority ?? 'medium',
+        complexity: v.complexity ?? 'm',
+        acceptanceCriteria: v.acceptanceCriteria ?? [],
         affectedAreas: [],
         roleEngines: {},
         orderIndex: this.maxOrder(projectId) + 1,
@@ -795,7 +799,19 @@ export class TaskService {
   /** Apply PMS-side fields (and pipeline-state patch) to an imported task without status checks. */
   updateImported(
     taskId: string,
-    v: Partial<Pick<TaskRow, 'title' | 'description' | 'externalUrl' | 'externalUpdatedAt'>>,
+    v: Partial<
+      Pick<
+        TaskRow,
+        | 'title'
+        | 'description'
+        | 'externalUrl'
+        | 'externalUpdatedAt'
+        | 'priority'
+        | 'complexity'
+        | 'type'
+        | 'acceptanceCriteria'
+      >
+    >,
     state?: Partial<TaskRow['pipelineState']>,
   ): TaskDto {
     const row = this.row(taskId);
@@ -1107,6 +1123,7 @@ export class TaskService {
       acceptanceCriteria: r.acceptanceCriteria,
       affectedAreas: r.affectedAreas,
       roleEngines: r.roleEngines,
+      roleModels: r.roleModels,
       orderIndex: r.orderIndex,
       dependsOn: deps.filter((d) => d.taskId === r.id).map((d) => d.dependsOnTaskId),
       subtasks: subs
@@ -1118,7 +1135,9 @@ export class TaskService {
         r.pmsConnectionId && r.externalId
           ? {
               connectionId: r.pmsConnectionId,
-              provider: providers.get(r.pmsConnectionId) ?? null,
+              provider: r.pmsConnectionId.startsWith('sht_')
+                ? ('sheet' as const)
+                : (providers.get(r.pmsConnectionId) ?? null),
               id: r.externalId,
               url: r.externalUrl,
               updatedAt: r.externalUpdatedAt,

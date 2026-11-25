@@ -31,9 +31,18 @@ describe('task state machine', () => {
 
   it('rejects skipping steps and leaving DONE', () => {
     expect(canTransition('DRAFT', 'IN_DEVELOPMENT')).toBe(false);
-    expect(canTransition('IN_DEVELOPMENT', 'DONE')).toBe(false);
+    // Review/Test can't be skipped in the full pipeline.
+    expect(canTransition('IN_DEVELOPMENT', 'IN_TESTING')).toBe(false);
     for (const s of TASK_STATUSES) expect(canTransition('DONE', s)).toBe(false);
     expect(() => assertTransition('DRAFT', 'DONE')).toThrow(InvalidTransitionError);
+  });
+
+  it('lets the LITE pipeline merge straight after Develop', () => {
+    // Complexity routing can send xs/s tasks Develop → Merge, skipping review/test/docs.
+    expect(canTransition('IN_DEVELOPMENT', 'DONE')).toBe(true);
+    expect(canTransition('IN_DEVELOPMENT', 'BLOCKED')).toBe(true); // merge conflict
+    // Normal full-pipeline exit is still available.
+    expect(canTransition('IN_DEVELOPMENT', 'IN_REVIEW')).toBe(true);
   });
 
   it('allows pausing, failing and escalating any active task', () => {
