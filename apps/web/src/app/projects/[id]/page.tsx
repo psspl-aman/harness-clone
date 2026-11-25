@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DocsTab } from '@/components/docs/docs-tab';
+import { GitTab } from '@/components/git/git-tab';
 import { MemoryList } from '@/components/memory/memory-list';
 import { BottomPanel } from '@/components/workspace/bottom-panel';
 import { CodeTab } from '@/components/workspace/code-tab';
@@ -34,8 +35,8 @@ import { useWorkspaceUi } from '@/components/workspace/store';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type Tab = 'plan' | 'overview' | 'chat' | 'preview' | 'code' | 'docs' | 'memory';
-const TAB_SHORTCUTS: Tab[] = ['plan', 'preview', 'code', 'docs', 'memory', 'overview'];
+type Tab = 'plan' | 'overview' | 'chat' | 'preview' | 'code' | 'git' | 'docs' | 'memory';
+const TAB_SHORTCUTS: Tab[] = ['plan', 'preview', 'code', 'docs', 'memory', 'overview', 'git'];
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -67,7 +68,7 @@ export default function ProjectWorkspace() {
       }),
   });
 
-  // Alt+1…6 switches workspace tabs.
+  // Alt+1…7 switches workspace tabs.
   useEffect(() => {
     const order = TAB_SHORTCUTS;
     const onKey = (e: KeyboardEvent) => {
@@ -120,6 +121,7 @@ export default function ProjectWorkspace() {
     { id: 'plan', label: 'Plan & Tasks' },
     { id: 'preview', label: 'Preview' },
     { id: 'code', label: 'Code' },
+    { id: 'git', label: 'Git' },
     { id: 'docs', label: 'Docs' },
     { id: 'memory', label: 'Memory' },
     { id: 'overview', label: 'Overview' },
@@ -162,9 +164,13 @@ export default function ProjectWorkspace() {
               </a>
             )}
             {p.workingBranch && (
-              <span className="flex items-center gap-1.5">
+              <button
+                className="hover:text-foreground flex items-center gap-1.5"
+                title="Branches and git actions"
+                onClick={() => setTab('git')}
+              >
                 <GitBranch className="size-3.5" /> {p.workingBranch}
-              </span>
+              </button>
             )}
           </div>
         </div>
@@ -290,6 +296,7 @@ export default function ProjectWorkspace() {
                 }
               />
             )}
+            {tab === 'git' && <GitTab projectId={id} onOpenTask={openTaskInPlan} />}
             {tab === 'docs' && <DocsTab projectId={id} />}
             {tab === 'memory' && (
               <div className="mx-auto max-w-4xl p-4 md:p-6">

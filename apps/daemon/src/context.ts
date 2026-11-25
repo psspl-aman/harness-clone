@@ -24,6 +24,7 @@ import type { CommandAdvisor } from './services/onboarding/command-advisor';
 import type { MemoryService } from './services/memory';
 import type { DocsService } from './services/docs';
 import type { SafetyService } from './services/safety';
+import type { GitManager } from './services/git-manager';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -53,6 +54,7 @@ export interface AppContext {
   memory: MemoryService;
   docs: DocsService;
   safety: SafetyService;
+  git: GitManager;
   workspaceRoot: () => string;
   startedAt: number;
 }

@@ -299,6 +299,18 @@ export class GithubService {
     }
   }
 
+  /** Env that lets git talk to `url` with the connected GitHub token (empty for other hosts). */
+  gitEnvFor(url: string): Record<string, string> {
+    if (!/^https:\/\/github\.com\//i.test(url)) return {};
+    return this.authEnv(url, this.secrets.get(TOKEN_SECRET));
+  }
+
+  /** Hide the token if git echoes it back. */
+  redact(text: string): string {
+    const token = this.secrets.get(TOKEN_SECRET);
+    return token ? text.split(token).join('***') : text;
+  }
+
   private authEnv(url: string, token: string | null): Record<string, string> {
     if (!token || !url.startsWith('https://')) return {};
     const basic = Buffer.from(`x-access-token:${token}`).toString('base64');

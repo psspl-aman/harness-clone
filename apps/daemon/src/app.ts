@@ -43,6 +43,8 @@ import { EngineRegistry } from './engines/registry';
 import { TerminalService } from './services/terminals';
 import { registerGithubRoutes } from './routes/github';
 import { registerProjectRoutes } from './routes/projects';
+import { registerGitRoutes } from './routes/git';
+import { GitManager } from './services/git-manager';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerSystemRoutes } from './routes/system';
 import { FsService } from './services/fs';
@@ -292,6 +294,13 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     sheets,
     commandAdvisor,
     memory,
+    git: new GitManager({
+      db: dbHandle.db,
+      bus,
+      projects,
+      github,
+      lock: (projectId, fn) => orchestrator.withMergeLock(projectId, fn),
+    }),
     workspaceRoot,
     startedAt: Date.now(),
   };
@@ -311,6 +320,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerSystemRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
   registerProjectRoutes(app, ctx);
+  registerGitRoutes(app, ctx);
   registerFsRoutes(app, ctx);
   registerGithubRoutes(app, ctx);
   registerEngineRoutes(app, ctx);
