@@ -11,7 +11,7 @@ import { FileSpreadsheet, SquareKanban, Server } from 'lucide-react';
 
 export default function IntegrationsPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
+    <div className="portal-content max-w-3xl py-8">
       <PageHeader
         title="Integrations"
         description="Connections AgentForge uses on your behalf. Credentials are encrypted and stay on this machine."
