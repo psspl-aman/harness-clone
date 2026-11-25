@@ -47,6 +47,7 @@ import { registerSettingsRoutes } from './routes/settings';
 import { registerSystemRoutes } from './routes/system';
 import { FsService } from './services/fs';
 import { GithubService, type GithubServiceOptions } from './services/github';
+import { AttachmentStore } from './services/attachments';
 import { ProjectService } from './services/projects';
 import { SecretStore } from './services/secrets';
 import { SettingsService } from './services/settings';
@@ -116,11 +117,13 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
         .from(projectsTable)
         .all(),
   });
+  const attachments = new AttachmentStore({ root: join(config.home, 'attachments'), log: app.log });
   const projects = new ProjectService({
     db: dbHandle.db,
     bus,
     fs,
     github,
+    attachments,
     workspaceRoot,
     log: app.log,
   });
@@ -172,6 +175,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     runs,
     settings,
     memory,
+    attachments,
     log: app.log,
   });
   const orchestrator = new Orchestrator({
@@ -270,6 +274,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   });
 
   const ctx: AppContext = {
+    attachments,
     config,
     db: dbHandle.db,
     bus,
@@ -329,6 +334,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   registerAgentMcpRoutes(app, ctx);
 
   app.addHook('onReady', async () => {
+    attachments.sweepStaging();
     projects.resumeInterruptedOnboarding();
     orchestrator.start();
     mcp.start();

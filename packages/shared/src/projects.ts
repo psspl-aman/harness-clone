@@ -105,6 +105,11 @@ export const CreateProjectInputSchema = z.discriminatedUnion('mode', [
     stackPreferences: z.string().max(4000).optional(),
     roleEngines: RoleEnginesSchema.partial().optional(),
     initialRequirement: z.string().max(50_000).optional(),
+    /** Files staged with POST /api/attachments/staged, attached to the initial requirement. */
+    initialAttachmentIds: z
+      .array(z.string().regex(/^stg_[a-z0-9]+$/, 'Invalid upload id'))
+      .max(10, 'Attach at most 10 files')
+      .default([]),
   }),
   z.object({
     mode: z.literal('existing'),

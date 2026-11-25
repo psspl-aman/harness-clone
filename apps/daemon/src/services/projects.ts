@@ -27,6 +27,7 @@ import type { EventBus } from '../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../http/errors';
 import { newId } from '../lib/id';
 import { normalizePath, slugify } from '../lib/paths';
+import type { AttachmentStore } from './attachments';
 import type { FsService } from './fs';
 import { currentBranch, initRepo, isRepoRoot } from './git';
 import type { GithubService } from './github';
@@ -34,11 +35,15 @@ import { analyzeProject, stackFromReport } from './onboarding/analyzer';
 
 type ProjectRow = typeof projects.$inferSelect;
 
+/** The requirement text when the wizard got files but no description. */
+const ATTACHMENTS_ONLY_REQUIREMENT = 'Build what the attached documents describe.';
+
 export interface ProjectServiceDeps {
   db: Db;
   bus: EventBus;
   fs: FsService;
   github: GithubService;
+  attachments: AttachmentStore;
   workspaceRoot: () => string;
   log: { warn: (o: unknown, m: string) => void; error: (o: unknown, m: string) => void };
 }
@@ -157,6 +162,9 @@ export class ProjectService {
 
   async create(raw: unknown): Promise<ProjectDetail> {
     const input = CreateProjectInputSchema.parse(raw);
+    // Check wizard uploads before creating folders or repos, so a stale one fails cleanly.
+    const stagedIds = input.mode === 'scratch' ? input.initialAttachmentIds : [];
+    this.deps.attachments.assertStaged(stagedIds);
     let localPath: string;
     let githubRepo: string | null = null;
     let defaultBranch: string | null = null;
@@ -213,6 +221,11 @@ export class ProjectService {
       defaultBranch = repo.defaultBranch;
     }
 
+    const files = await this.deps.attachments.claim(localPath, stagedIds);
+    const requirementText =
+      input.mode === 'scratch'
+        ? input.initialRequirement?.trim() || (files.length ? ATTACHMENTS_ONLY_REQUIREMENT : '')
+        : '';
     const name = input.name ?? (githubRepo ? githubRepo.split('/')[1]! : basename(localPath));
     const id = newId('prj');
     const now = Date.now();
@@ -238,14 +251,21 @@ export class ProjectService {
       tx.insert(projectSettings)
         .values({ projectId: id, roleEngines: input.roleEngines ?? {} })
         .run();
-      if (input.mode === 'scratch' && input.initialRequirement?.trim()) {
+      if (requirementText) {
         tx.insert(requirements)
           .values({
             id: newId('req'),
             projectId: id,
             author: 'user',
-            content: input.initialRequirement.trim(),
+            content: requirementText,
             intent: 'generate_plan',
+            attachments: files.map((f) => ({
+              id: f.id,
+              name: f.name,
+              mime: f.mime,
+              size: f.size,
+              storagePath: f.path,
+            })),
           })
           .run();
       }

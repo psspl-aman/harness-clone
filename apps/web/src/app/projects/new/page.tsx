@@ -1,6 +1,11 @@
 'use client';
 
-import type { CreateProjectInput, GithubRepo, RoleEngines } from '@agentforge/shared';
+import type {
+  CreateProjectInput,
+  GithubRepo,
+  RoleEngines,
+  StagedAttachmentDto,
+} from '@agentforge/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -23,6 +28,7 @@ import { GithubConnect, useGithubStatus } from '@/components/github/github-conne
 import { RepoPicker } from '@/components/github/repo-picker';
 import { GithubIcon } from '@/components/icons';
 import { EngineRoles } from '@/components/projects/engine-roles';
+import { RequirementFiles } from '@/components/projects/requirement-files';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,7 +89,11 @@ const toFolder = (name: string) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
 // Last path segment, handling both POSIX (/) and Windows (\) separators.
-const basename = (p: string) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? '';
+const basename = (p: string) =>
+  p
+    .replace(/[\\/]+$/, '')
+    .split(/[\\/]/)
+    .pop() ?? '';
 // An absolute path on either platform: POSIX "/…" or Windows "C:\…" / "C:/…".
 const isAbsPath = (p: string) => /^(\/|[A-Za-z]:[\\/])/.test(p);
 
@@ -217,6 +227,7 @@ function Wizard({ mode }: { mode: Mode }) {
   const [ghRepo, setGhRepo] = useState<GithubRepo | null>(null);
   const [stack, setStack] = useState('');
   const [requirement, setRequirement] = useState('');
+  const [requirementFiles, setRequirementFiles] = useState<StagedAttachmentDto[]>([]);
   // Existing
   const [existingPath, setExistingPath] = useState('');
   const [initGit, setInitGit] = useState(true);
@@ -283,6 +294,7 @@ function Wizard({ mode }: { mode: Mode }) {
         stackPreferences: stack.trim() || undefined,
         roleEngines,
         initialRequirement: requirement.trim() || undefined,
+        initialAttachmentIds: requirementFiles.map((f) => f.id),
       };
     }
     return {
@@ -310,6 +322,7 @@ function Wizard({ mode }: { mode: Mode }) {
     stack,
     roleEngines,
     requirement,
+    requirementFiles,
     derivedName,
     existingPath,
     initGit,
@@ -630,19 +643,24 @@ function Wizard({ mode }: { mode: Mode }) {
       </div>
     ),
     requirement: (
-      <Field
-        label="What should we build?"
-        htmlFor="req"
-        hint="Optional. The Planner starts drafting a plan as soon as the project is created — you review and edit it before anything is built."
-      >
-        <Textarea
-          id="req"
-          rows={9}
-          placeholder="Describe the product, key features, users and any constraints. Markdown is fine."
-          value={requirement}
-          onChange={(e) => setRequirement(e.target.value)}
-        />
-      </Field>
+      <div className="space-y-4">
+        <Field
+          label="What should we build?"
+          htmlFor="req"
+          hint="Optional. The Planner starts drafting a plan as soon as the project is created — you review and edit it before anything is built."
+        >
+          <Textarea
+            id="req"
+            rows={9}
+            placeholder="Describe the product, key features, users and any constraints. Markdown is fine."
+            value={requirement}
+            onChange={(e) => setRequirement(e.target.value)}
+          />
+        </Field>
+        <Field label="Requirement documents">
+          <RequirementFiles value={requirementFiles} onChange={setRequirementFiles} />
+        </Field>
+      </div>
     ),
     review: (
       <dl className="divide-y rounded-xl border text-sm">
@@ -670,7 +688,13 @@ function Wizard({ mode }: { mode: Mode }) {
                   'Requirement',
                   requirement
                     ? `${requirement.slice(0, 140)}${requirement.length > 140 ? '…' : ''}`
-                    : 'None yet',
+                    : requirementFiles.length
+                      ? 'From the attached documents'
+                      : 'None yet',
+                ],
+                [
+                  'Documents',
+                  requirementFiles.length ? requirementFiles.map((f) => f.name).join(', ') : 'None',
                 ],
               ]
             : []),
