@@ -12,9 +12,52 @@
  * the live process) so the behaviour is pure and testable on any host.
  */
 
+import { existsSync } from 'node:fs';
+
 type Env = Record<string, string | undefined>;
 
 export const isWindows = process.platform === 'win32';
+
+/**
+ * Path to a Git Bash `bash.exe` on Windows, for `CLAUDE_CODE_GIT_BASH_PATH`.
+ *
+ * Claude Code runs its PreToolUse hooks (including AgentForge's own safety
+ * guard) and its Bash tool through Git Bash on Windows. When it can't locate
+ * Git Bash it reports "Git Bash wasn't found" and fails every tool call, so an
+ * agent can read/think but never write a file. Pointing it at a detected
+ * bash.exe fixes this. Returns undefined on POSIX (bash is native) or when no
+ * Git install can be found. Pure given `exists`, so it is testable on any host.
+ */
+export function gitBashPath(
+  platform: NodeJS.Platform = process.platform,
+  env: Env = process.env,
+  exists: (p: string) => boolean = existsSync,
+): string | undefined {
+  if (platform !== 'win32') return undefined;
+  const preset = env.CLAUDE_CODE_GIT_BASH_PATH?.trim();
+  if (preset && exists(preset)) return preset;
+  const roots: string[] = [];
+  // Derive the Git install root from git.exe on PATH (…\cmd, …\bin, …\mingw64\bin).
+  for (const raw of (env.PATH || env.Path || '').split(';')) {
+    const dir = raw.trim().replace(/[\\/]+$/, '');
+    if (!dir || !exists(`${dir}\\git.exe`)) continue;
+    // Strip the known bin subdir to get the install root (leftmost match wins, so
+    // "…\mingw64\bin" strips the whole segment rather than just the trailing "\bin").
+    const root = dir.replace(/[\\/](?:mingw(?:64|32)[\\/]bin|cmd|bin)$/i, '');
+    if (root && root !== dir) roots.push(root);
+  }
+  // Common install locations as a fallback.
+  const programsLocal = env.LOCALAPPDATA ? `${env.LOCALAPPDATA}\\Programs` : undefined;
+  for (const base of [env.ProgramFiles, env['ProgramFiles(x86)'], programsLocal]) {
+    if (base) roots.push(`${base}\\Git`);
+  }
+  for (const root of roots) {
+    for (const cand of [`${root}\\bin\\bash.exe`, `${root}\\usr\\bin\\bash.exe`]) {
+      if (exists(cand)) return cand;
+    }
+  }
+  return undefined;
+}
 
 /** The Windows command interpreter (honours a custom %ComSpec%). */
 export const comSpec = (env: Env = process.env): string => env.ComSpec || 'cmd.exe';
