@@ -224,6 +224,27 @@ Columns are matched by header name (Title/Task/Name, Description/Details, Priori
 
 `TaskDto.external` is set for imported tasks: `connectionId`, `provider` (`sheet` for spreadsheet rows), `id`, `url`, `updatedAt` and `conflict`. Live events: `mcp.updated`, `mcp.removed`, `pms.connections_changed`, `pms.mapping` and `pms.mapping_removed`.
 
+## Git (branches and the work on each)
+
+| Method | Path                                    | Description                                                                                                                                                                                       |
+| ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/projects/:id/git`                 | `GitOverviewDto`: `current` branch, `workingBranch`, `remotes` (credentials removed), `upstream` ahead/behind, uncommitted `changes`, `branches` (local + up to 300 recent remote), `work` groups |
+| GET    | `/api/projects/:id/git/branch`          | `?name=&base=` → `GitBranchDetailDto`: commits not in `base` (default: the working branch; `base=` empty = full history), linked tasks, and the diff since the branches split                     |
+| POST   | `/api/projects/:id/git/init`            | `git init` + first commit (secrets left out) when the folder has no repository. 409 if it has one                                                                                                 |
+| POST   | `/api/projects/:id/git/branches`        | `{ name, from?, checkout? }` create a branch (from the working branch by default). 409 if it exists                                                                                               |
+| POST   | `/api/projects/:id/git/branches/delete` | `{ name, force? }`. Refuses the current, working and default branches, and branches a running task uses. `BRANCH_UNMERGED` (409) asks for `force`                                                 |
+| POST   | `/api/projects/:id/git/checkout`        | `{ branch }` switch the project folder; `origin/x` creates a local tracking branch. Refuses branches agents have checked out                                                                      |
+| POST   | `/api/projects/:id/git/merge`           | `{ source, target? }` merge a local branch into `target` (the working branch by default), serialised with agent merges. `MERGE_CONFLICT` (409) changes nothing                                    |
+| POST   | `/api/projects/:id/git/working-branch`  | `{ branch }` the branch agents start from and merge into                                                                                                                                          |
+| POST   | `/api/projects/:id/git/commit`          | `{ message }` commit every change on the current branch; secret files are never committed (a first commit also writes a safe `.gitignore`)                                                        |
+| POST   | `/api/projects/:id/git/abort`           | Abort a merge, rebase or cherry-pick left in progress                                                                                                                                             |
+| POST   | `/api/projects/:id/git/fetch`           | `git fetch --prune` every remote                                                                                                                                                                  |
+| POST   | `/api/projects/:id/git/pull`            | Fast-forward the current branch from its upstream (409 if they diverged)                                                                                                                          |
+| POST   | `/api/projects/:id/git/push`            | `{ branch? }` push (and track) the current or given branch                                                                                                                                        |
+| POST   | `/api/projects/:id/git/pull-request`    | `{ branch, base?, title?, body? }` push and open a GitHub pull request (needs a linked repo and a GitHub connection)                                                                              |
+
+Every action returns `GitActionResultDto` (`message`, the fresh `overview`, and `url` for pull requests) and emits `project.git`. A task's `state` in `work` is `merged` (into `mergedInto`), `pull_request`, `in_progress` (on `branchName`, heading for `baseBranch`), `cancelled` or `done`. GitHub remotes use the connected token; other remotes use your own git credentials (never prompted).
+
 ## Memory and docs
 
 | Method | Path                                            | Description                                                                                   |

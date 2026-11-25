@@ -217,11 +217,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               suggestion: e.payload.suggestion,
             });
             break;
+          case 'project.git':
+            void queryClient.invalidateQueries({ queryKey: qk.git(e.payload.projectId) });
+            break;
           case 'terminal.exit':
             void queryClient.invalidateQueries({ queryKey: ['terminals'] });
             break;
           case 'task.status_changed':
             void queryClient.invalidateQueries({ queryKey: ['activity'] });
+            // Agents create, merge and remove task branches as tasks move.
+            void queryClient.invalidateQueries({ queryKey: qk.git(e.payload.projectId) });
             if (e.payload.to === 'DONE') {
               void queryClient.invalidateQueries({ queryKey: qk.docs(e.payload.projectId) });
               void queryClient.invalidateQueries({ queryKey: qk.memory(e.payload.projectId) });

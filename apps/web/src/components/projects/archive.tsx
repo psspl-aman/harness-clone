@@ -235,7 +235,7 @@ export function ArchivedProjectsSection() {
   const list = archived.data ?? [];
   if (!list.length) return null;
   return (
-    <section className="mt-10" aria-label="Archived projects">
+    <section className="mt-6 border-t pt-3" aria-label="Archived projects">
       <button
         className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm font-medium"
         aria-expanded={open}

@@ -378,6 +378,7 @@ export class TaskService {
         acceptanceCriteria: input.acceptanceCriteria,
         affectedAreas: input.affectedAreas,
         roleEngines: input.roleEngines,
+        roleModels: input.roleModels,
         orderIndex: this.maxOrder(projectId) + 1,
         origin: 'manual',
       });

@@ -246,6 +246,17 @@ Keep your task list in a spreadsheet and AgentForge works through it.
 3. **Start working automatically** (on by default) approves new rows straight away, so agents build them highest priority first with no waiting for you. Turn it off to review each task first. **Let the Planner detail each task** adds acceptance criteria and subtasks before building, keeping your title and priority.
 4. **New rows are picked up** every few minutes (or press **Sync**). Editing a row updates its task while it's still a draft. If a task is already being built, the change is shown on the task to apply or dismiss.
 
+## Git: branches and the work on each
+
+Open a project's **Git** tab (or click the branch name under the project title).
+
+- **Status:** the branch the project folder is on, uncommitted changes, the remote and how far you are ahead or behind it, with **Fetch**, **Pull** and **Push**. **Agents branch from and merge into** picks the working branch for new tasks.
+- **Branches:** every local branch (remote ones with the **Remote** switch) with its last commit, how many commits it is ahead of or behind the working branch, and badges for _current_, _working_, _merged_, _agent_ (an agent is working in it) and the tasks on it. Select a branch to see its commits (linked to their tasks), its tasks and the diff against any other branch. The **⋯** menu switches to it, merges it, makes it the working branch, pushes it, opens a GitHub pull request, starts a new branch from it or deletes it. A merge that would conflict changes nothing and tells you which files conflict.
+- **Work by branch:** for each branch, the tasks whose work was merged into it (with the merge commit), is waiting in a pull request, or is still in progress on its own branch.
+- **Changes:** uncommitted files with a box to commit them. Secret files (.env, keys) are never committed.
+
+If the folder isn't a git repository (or has no commits yet), the tab offers to initialise it or make the first commit, since agents need a commit to branch from.
+
 ## Memory and documentation
 
 - **Project memory (Memory tab).** Facts agents should know about the project: stack, architecture, conventions, commands, decisions, pitfalls, glossary and features. Project analysis and the Documenter add entries automatically, and you can add, edit, pin or delete your own. **Completed tasks** holds a summary of each finished task.

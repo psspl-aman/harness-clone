@@ -11,6 +11,10 @@ const config: NextConfig = {
   devIndicators: false,
   turbopack: { root },
   outputFileTracingRoot: root,
+  // Serve the standalone welcome/service page (public/welcome.html) at a clean URL.
+  async rewrites() {
+    return [{ source: '/welcome', destination: '/welcome.html' }];
+  },
 };
 
 export default config;

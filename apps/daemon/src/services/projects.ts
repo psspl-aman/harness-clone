@@ -518,6 +518,20 @@ export class ProjectService {
     this.emitUpdated(id);
   }
 
+  /** Record the repository's default/working branch (git init, the Git tab). */
+  setBranches(
+    id: string,
+    b: { defaultBranch?: string | null; workingBranch?: string | null },
+  ): void {
+    this.assertExists(id);
+    const patch: Partial<typeof projects.$inferInsert> = {};
+    if (b.defaultBranch !== undefined) patch.defaultBranch = b.defaultBranch;
+    if (b.workingBranch !== undefined) patch.workingBranch = b.workingBranch;
+    if (!Object.keys(patch).length) return;
+    this.db.update(projects).set(patch).where(eq(projects.id, id)).run();
+    this.emitUpdated(id);
+  }
+
   /** Re-broadcast a project after another service changed it. */
   touch(id: string): void {
     this.emitUpdated(id);

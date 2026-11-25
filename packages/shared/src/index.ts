@@ -14,3 +14,4 @@ export * from './memory';
 export * from './safety';
 export * from './estimate';
 export * from './sheets';
+export * from './git';

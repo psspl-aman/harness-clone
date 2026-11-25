@@ -808,11 +808,15 @@ export class Orchestrator {
   // ─── Merge ─────────────────────────────────────────────────────────────────
 
   private async finalize(taskId: string): Promise<void> {
-    const task = this.row(taskId);
-    const prev = this.mergeLocks.get(task.projectId) ?? Promise.resolve();
-    const next = prev.catch(() => {}).then(() => this.doFinalize(taskId));
-    this.mergeLocks.set(task.projectId, next);
-    await next;
+    await this.withMergeLock(this.row(taskId).projectId, () => this.doFinalize(taskId));
+  }
+
+  /** Run `fn` after any merge in progress for the project (also used for manual git actions). */
+  withMergeLock<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.mergeLocks.get(projectId) ?? Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+    this.mergeLocks.set(projectId, next);
+    return next;
   }
 
   private async doFinalize(taskId: string): Promise<void> {

@@ -54,6 +54,8 @@ export const EventPayloads = {
   'sheet.source': z.object({ source: z.custom<SheetSourceDto>() }),
   'sheet.removed': z.object({ projectId: z.string(), sourceId: z.string() }),
   'project.command_suggestion': z.object({ suggestion: z.custom<CommandSuggestionDto>() }),
+  /** Branches, commits or the checkout changed (refetch the Git tab). */
+  'project.git': z.object({ projectId: z.string(), action: z.string() }),
   /** High-volume, transient: not kept in the replay buffer. */
   'run.event': z.object({ runId: z.string(), event: z.custom<AgentEvent>() }),
   'run.finished': z.object({ runId: z.string(), result: z.custom<AgentRunResultDto>() }),

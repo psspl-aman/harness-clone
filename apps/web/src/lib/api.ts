@@ -1,6 +1,13 @@
 import type {
   ApiError,
   CommandSuggestionDto,
+  GitActionResultDto,
+  GitBranchDetailDto,
+  GitCreateBranchInput,
+  GitDeleteBranchInput,
+  GitMergeInput,
+  GitOverviewDto,
+  GitPullRequestInput,
   ProjectCostDto,
   SheetPreviewDto,
   SheetPreviewInput,
@@ -146,6 +153,8 @@ async function uploadFiles<T>(path: string, files: File[]): Promise<T> {
   }
   return data as T;
 }
+const gitAction = (id: string, path: string, body: unknown = {}) =>
+  request<GitActionResultDto>('POST', `/api/projects/${id}/git/${path}`, body);
 
 export const api = {
   system: () => request<SystemInfo>('GET', '/api/system'),
@@ -408,6 +417,30 @@ export const api = {
     resolveConflict: (taskId: string, action: 'apply' | 'dismiss') =>
       request<TaskDto>('POST', `/api/tasks/${taskId}/pms-conflict`, { action }),
   },
+  git: {
+    overview: (id: string) => request<GitOverviewDto>('GET', `/api/projects/${id}/git`),
+    branch: (id: string, name: string, base?: string | null) =>
+      request<GitBranchDetailDto>(
+        'GET',
+        `/api/projects/${id}/git/branch?${new URLSearchParams({
+          name,
+          ...(base === undefined ? {} : { base: base ?? '' }),
+        })}`,
+      ),
+    init: (id: string) => gitAction(id, 'init'),
+    createBranch: (id: string, input: GitCreateBranchInput) => gitAction(id, 'branches', input),
+    deleteBranch: (id: string, input: GitDeleteBranchInput) =>
+      gitAction(id, 'branches/delete', input),
+    checkout: (id: string, branch: string) => gitAction(id, 'checkout', { branch }),
+    merge: (id: string, input: GitMergeInput) => gitAction(id, 'merge', input),
+    setWorkingBranch: (id: string, branch: string) => gitAction(id, 'working-branch', { branch }),
+    commit: (id: string, message: string) => gitAction(id, 'commit', { message }),
+    abort: (id: string) => gitAction(id, 'abort'),
+    fetch: (id: string) => gitAction(id, 'fetch'),
+    pull: (id: string) => gitAction(id, 'pull'),
+    push: (id: string, branch?: string) => gitAction(id, 'push', branch ? { branch } : {}),
+    pullRequest: (id: string, input: GitPullRequestInput) => gitAction(id, 'pull-request', input),
+  },
   sheets: {
     list: () => request<SheetSourceDto[]>('GET', '/api/sheets'),
     preview: (v: SheetPreviewInput) => request<SheetPreviewDto>('POST', '/api/sheets/preview', v),
@@ -490,6 +523,9 @@ export const qk = {
   sheets: ['sheets'] as const,
   commandSuggestion: (projectId: string) => ['projects', projectId, 'command-suggestion'] as const,
   projectCost: (projectId: string) => ['projects', projectId, 'cost'] as const,
+  git: (projectId: string) => ['git', projectId] as const,
+  gitBranch: (projectId: string, name: string, base: string | null | undefined) =>
+    ['git', projectId, 'branch', name, base === undefined ? '~' : (base ?? '')] as const,
   references: (projectId: string, q: string) => ['references', projectId, q] as const,
   githubRepos: (q: string) => ['github', 'repos', q] as const,
   githubOwners: ['github', 'owners'] as const,
