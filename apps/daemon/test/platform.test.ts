@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   comSpec,
+  gitBashPath,
   interactiveShell,
   pathExts,
   ptyCommand,
@@ -88,6 +89,55 @@ describe('platform: pathExts', () => {
 describe('platform: comSpec', () => {
   it('defaults to cmd.exe', () => {
     expect(comSpec({})).toBe('cmd.exe');
+  });
+});
+
+describe('platform: gitBashPath', () => {
+  const has =
+    (...paths: string[]) =>
+    (p: string) =>
+      paths.includes(p);
+
+  it('is undefined on POSIX (bash is native)', () => {
+    expect(gitBashPath('linux', { PATH: '/usr/bin' }, () => true)).toBeUndefined();
+  });
+
+  it('honours CLAUDE_CODE_GIT_BASH_PATH when it exists', () => {
+    const preset = 'D:\\tools\\Git\\bin\\bash.exe';
+    expect(gitBashPath('win32', { CLAUDE_CODE_GIT_BASH_PATH: preset }, has(preset))).toBe(preset);
+  });
+
+  it('ignores CLAUDE_CODE_GIT_BASH_PATH that does not exist and detects instead', () => {
+    const real = 'C:\\Program Files\\Git\\bin\\bash.exe';
+    const env = {
+      CLAUDE_CODE_GIT_BASH_PATH: 'C:\\gone\\bash.exe',
+      ProgramFiles: 'C:\\Program Files',
+    };
+    expect(gitBashPath('win32', env, has(real))).toBe(real);
+  });
+
+  it('derives the Git root from git.exe on PATH (…\\mingw64\\bin)', () => {
+    const root = 'C:\\Users\\me\\AppData\\Local\\Programs\\Git';
+    const env = { PATH: `C:\\Windows;${root}\\mingw64\\bin` };
+    const exists = has(`${root}\\mingw64\\bin\\git.exe`, `${root}\\bin\\bash.exe`);
+    expect(gitBashPath('win32', env, exists)).toBe(`${root}\\bin\\bash.exe`);
+  });
+
+  it('derives from git.exe in …\\cmd and falls back to usr\\bin\\bash.exe', () => {
+    const root = 'C:\\Git';
+    const env = { Path: `${root}\\cmd` };
+    const exists = has(`${root}\\cmd\\git.exe`, `${root}\\usr\\bin\\bash.exe`);
+    expect(gitBashPath('win32', env, exists)).toBe(`${root}\\usr\\bin\\bash.exe`);
+  });
+
+  it('falls back to %LOCALAPPDATA%\\Programs\\Git when git is not on PATH', () => {
+    const bash = 'C:\\Users\\me\\AppData\\Local\\Programs\\Git\\bin\\bash.exe';
+    const env = { PATH: 'C:\\Windows', LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' };
+    expect(gitBashPath('win32', env, has(bash))).toBe(bash);
+  });
+
+  it('is undefined on Windows when no Git install is found', () => {
+    expect(gitBashPath('win32', { PATH: 'C:\\Windows' }, () => false)).toBeUndefined();
   });
 });
 
