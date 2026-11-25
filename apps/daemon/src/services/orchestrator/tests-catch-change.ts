@@ -46,7 +46,7 @@ export type TestsCatchChangeResult =
   | { kind: 'caught'; reverted: string[]; step: VerifyStep }
   /** The tests passed without the change: they don't test it. */
   | { kind: 'missed'; reverted: string[]; step: VerifyStep }
-  /** The run timed out, so there is no verdict. */
+  /** The run timed out or ended without an exit code, so there is no verdict. */
   | { kind: 'inconclusive'; reverted: string[]; step: VerifyStep };
 
 export interface TestsCatchChangeInput {
@@ -84,7 +84,7 @@ export async function checkTestsCatchChange(
   }
   if (!(await gitops.isClean(input.worktree)))
     throw new Error('Could not restore the worktree after the fail-before check');
-  if (step.timedOut) return { kind: 'inconclusive', reverted, step };
+  if (step.timedOut || step.exitCode === null) return { kind: 'inconclusive', reverted, step };
   return { kind: step.exitCode === 0 ? 'missed' : 'caught', reverted, step };
 }
 
@@ -102,6 +102,6 @@ export function formatTestsCatchChange(r: TestsCatchChangeResult): string {
       ? 'Passed: the tests fail without the change, so they test it.'
       : r.kind === 'missed'
         ? 'Failed: the tests still pass without the change, so they do not test it.'
-        : 'Inconclusive: the test command timed out.';
+        : `Inconclusive: the test command ${r.step.timedOut ? 'timed out' : 'ended without an exit code'}.`;
   return `${title}\n${verdict}\n\nSource files put back to the base commit for this run:\n${files}${more}\n\n$ ${r.step.command}\n(exit ${r.step.exitCode ?? '?'}${r.step.timedOut ? ', timed out' : ''}, ${Math.round(r.step.durationMs / 1000)}s)\n${r.step.output.trim()}`;
 }

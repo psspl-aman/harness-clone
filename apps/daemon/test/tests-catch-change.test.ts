@@ -106,6 +106,18 @@ describe('fail-before check', () => {
     expect(readFileSync(join(repo, 'src/greet.txt'), 'utf8')).toBe('hello\n');
     expect(git('status', '--porcelain')).toBe('');
   });
+
+  it('is inconclusive when the test command is aborted before it can exit', async () => {
+    const testCommand = `"${process.execPath}" -e "setTimeout(() => {}, 1000)"`;
+    const result = await checkTestsCatchChange(
+      { worktree: repo, baseCommit: base, testCommand, taskType: 'feature' },
+      { signal: AbortSignal.abort() },
+    );
+
+    expect(result).toMatchObject({ kind: 'inconclusive', step: { exitCode: null } });
+    expect(formatTestsCatchChange(result)).toContain('test command ended without an exit code');
+    expect(git('status', '--porcelain')).toBe('');
+  });
 });
 
 describe('test file detection', () => {

@@ -600,6 +600,7 @@ export class Orchestrator {
     const checks = await runProjectChecks(task.worktreePath!, project.commands, { signal });
     if (signal.aborted) return;
     const ranChecks = checks.steps.length > 0;
+    const buildStep = checks.steps.find((step) => step.name === 'build');
     const passed = agent.passed && agent.buildPassed !== false && (!ranChecks || checks.ok);
     // Only worth asking whether the tests catch the change once they pass at all.
     const failBefore: TestsCatchChangeResult | null =
@@ -644,8 +645,7 @@ export class Orchestrator {
         total: agent.total ?? null,
         failed: agent.failed ?? null,
         skipped: agent.skipped ?? null,
-        buildPassed:
-          agent.buildPassed ?? (checks.steps.some((s) => s.name === 'build') ? checks.ok : null),
+        buildPassed: buildStep ? buildStep.exitCode === 0 : (agent.buildPassed ?? null),
         commands: [...agent.commands, ...checks.steps.map((s) => s.command)],
         summary,
         log,

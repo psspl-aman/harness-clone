@@ -350,6 +350,34 @@ describe('pipeline: fix loops', () => {
     );
   });
 
+  it.each([
+    { build: 'exit 0', reported: null, expected: true },
+    { build: 'exit 1', reported: true, expected: false },
+    { build: null, reported: true, expected: true },
+  ])(
+    'records buildPassed=$expected for build command $build',
+    async ({ build, reported, expected }) => {
+      await setProject({ commands: { build, test: 'exit 1' }, pipeline: { maxFixLoops: 0 } });
+      script(
+        developer('SA-1', { 'src/a.txt': 'a' }),
+        reviewer(),
+        role(
+          'Tester',
+          JSON.stringify({ passed: true, buildPassed: reported, summary: 'Tests pass.' }),
+        ),
+      );
+      const { planId, tasks } = plan(pt('T1', 'Feature A'));
+      await approveAll(planId);
+      await t.ctx.orchestrator.idle();
+
+      const results = await t.app.inject({
+        method: 'GET',
+        url: `/api/tasks/${tasks[0]!.id}/tests`,
+      });
+      expect(results.json()).toMatchObject([{ passed: false, buildPassed: expected }]);
+    },
+  );
+
   it('escalates to you after the fix-loop limit, and retry grants another round', async () => {
     await t.app.inject({
       method: 'PATCH',
