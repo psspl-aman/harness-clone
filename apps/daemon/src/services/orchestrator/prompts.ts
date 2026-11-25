@@ -108,6 +108,7 @@ export function reviewerPrompt(
   ctx: RoleContext,
   d: TaskDiffDto,
   developerSummary: string | null,
+  withheldSecrets: string[],
 ): string {
   return `# Role: Reviewer
 You review the change for task ${ctx.task.key} before it is tested and merged. You may read files in the repository; do not modify anything.
@@ -116,7 +117,7 @@ ${contextBlock(ctx)}
 
 ## Developer's summary
 ${developerSummary ?? '(none)'}
-
+${withheldBlock(withheldSecrets)}
 ## Changed files (${d.files.length})
 ${d.files.map((f) => `- ${f.status} ${f.path} (+${f.additions} −${f.deletions})`).join('\n') || '(no changes!)'}
 
@@ -132,6 +133,20 @@ ${JSON_ONLY}
   "summary": "One paragraph overall assessment",
   "comments": [{ "file": "src/x.ts", "line": 42, "severity": "info" | "minor" | "major" | "blocker", "body": "What is wrong and how to fix it" }]
 }`;
+}
+
+/**
+ * Files AgentForge deliberately left out of the commits. Without this the Reviewer sees
+ * them in the worktree but not in the diff, and requests a commit nobody is allowed to make.
+ */
+function withheldBlock(files: string[]): string {
+  if (!files.length) return '';
+  return `
+## Files withheld from git by AgentForge
+These files exist in the worktree but AgentForge never commits them, because they may hold real secrets:
+${files.map((f) => `- ${f}`).join('\n')}
+This is intended. Do not request that they be committed, and do not count their absence from the diff against the change. If the project needs to document the variables in them, a template such as \`.env.example\` (with placeholder values) is committed normally.
+`;
 }
 
 export interface TestReviewInput {

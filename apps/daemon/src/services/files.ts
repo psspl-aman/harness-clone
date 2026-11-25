@@ -7,7 +7,7 @@ import type { Db } from '../db/client';
 import { projects } from '../db/schema';
 import { AppError, badRequest, notFound } from '../http/errors';
 import { isWithin } from '../lib/paths';
-import { SECRET_FILE_RE } from './git';
+import { isSecretFile } from './git';
 
 const MAX_BYTES = 1024 * 1024;
 const LANG: Record<string, string> = {
@@ -79,7 +79,7 @@ export class FileService {
       clean === '.git'
     )
       throw badRequest('Invalid path');
-    if (SECRET_FILE_RE.test(clean))
+    if (isSecretFile(clean))
       throw new AppError(
         403,
         'SECRET_FILE',
