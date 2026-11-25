@@ -546,11 +546,12 @@ export class Orchestrator {
     const project = this.project(task.projectId);
     const d = await this.taskDiff(task, project);
     const devSummary = this.lastRunSummary(task.id, ['developer', 'fixer']);
+    const withheld = await gitops.withheldSecrets(task.worktreePath!);
     const out = await this.runRole(
       task,
       driver,
       'reviewer',
-      reviewerPrompt(this.context(task, project), d, devSummary),
+      reviewerPrompt(this.context(task, project), d, devSummary, withheld),
       task.worktreePath!,
       'readonly',
       ReviewOutputSchema,

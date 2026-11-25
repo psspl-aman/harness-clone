@@ -105,6 +105,16 @@ export interface AttachmentDto {
   size: number;
   /** Absolute path agents can read. */
   path: string;
+  /** Plain-text copy for formats agents can't read directly (Word), when one was made. */
+  textPath?: string | null;
+}
+
+/** An upload kept for a project that doesn't exist yet (new-project wizard). */
+export interface StagedAttachmentDto {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
 }
 
 export interface ChatMessageDto {

@@ -196,7 +196,7 @@ export function buildPlannerPrompt(ctx: PlannerContext): string {
   }
   if (ctx.attachments.length) {
     sections.push(
-      `## Attachments (read them; images included)\n${ctx.attachments.map((a) => `- ${a.name} (${a.mime}, ${a.size} bytes): ${a.path}`).join('\n')}`,
+      `## Attachments (read them; images included)\n${ctx.attachments.map((a) => `- ${a.name} (${a.mime}, ${a.size} bytes): ${a.path}${a.textPath ? `\n  Text version (read this one): ${a.textPath}` : ''}`).join('\n')}`,
     );
   }
   if (ctx.mode !== 'discuss')

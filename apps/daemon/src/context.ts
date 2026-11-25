@@ -21,6 +21,7 @@ import type { McpService } from './services/mcp/mcp-service';
 import type { PmsService } from './services/pms/pms-service';
 import type { SheetService } from './services/sheets/sheet-service';
 import type { CommandAdvisor } from './services/onboarding/command-advisor';
+import type { AttachmentStore } from './services/attachments';
 import type { MemoryService } from './services/memory';
 import type { DocsService } from './services/docs';
 import type { SafetyService } from './services/safety';
@@ -41,6 +42,7 @@ export interface AppContext {
   terminals: TerminalService;
   tasks: TaskService;
   planner: PlannerService;
+  attachments: AttachmentStore;
   runs: RunRecorder;
   orchestrator: Orchestrator;
   usage: UsageService;

@@ -4,13 +4,15 @@ import {
   type ChatMessageDto,
   type TaskDto,
 } from '@agentforge/shared';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { agentRuns, memoryEntries, usageRecords } from '../src/db/schema';
+import JSZip from 'jszip';
 import { newId } from '../src/lib/id';
+import { docxToText } from '../src/services/attachments';
 import { claudeStream, FIXTURES, makeFakeCli, type FakeCli, type FakeResponse } from './fake-cli';
 import { createTestApp, GIT_ID, tempDir, type TestApp } from './helpers';
 
@@ -317,6 +319,117 @@ describe('Planner: wizard requirement', () => {
     // Re-analysing later never re-plans an already answered requirement.
     await t.ctx.projects.runOnboarding(id);
     expect(t.ctx.planner.state(id).running).toBe(false);
+  });
+});
+
+describe('Planner: wizard documents', () => {
+  /** A minimal Word document: two paragraphs, a tab and an escaped character. */
+  const docx = async () => {
+    const zip = new JSZip();
+    zip.file(
+      'word/document.xml',
+      '<w:document><w:body><w:p><w:r><w:t>Users &amp; roles</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>Admins</w:t><w:tab/><w:t>can invite</w:t></w:r></w:p></w:body></w:document>',
+    );
+    return zip.generateAsync({ type: 'nodebuffer' });
+  };
+  const multipart = (files: { name: string; type: string; data: Buffer }[]) => {
+    const boundary = '----af';
+    const parts = files.flatMap((f) => [
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${f.name}"\r\nContent-Type: ${f.type}\r\n\r\n`,
+      ),
+      f.data,
+      Buffer.from('\r\n'),
+    ]);
+    return {
+      payload: Buffer.concat([...parts, Buffer.from(`--${boundary}--\r\n`)]),
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+    };
+  };
+  const stage = async (files: { name: string; type: string; data: Buffer }[]) => {
+    const res = await t.app.inject({
+      method: 'POST',
+      url: '/api/attachments/staged',
+      ...multipart(files),
+    });
+    expect(res.statusCode).toBe(201);
+    return res.json() as { id: string; name: string; size: number }[];
+  };
+
+  it('extracts the text of a Word document', async () => {
+    expect(await docxToText(await docx())).toBe('Users & roles\nAdmins\tcan invite');
+  });
+
+  it('attaches wizard documents to the first requirement and gives them to the Planner', async () => {
+    script(answer(PLAN));
+    const staged = await stage([
+      { name: 'brief.md', type: 'text/markdown', data: Buffer.from('# Brief\nA booking app') },
+      {
+        name: 'Spec.docx',
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        data: await docx(),
+      },
+    ]);
+    expect(staged.map((f) => f.name)).toEqual(['brief.md', 'Spec.docx']);
+    const res = await t.app.inject({
+      method: 'POST',
+      url: '/api/projects',
+      payload: {
+        mode: 'scratch',
+        name: 'Docs App',
+        location: { kind: 'local', parentDir: root, folderName: 'docs-app' },
+        initialAttachmentIds: staged.map((f) => f.id),
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const id = res.json().id;
+    const dir = join(root, 'docs-app');
+    await t.ctx.projects.runOnboarding(id);
+    const end = Date.now() + 10_000;
+    while (!t.ctx.tasks.latestPlan(id) || t.ctx.planner.state(id).running) {
+      if (Date.now() > end) throw new Error('initial plan not created');
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    // No description given: the requirement points at the documents, which it carries.
+    const [first] = (await t.app.inject({ method: 'GET', url: `/api/projects/${id}/chat` })).json();
+    expect(first.content).toBe('Build what the attached documents describe.');
+    expect(first.attachments.map((a: { name: string }) => a.name)).toEqual([
+      'brief.md',
+      'Spec.docx',
+    ]);
+    const stdin = plannerCalls().at(-1)!.stdin;
+    const brief = join(dir, '.agentforge/attachments', first.attachments[0].id, 'brief.md');
+    const text = join(dir, '.agentforge/attachments', first.attachments[1].id, 'Spec.txt');
+    expect(stdin).toContain(brief);
+    expect(stdin).toContain(`Text version (read this one): ${text}`);
+    expect(readFileSync(text, 'utf8')).toContain('Admins\tcan invite');
+    // Moved out of staging, and never committed.
+    expect(readdirSync(join(t.home, 'attachments/staging'))).toEqual([]);
+    expect(execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' })).toBe('');
+  });
+
+  it('rejects a stale upload before creating anything', async () => {
+    const res = await t.app.inject({
+      method: 'POST',
+      url: '/api/projects',
+      payload: {
+        mode: 'scratch',
+        name: 'Stale',
+        location: { kind: 'local', parentDir: root, folderName: 'stale' },
+        initialAttachmentIds: ['stg_doesnotexist0000000000'],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toMatch(/expired or was already used/);
+    expect(existsSync(join(root, 'stale'))).toBe(false);
+  });
+
+  it('removes staged uploads nobody claimed after a day', async () => {
+    const [f] = await stage([{ name: 'old.txt', type: 'text/plain', data: Buffer.from('x') }]);
+    const staging = join(t.home, 'attachments/staging');
+    t.ctx.attachments.sweepStaging(Date.now() + 25 * 60 * 60_000);
+    expect(existsSync(join(staging, f!.id))).toBe(false);
   });
 });
 

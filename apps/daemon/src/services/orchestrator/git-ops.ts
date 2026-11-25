@@ -2,7 +2,7 @@ import type { DiffFileDto, TaskDiffDto } from '@agentforge/shared';
 import { execa } from 'execa';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { identityConfig, SECRET_FILE_RE } from '../git';
+import { identityConfig, isSecretFile } from '../git';
 
 const MAX_PATCH = 400_000;
 
@@ -93,6 +93,15 @@ export async function mergeBranchesInto(worktree: string, branches: string[]): P
   }
 }
 
+/**
+ * Secret-looking files in the working tree that `commitAll` keeps out of git: untracked
+ * and not covered by .gitignore. Derived from the worktree, so it survives restarts.
+ */
+export async function withheldSecrets(worktree: string): Promise<string[]> {
+  const out = (await git(worktree, ['ls-files', '--others', '--exclude-standard', '-z'])).out;
+  return out.split('\0').filter((f) => f && isSecretFile(f));
+}
+
 /** Stage everything, never secrets, and commit. Returns the new commit or null when nothing changed. */
 export async function commitAll(
   worktree: string,
@@ -102,7 +111,7 @@ export async function commitAll(
   const staged = (await git(worktree, ['diff', '--cached', '--name-only'])).out
     .split('\n')
     .filter(Boolean);
-  const secrets = staged.filter((f) => SECRET_FILE_RE.test(f));
+  const secrets = staged.filter((f) => isSecretFile(f));
   if (secrets.length) await git(worktree, ['rm', '--cached', '--quiet', '--', ...secrets]);
   const files = staged.filter((f) => !secrets.includes(f));
   if (!files.length) return { commit: null, files: [], skippedSecrets: secrets };
