@@ -15,6 +15,8 @@ export const useConnection = create<ConnectionState>((set) => ({
 interface UiState {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  projectView: 'cards' | 'list';
+  setProjectView: (view: UiState['projectView']) => void;
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
 }
@@ -24,9 +26,14 @@ export const useUi = create<UiState>()(
     (set) => ({
       sidebarCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      projectView: 'cards',
+      setProjectView: (projectView) => set({ projectView }),
       paletteOpen: false,
       setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
     }),
-    { name: 'agentforge-ui', partialize: (s) => ({ sidebarCollapsed: s.sidebarCollapsed }) },
+    {
+      name: 'agentforge-ui',
+      partialize: (s) => ({ sidebarCollapsed: s.sidebarCollapsed, projectView: s.projectView }),
+    },
   ),
 );
