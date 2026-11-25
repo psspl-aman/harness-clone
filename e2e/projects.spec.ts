@@ -51,7 +51,10 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   const folder = join(parent, name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'));
   expect(existsSync(join(folder, '.git'))).toBe(true);
 
-  await page.getByRole('link', { name: 'Projects' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Projects' })
+    .click();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 });
 

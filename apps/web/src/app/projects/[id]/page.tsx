@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
+  ChevronRight,
   Copy,
   GitBranch,
   HardDrive,
@@ -131,10 +132,22 @@ export default function ProjectWorkspace() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 md:px-6">
-        <div className="min-w-0 flex-1">
+      <header className="bg-card flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 md:px-5">
+        <div className="min-w-0 flex-1 basis-full sm:basis-64">
+          <nav
+            aria-label="Project breadcrumb"
+            className="text-muted-foreground mb-1 flex items-center gap-1 text-xs"
+          >
+            <Link href="/" className="hover:text-primary hover:underline">
+              Projects
+            </Link>
+            <ChevronRight className="size-3" aria-hidden="true" />
+            <span className="truncate" aria-current="page">
+              {p.name}
+            </span>
+          </nav>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-lg font-semibold tracking-tight">{p.name}</h1>
+            <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight">{p.name}</h1>
             <Badge variant="secondary">
               {p.origin === 'scratch' ? 'From scratch' : 'Existing'}
             </Badge>
@@ -191,13 +204,13 @@ export default function ProjectWorkspace() {
         <aside
           aria-label="Requirement chat"
           className={cn(
-            'bg-sidebar/40 hidden min-h-0 shrink-0 flex-col border-r md:flex',
-            chatOpen ? 'w-[400px]' : 'w-0 border-r-0',
+            'bg-background hidden min-h-0 shrink-0 flex-col border-r md:flex',
+            chatOpen ? 'w-[clamp(256px,23vw,336px)]' : 'w-0 border-r-0',
           )}
         >
           {chatOpen && (
             <>
-              <div className="flex items-center gap-2 border-b px-4 py-2.5">
+              <div className="bg-card flex h-11 shrink-0 items-center gap-2 border-b px-4">
                 <MessageSquare className="text-primary size-4" />
                 <h2 className="text-sm font-semibold">Requirements</h2>
                 <Button
@@ -225,7 +238,7 @@ export default function ProjectWorkspace() {
           <div
             role="tablist"
             aria-label="Workspace"
-            className="flex items-center gap-1 border-b px-2 md:px-4"
+            className="bg-card flex min-h-11 shrink-0 items-center gap-0.5 overflow-x-auto border-b px-2 md:px-3"
           >
             {!chatOpen && (
               <Button
@@ -250,14 +263,16 @@ export default function ProjectWorkspace() {
                 aria-selected={tab === t.id}
                 onClick={() => setTab(t.id)}
                 className={cn(
-                  'relative px-3 py-2.5 text-sm font-medium transition-colors',
+                  'focus-visible:ring-ring/50 relative flex min-h-10 shrink-0 items-center px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-inset',
                   t.mobileOnly && 'md:hidden',
-                  tab === t.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  tab === t.id
+                    ? 'text-accent-foreground font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {t.label}
                 {tab === t.id && (
-                  <span className="bg-primary absolute inset-x-2 -bottom-px h-0.5 rounded-full" />
+                  <span className="bg-primary absolute inset-x-2 bottom-0 h-0.5 rounded-full" />
                 )}
               </button>
             ))}
