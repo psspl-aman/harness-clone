@@ -20,7 +20,7 @@ export function Topbar() {
   const current = NAV_ITEMS.find((item) => isActivePath(pathname, item.href));
 
   return (
-    <header className="bg-card flex h-14 shrink-0 items-center gap-2 border-b px-3 md:gap-4 md:px-5">
+    <header className="bg-card flex h-14 shrink-0 items-center gap-2 border-b px-[var(--portal-gutter)] md:gap-4">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Open navigation">

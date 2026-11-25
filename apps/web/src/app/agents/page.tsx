@@ -23,7 +23,7 @@ export default function AgentsPage() {
   const custom = engines.data?.filter((e) => e.kind === 'custom') ?? [];
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
+    <div className="portal-content max-w-4xl py-8">
       <PageHeader
         title="Agents & Accounts"
         description="The coding-agent CLIs AgentForge can drive, and whether each is installed and signed in."

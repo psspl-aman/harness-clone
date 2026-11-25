@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, qk } from '@/lib/api';
 import { useUi } from '@/lib/stores';
-import { cn } from '@/lib/utils';
 
 export default function ProjectsPage() {
   const projects = useQuery({ queryKey: qk.projects, queryFn: api.projects.list });
@@ -20,6 +19,7 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const view = useUi((s) => s.projectView);
   const setView = useUi((s) => s.setProjectView);
+  const projectGrid = view === 'list' ? 'grid gap-2' : 'project-grid';
   const query = search.trim().toLowerCase();
   const visibleProjects = projects.data?.filter((project) =>
     [project.name, project.githubRepo, project.localPath, ...project.stack].some((value) =>
@@ -28,7 +28,7 @@ export default function ProjectsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1320px] px-4 py-7 md:px-[30px]">
+    <div className="portal-content py-7">
       <PageHeader
         title="Projects"
         description={
@@ -53,7 +53,7 @@ export default function ProjectsPage() {
       />
       {projects.data && projects.data.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <label className="relative block w-full max-w-[270px]">
+          <label className="relative block w-full max-w-[17rem]">
             <span className="sr-only">Filter projects</span>
             <Search
               aria-hidden="true"
@@ -94,19 +94,14 @@ export default function ProjectsPage() {
         </div>
       )}
       {projects.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={projectGrid}>
           {Array.from({ length: 3 }, (_, i) => (
             <Skeleton key={i} className="h-48 rounded-xl" />
           ))}
         </div>
       ) : projects.data && projects.data.length > 0 ? (
         visibleProjects?.length ? (
-          <div
-            className={cn(
-              'grid',
-              view === 'list' ? 'gap-2' : 'gap-3.5 sm:grid-cols-2 xl:grid-cols-3',
-            )}
-          >
+          <div className={projectGrid}>
             {visibleProjects.map((p, i) => (
               <ProjectCard key={p.id} project={p} index={i} list={view === 'list'} />
             ))}

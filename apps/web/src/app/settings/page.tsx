@@ -108,7 +108,7 @@ export default function SettingsPage() {
     });
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 pb-28 md:px-8">
+    <div className="portal-content max-w-3xl py-8 pb-28">
       <PageHeader
         title="Settings"
         description="Global defaults for every project. Projects can override most of these."
