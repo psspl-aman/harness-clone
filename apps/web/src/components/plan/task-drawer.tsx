@@ -48,6 +48,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { TaskStatusBadge, statusLabel } from './badges';
+import { RoutingBadge } from './routing-badge';
 import { CancelledActions } from './cancelled-actions';
 import { ExternalTicket } from './external-ticket';
 import { TaskTimePanel } from './task-time';
@@ -306,6 +307,7 @@ export function TaskDrawer({
               <div className="flex items-center gap-2 pr-8">
                 <span className="text-muted-foreground font-mono text-xs">{task.key}</span>
                 <TaskStatusBadge status={task.status} />
+                <RoutingBadge projectId={projectId} complexity={task.complexity} />
                 {update.isPending && (
                   <Loader2 className="text-muted-foreground size-3.5 animate-spin" />
                 )}
@@ -528,10 +530,12 @@ export function TaskDrawer({
                 />
               </Field>
 
-              <Field label="Agent engines">
+              <Field label="Agent engines & models">
                 <EngineRoles
                   value={task.roleEngines}
                   onChange={(v) => update.mutate({ roleEngines: v })}
+                  models={task.roleModels}
+                  onModelsChange={(v) => update.mutate({ roleModels: v })}
                 />
               </Field>
 

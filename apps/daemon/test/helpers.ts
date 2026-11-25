@@ -31,7 +31,9 @@ export async function createTestApp(
     home,
     async cleanup() {
       await built.app.close();
-      rmSync(home, { recursive: true, force: true });
+      // On Windows a just-killed child process can still hold a handle to the
+      // temp dir for a moment, so rmSync throws EPERM; retry briefly. No-op on POSIX.
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     },
   };
 }

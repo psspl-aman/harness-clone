@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { EngineSelectItems, useUnusableEngine } from '@/components/engines/engine-select-items';
+import { api, qk } from '@/lib/api';
 
 function Row({
   id,
@@ -163,6 +165,49 @@ export function EngineField(props: {
         </SelectTrigger>
         <SelectContent>
           <EngineSelectItems extra={props.value} />
+        </SelectContent>
+      </Select>
+    </Row>
+  );
+}
+
+const MODEL_DEFAULT = '__default';
+
+/** Model picker populated from `engineId`'s model list; "Engine default" uses the engine's own default. */
+export function ModelField(props: {
+  id: string;
+  label: string;
+  hint?: ReactNode;
+  engineId: string;
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+}) {
+  const engines = useQuery({ queryKey: qk.engines, queryFn: api.engines.list });
+  const list = engines.data?.find((e) => e.id === props.engineId)?.models ?? [];
+  const stale = !!props.value && !list.some((m) => m.id === props.value);
+  return (
+    <Row id={props.id} label={props.label} hint={props.hint}>
+      <Select
+        value={props.value ?? MODEL_DEFAULT}
+        onValueChange={(v) => props.onChange(v === MODEL_DEFAULT ? undefined : v)}
+        disabled={list.length === 0 && !props.value}
+      >
+        <SelectTrigger id={props.id} size="sm" className="w-52">
+          <SelectValue placeholder="Engine default" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={MODEL_DEFAULT}>Engine default</SelectItem>
+          {stale && (
+            <SelectItem value={props.value!} disabled>
+              {props.value}
+              <span className="text-muted-foreground text-xs">· unavailable</span>
+            </SelectItem>
+          )}
+          {list.map((m) => (
+            <SelectItem key={m.id} value={m.id}>
+              {m.label}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </Row>

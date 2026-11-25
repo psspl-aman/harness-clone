@@ -378,6 +378,7 @@ export class TaskService {
         acceptanceCriteria: input.acceptanceCriteria,
         affectedAreas: input.affectedAreas,
         roleEngines: input.roleEngines,
+        roleModels: input.roleModels,
         orderIndex: this.maxOrder(projectId) + 1,
         origin: 'manual',
       });
@@ -399,9 +400,9 @@ export class TaskService {
 
   update(taskId: string, raw: unknown): TaskDto {
     const input = UpdateTaskInputSchema.parse(raw);
-    // Reassigning engines is allowed at any time (it applies from the next step);
+    // Reassigning engines or models is allowed at any time (it applies from the next step);
     // the task definition is locked while an agent works on it.
-    const onlyEngines = Object.keys(input).every((k) => k === 'roleEngines');
+    const onlyEngines = Object.keys(input).every((k) => k === 'roleEngines' || k === 'roleModels');
     const row = onlyEngines ? this.row(taskId) : this.editableRow(taskId);
     if (Object.keys(input).length)
       this.db.update(tasks).set(input).where(eq(tasks.id, row.id)).run();
@@ -1122,6 +1123,7 @@ export class TaskService {
       acceptanceCriteria: r.acceptanceCriteria,
       affectedAreas: r.affectedAreas,
       roleEngines: r.roleEngines,
+      roleModels: r.roleModels,
       orderIndex: r.orderIndex,
       dependsOn: deps.filter((d) => d.taskId === r.id).map((d) => d.dependsOnTaskId),
       subtasks: subs

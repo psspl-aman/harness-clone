@@ -1,7 +1,26 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { simpleGit, type SimpleGit } from 'simple-git';
+
+/**
+ * Compare two filesystem paths for identity across platforms. `git` reports paths
+ * with forward slashes (and sometimes a different case or 8.3 short form than Node),
+ * so a raw `===` against a Node path wrongly fails on Windows. Canonicalise both
+ * (real path, then normalise separators/case on Windows) before comparing.
+ */
+function samePath(a: string, b: string): boolean {
+  const canon = (p: string) => {
+    let out = p;
+    try {
+      out = realpathSync.native(p);
+    } catch {
+      /* path may not exist yet; fall back to the raw value */
+    }
+    return process.platform === 'win32' ? out.replace(/\\/g, '/').toLowerCase() : out;
+  };
+  return canon(a) === canon(b);
+}
 
 /** Patterns AgentForge always keeps out of git. */
 export const SECRET_IGNORE_PATTERNS = [
@@ -36,7 +55,7 @@ export async function isRepoRoot(dir: string): Promise<boolean> {
   if (!existsSync(join(dir, '.git'))) return false;
   try {
     const top = (await git(dir).revparse(['--show-toplevel'])).trim();
-    return top === dir;
+    return samePath(top, dir);
   } catch {
     return false;
   }

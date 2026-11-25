@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectDetail, RoleEngines } from '@agentforge/shared';
+import type { ProjectDetail, RoleEngines, RoleModels } from '@agentforge/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Save,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { EngineRoles } from '@/components/projects/engine-roles';
@@ -20,15 +19,6 @@ import { PipelineSettingsCard } from '@/components/projects/pipeline-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -103,21 +93,26 @@ function OnboardingBanner({ project, onRetry }: { project: ProjectDetail; onRetr
 function EnginesCard({ project }: { project: ProjectDetail }) {
   const queryClient = useQueryClient();
   const [edits, setEdits] = useState<Partial<RoleEngines> | null>(null);
+  const [modelEdits, setModelEdits] = useState<RoleModels | null>(null);
   const value = edits ?? project.roleEngines;
-  const dirty = edits !== null && JSON.stringify(edits) !== JSON.stringify(project.roleEngines);
+  const models = modelEdits ?? project.roleModels;
+  const dirty =
+    (edits !== null && JSON.stringify(edits) !== JSON.stringify(project.roleEngines)) ||
+    (modelEdits !== null && JSON.stringify(modelEdits) !== JSON.stringify(project.roleModels));
   const save = useMutation({
-    mutationFn: () => api.projects.update(project.id, { roleEngines: value }),
+    mutationFn: () => api.projects.update(project.id, { roleEngines: value, roleModels: models }),
     onSuccess: (p) => {
       queryClient.setQueryData(qk.project(p.id), p);
       setEdits(null);
+      setModelEdits(null);
       toast.success('Agent engines saved');
     },
     onError: (e) => toast.error('Could not save', { description: errMsg(e) }),
   });
   return (
     <Section
-      title="Agent engines"
-      description="Per-role overrides for this project."
+      title="Agent engines & models"
+      description="Per-role engine and model overrides for this project."
       action={
         dirty && (
           <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
@@ -126,7 +121,12 @@ function EnginesCard({ project }: { project: ProjectDetail }) {
         )
       }
     >
-      <EngineRoles value={value} onChange={setEdits} />
+      <EngineRoles
+        value={value}
+        onChange={setEdits}
+        models={models}
+        onModelsChange={setModelEdits}
+      />
     </Section>
   );
 }
@@ -272,59 +272,6 @@ function AnalysisCards({ project }: { project: ProjectDetail }) {
         </Section>
       </div>
     </>
-  );
-}
-
-export function RemoveDialog({
-  project,
-  open,
-  onOpenChange,
-}: {
-  project: ProjectDetail;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-}) {
-  const router = useRouter();
-  const [confirm, setConfirm] = useState('');
-  const remove = useMutation({
-    mutationFn: () => api.projects.remove(project.id),
-    onSuccess: () => {
-      toast.success(`Removed ${project.name}`, { description: 'Files on disk were not touched.' });
-      router.push('/');
-    },
-    onError: (e) => toast.error('Could not remove project', { description: errMsg(e) }),
-  });
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Remove {project.name} from AgentForge?</DialogTitle>
-          <DialogDescription>
-            Its plans, tasks, run history and memory are deleted from AgentForge. The folder{' '}
-            <code className="font-mono">{project.localPath}</code> and its git history stay exactly
-            as they are.
-          </DialogDescription>
-        </DialogHeader>
-        <Input
-          placeholder={`Type ${project.name} to confirm`}
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          aria-label="Confirm project name"
-        />
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={confirm !== project.name || remove.isPending}
-            onClick={() => remove.mutate()}
-          >
-            {remove.isPending && <Loader2 className="animate-spin" />} Remove project
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

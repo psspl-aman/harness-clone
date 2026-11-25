@@ -38,13 +38,10 @@ export const FIXTURES = join(import.meta.dirname, 'fixtures/engines');
  * stdout/stderr/exit codes chosen by argv prefix.
  */
 export function makeFakeCli(dir: string, name: string): FakeCli {
-  const path = join(dir, name);
-  const cfg = `${path}.json`;
-  const log = `${path}.calls.jsonl`;
-  writeFileSync(
-    path,
-    `#!/usr/bin/env node
-const fs = require('node:fs');
+  const base = join(dir, name);
+  const cfg = `${base}.json`;
+  const log = `${base}.calls.jsonl`;
+  const body = `const fs = require('node:fs');
 const cfg = JSON.parse(fs.readFileSync(${JSON.stringify(cfg)}, 'utf8'));
 const args = process.argv.slice(2);
 let stdin = '';
@@ -71,9 +68,22 @@ if (idx >= 0 && r.once) fs.writeFileSync(usedPath, JSON.stringify([...used, idx]
   if (r.sleepMs) await new Promise((res) => setTimeout(res, r.sleepMs));
   process.exit(r.exitCode ?? 0);
 })();
-`,
-  );
-  chmodSync(path, 0o755);
+`;
+  // The daemon resolves a configured binaryPath with `which()` and runs it through
+  // execa. Windows cannot execute a POSIX shebang script, so there we write the body
+  // as a `.js` file plus a sibling `.cmd` launcher that `which()` finds via %PATHEXT%
+  // and execa runs; on POSIX we keep the self-executable shebang script.
+  let path: string;
+  if (process.platform === 'win32') {
+    const js = `${base}.js`;
+    writeFileSync(js, body);
+    path = `${base}.cmd`;
+    writeFileSync(path, `@node "${js}" %*\r\n`);
+  } else {
+    path = base;
+    writeFileSync(path, `#!/usr/bin/env node\n${body}`);
+    chmodSync(path, 0o755);
+  }
   writeFileSync(cfg, '[]');
   return {
     path,

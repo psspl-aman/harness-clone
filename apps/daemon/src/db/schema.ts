@@ -37,7 +37,10 @@ import type {
   ProjectOrigin,
   ProjectSource,
   RequirementIntent,
+  ReviewScope,
   RoleEngines,
+  RoleModels,
+  Routing,
   RunStatus,
   ProjectServiceDto,
   SheetField,
@@ -115,6 +118,12 @@ export const projectSettings = sqliteTable('project_settings', {
   roleEngines: json<Partial<RoleEngines>>('role_engines')
     .notNull()
     .default(sql`'{}'`),
+  /** Per-role model overrides; missing roles fall back to global roleModels, then the engine default. */
+  roleModels: json<RoleModels>('role_models')
+    .notNull()
+    .default(sql`'{}'`),
+  /** Complexity→pipeline routing override; null falls back to the global routing setting. */
+  routing: json<Routing>('routing'),
   maxConcurrentTasks: integer('max_concurrent_tasks'),
   maxFixLoops: integer('max_fix_loops'),
   requireHumanReview: bool('require_human_review'),
@@ -238,6 +247,9 @@ export const tasks = sqliteTable(
       .notNull()
       .default(sql`'[]'`),
     roleEngines: json<Partial<RoleEngines>>('role_engines')
+      .notNull()
+      .default(sql`'{}'`),
+    roleModels: json<RoleModels>('role_models')
       .notNull()
       .default(sql`'{}'`),
     orderIndex: real('order_index').notNull().default(0),
@@ -396,6 +408,8 @@ export const reviews = sqliteTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     runId: text('run_id').references(() => agentRuns.id, { onDelete: 'set null' }),
     reviewer: text('reviewer').$type<'agent' | 'human'>().notNull().default('agent'),
+    /** 'code' reviews gate testing; 'tests' reviews check the tests after they pass. */
+    scope: text('scope').$type<ReviewScope>().notNull().default('code'),
     verdict: text('verdict').$type<'APPROVE' | 'CHANGES_REQUESTED'>().notNull(),
     summary: text('summary').notNull().default(''),
     createdAt: createdAt(),

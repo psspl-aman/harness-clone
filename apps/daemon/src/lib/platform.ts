@@ -79,8 +79,9 @@ export function pathExts(
   env: Env = process.env,
 ): string[] {
   if (platform !== 'win32') return [];
+  // %PATHEXT% is always ';'-separated; path.delimiter is the host's (':' on POSIX).
   return (env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
-    .split(';') // PATHEXT is always ;-separated (Windows)
+    .split(';')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 }

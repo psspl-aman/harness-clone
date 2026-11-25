@@ -16,10 +16,17 @@ import {
   type TaskStatus,
 } from '@agentforge/shared';
 import { createHash } from 'node:crypto';
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client';
-import { agentRuns, mcpServers, pmsConnections, pmsMappings, tasks } from '../../db/schema';
+import {
+  agentRuns,
+  mcpServers,
+  pmsConnections,
+  pmsMappings,
+  projects,
+  tasks,
+} from '../../db/schema';
 import type { EventBus } from '../../events/bus';
 import { badRequest, conflict, notFound } from '../../http/errors';
 import { newId } from '../../lib/id';
@@ -594,11 +601,14 @@ export class PmsService {
 
   private async poll(): Promise<void> {
     const now = Date.now();
+    // Archived projects don't pull new tickets until they're restored.
     const due = this.d.db
-      .select()
+      .select({ m: pmsMappings })
       .from(pmsMappings)
-      .where(isNotNull(pmsMappings.pollingIntervalSec))
-      .all();
+      .innerJoin(projects, eq(projects.id, pmsMappings.projectId))
+      .where(and(isNotNull(pmsMappings.pollingIntervalSec), isNull(projects.archivedAt)))
+      .all()
+      .map((r) => r.m);
     for (const m of due) {
       const last = Math.max(m.lastSyncedAt ?? 0, this.lastAttempt.get(m.id) ?? 0);
       if (this.syncing.has(m.id) || now - last < m.pollingIntervalSec! * 1000) continue;

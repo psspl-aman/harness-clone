@@ -17,3 +17,6 @@ next-env.d.ts
 
 # Monaco is copied from node_modules at dev/build time
 apps/web/public/monaco/
+
+# Local pnpm content-addressable store
+.pnpm-store/

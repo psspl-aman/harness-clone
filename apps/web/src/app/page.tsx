@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FolderOpen, FolderPlus, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { ArchivedProjectsSection } from '@/components/projects/archive';
 import { ProjectCard } from '@/components/projects/project-card';
 import { PageHeader } from '@/components/shell/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -76,6 +77,7 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+      <ArchivedProjectsSection />
     </div>
   );
 }

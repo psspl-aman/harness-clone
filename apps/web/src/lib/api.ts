@@ -143,10 +143,14 @@ export const api = {
   },
   projects: {
     list: () => request<ProjectSummary[]>('GET', '/api/projects'),
+    archived: () => request<ProjectSummary[]>('GET', '/api/projects?archived=true'),
     get: (id: string) => request<ProjectDetail>('GET', `/api/projects/${id}`),
     create: (input: CreateProjectInput) => request<ProjectDetail>('POST', '/api/projects', input),
     update: (id: string, input: UpdateProjectInput) =>
       request<ProjectDetail>('PATCH', `/api/projects/${id}`, input),
+    archive: (id: string) => request<ProjectDetail>('POST', `/api/projects/${id}/archive`),
+    restore: (id: string) => request<ProjectDetail>('POST', `/api/projects/${id}/restore`),
+    /** Deletes the project and its data for good. */
     remove: (id: string) => request<void>('DELETE', `/api/projects/${id}`),
     analyze: (id: string) => request<{ ok: true }>('POST', `/api/projects/${id}/analyze`),
     requirements: (id: string) =>
@@ -482,6 +486,7 @@ export const qk = {
   settings: ['settings'] as const,
   projects: ['projects'] as const,
   project: (id: string) => ['projects', id] as const,
+  archivedProjects: ['archived-projects'] as const,
   requirements: (id: string) => ['projects', id, 'requirements'] as const,
   fsBrowse: (path: string | undefined, hidden: boolean) =>
     ['fs', 'browse', path ?? '~', hidden] as const,

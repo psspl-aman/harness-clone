@@ -45,7 +45,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await t.cleanup();
-  rmSync(root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 const seed = () => {
@@ -235,6 +235,7 @@ describe('plans and tasks', () => {
         type: 'docs',
         dependsOn: [created[2]!.id],
         subtasks: ['Install section'],
+        roleModels: { developer: 'opus' },
       })
     ).json();
     expect(manual).toMatchObject({
@@ -242,7 +243,10 @@ describe('plans and tasks', () => {
       origin: 'manual',
       type: 'docs',
       dependsOn: [created[2]!.id],
+      roleModels: { developer: 'opus' },
     });
+    // Round-trips from the DB, not just echoed back from the insert.
+    expect(t.ctx.tasks.get(manual.id).roleModels).toEqual({ developer: 'opus' });
     const order = [manual.id, ...created.map((c) => c.id)];
     await api('POST', `/api/projects/${projectId}/tasks/reorder`, { taskIds: order });
     expect(
