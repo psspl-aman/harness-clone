@@ -6,6 +6,7 @@
 /* ── Design tokens ───────────────────────────────────────────────────────── */
 :root {
   --radius: 0.75rem;
+  --portal-gutter: clamp(1rem, 2vw, 2rem);
   --background: #f6f7f9;
   --foreground: #181b26;
   --card: #fff;
@@ -125,6 +126,20 @@
   --color-viz-warning: var(--viz-warning);
   --color-viz-critical: var(--viz-critical);
   --color-viz-grid: var(--viz-grid);
+}
+
+@layer components {
+  .portal-content {
+    inline-size: 100%;
+    max-inline-size: 112rem;
+    padding-inline: var(--portal-gutter);
+  }
+
+  .project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: 0.875rem;
+  }
 }
 
 @layer base {
