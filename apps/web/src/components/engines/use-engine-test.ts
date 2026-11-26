@@ -15,23 +15,23 @@ export function useEngineTest(engineId: string) {
   const queryClient = useQueryClient();
   const [runId, setRunId] = useState<string | null>(null);
   const [events, setEvents] = useState<AgentEvent[]>([]);
-  const [result, setResult] = useState<AgentRunResultDto | null>(null);
+  const [liveResult, setLiveResult] = useState<AgentRunResultDto | null>(null);
   useLiveTopic(runId ? `run:${runId}` : null);
   useLiveEvent((e) => {
     if (e.type === 'run.event' && e.payload.runId === runId)
       setEvents((xs) => [...xs, e.payload.event]);
-    if (e.type === 'run.finished' && e.payload.runId === runId) setResult(e.payload.result);
+    if (e.type === 'run.finished' && e.payload.runId === runId) setLiveResult(e.payload.result);
   });
   const poll = useQuery({
     queryKey: ['engine-test', runId],
     queryFn: () => api.engines.runResult(runId!),
-    enabled: !!runId && !result,
-    refetchInterval: 1500,
+    enabled: !!runId && !liveResult,
+    // Stop polling once the run has finished.
+    refetchInterval: (q) => (q.state.data?.result ? false : 1500),
   });
-  useEffect(() => {
-    if (poll.data?.result && !result) setResult(poll.data.result);
-  }, [poll.data, result]);
-  // The run updates the engine's status (e.g. a sign-in failure → Expired): refetch it.
+  // The live event wins; otherwise fall back to the polled result. Derived, so no effect syncs it.
+  const result = liveResult ?? poll.data?.result ?? null;
+  // The run updates the engine's status (e.g. a sign-in failure → Expired): refetch it once done.
   useEffect(() => {
     if (result) void queryClient.invalidateQueries({ queryKey: qk.engines });
   }, [result, queryClient]);
@@ -40,7 +40,7 @@ export function useEngineTest(engineId: string) {
     onMutate: () => {
       setRunId(null);
       setEvents([]);
-      setResult(null);
+      setLiveResult(null);
     },
     onSuccess: (r) => setRunId(r.runId),
   });
