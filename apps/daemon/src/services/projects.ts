@@ -10,7 +10,7 @@ import {
   type RequirementDto,
 } from '@agentforge/shared';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { Db } from '../db/client';
@@ -26,7 +26,7 @@ import {
 import type { EventBus } from '../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../http/errors';
 import { newId } from '../lib/id';
-import { normalizePath, slugify } from '../lib/paths';
+import { isWithin, normalizePath, slugify } from '../lib/paths';
 import type { AttachmentStore } from './attachments';
 import type { FsService } from './fs';
 import { currentBranch, initRepo, isRepoRoot } from './git';
@@ -107,6 +107,7 @@ export class ProjectService {
       onboardingError: row.onboardingError,
       onboardedAt: row.onboardedAt,
       onboardingReport: row.onboardingReport ?? null,
+      hasStaticSite: !row.commands.run && existsSync(join(row.localPath, 'index.html')),
       roleEngines: settings?.roleEngines ?? {},
       roleModels: settings?.roleModels ?? {},
       effort: settings?.effort ?? null,
@@ -119,8 +120,30 @@ export class ProjectService {
         engineFallback: settings?.engineFallback ?? {},
         paused: settings?.pipelinePaused ?? false,
         routing: settings?.routing ?? null,
+        monthlyBudgetUsd: settings?.monthlyBudgetUsd ?? null,
       },
     };
+  }
+
+  /**
+   * Resolve a request path (e.g. "" or "css/app.css") to an absolute file inside the project
+   * root for the static Preview, with a directory default of index.html. Returns null for
+   * traversal attempts or a missing file — never serves outside the project root.
+   */
+  resolveSiteFile(id: string, rel: string): string | null {
+    const root = this.db
+      .select({ p: projects.localPath })
+      .from(projects)
+      .where(eq(projects.id, id))
+      .get()?.p;
+    if (!root) return null;
+    const clean = rel.replace(/^\/+/, '').split(/[?#]/)[0] || 'index.html';
+    const target = join(root, clean);
+    if (!isWithin(root, target)) return null;
+    let st = existsSync(target) ? statSync(target) : null;
+    const indexed = st?.isDirectory() ? join(target, 'index.html') : target;
+    st = existsSync(indexed) ? statSync(indexed) : null;
+    return st?.isFile() ? indexed : null;
   }
 
   findByPath(path: string): { id: string; localPath: string; archivedAt: number | null } | null {

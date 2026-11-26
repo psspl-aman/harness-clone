@@ -246,6 +246,8 @@ export const ProjectDetailSchema = ProjectSummarySchema.extend({
   workingBranch: z.string().nullable(),
   stackPreferences: z.string().nullable(),
   commands: ProjectCommandsSchema,
+  /** The project root has an index.html, so the Preview tab can serve it statically (no run command needed). */
+  hasStaticSite: z.boolean(),
   onboardingStatus: z.enum(ONBOARDING_STATUSES),
   onboardingError: z.string().nullable(),
   onboardedAt: Timestamp.nullable(),
@@ -263,6 +265,8 @@ export const ProjectDetailSchema = ProjectSummarySchema.extend({
     paused: z.boolean(),
     /** Complexity→pipeline routing override; null uses the global routing setting. */
     routing: RoutingSchema.nullable(),
+    /** Monthly spend cap (USD) for this project; null uses the global cap. */
+    monthlyBudgetUsd: z.number().nullable(),
   }),
   /** Full analysis; typed as OnboardingReport on the client. */
   onboardingReport: z.custom<OnboardingReport>().nullable(),
@@ -289,6 +293,8 @@ export const UpdateProjectInputSchema = z
         engineFallback: z.record(z.string().max(80), z.string().max(80)),
         /** null clears the override (back to the global routing setting). */
         routing: RoutingSchema.nullable(),
+        /** null clears the override (back to the global monthly budget). */
+        monthlyBudgetUsd: z.number().min(0).max(1_000_000).nullable(),
       })
       .partial()
       .strict()

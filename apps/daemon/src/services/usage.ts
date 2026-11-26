@@ -5,7 +5,7 @@ import type {
   UsageSummaryDto,
   UsageWindowStatusDto,
 } from '@agentforge/shared';
-import { and, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, isNull, lte, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { projects, tasks, usageRecords } from '../db/schema';
 import type { EngineRegistry } from '../engines/registry';
@@ -59,8 +59,41 @@ export class UsageService {
     return n;
   }
 
+  /**
+   * Backfill the model on old rows that recorded none (older Codex runs), from the engine's
+   * default model, so "By model" shows the engine instead of a lump of `unknown`. One-time per
+   * row: cheap once filled.
+   */
+  backfillModels(): number {
+    const engineIds = this.db
+      .selectDistinct({ e: usageRecords.engineId })
+      .from(usageRecords)
+      .where(isNull(usageRecords.model))
+      .all()
+      .map((r) => r.e);
+    let n = 0;
+    for (const engineId of engineIds) {
+      let model: string | null = null;
+      try {
+        const info = this.engines.get(engineId);
+        model = info.defaultModel ?? info.models[0]?.id ?? null;
+      } catch {
+        model = null;
+      }
+      if (!model) continue;
+      this.db
+        .update(usageRecords)
+        .set({ model })
+        .where(and(eq(usageRecords.engineId, engineId), isNull(usageRecords.model)))
+        .run();
+      n++;
+    }
+    return n;
+  }
+
   summary(q: UsageQuery): UsageSummaryDto {
     this.repriceUnpriced();
+    this.backfillModels();
     const to = q.to ?? Date.now();
     const from = q.from ?? to - 30 * 86_400_000;
     const where = and(

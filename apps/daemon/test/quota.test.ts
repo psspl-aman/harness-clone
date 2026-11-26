@@ -329,6 +329,44 @@ describe('auto-pause and auto-resume', () => {
     expect(get(id).status).not.toBe('PAUSED_AUTH');
   });
 
+  it('holds queued tasks when the project is over its monthly budget', async () => {
+    agent.setResponses([
+      ...base(),
+      role('Developer', 'done', { writeFiles: { 'a.txt': 'a' } }),
+      ...rest(),
+    ]);
+    // A $1 cap and $5 already spent this month: the task shouldn't start.
+    await t.app.inject({
+      method: 'PATCH',
+      url: `/api/projects/${projectId}`,
+      payload: { pipeline: { monthlyBudgetUsd: 1 } },
+    });
+    t.ctx.db
+      .insert(usageRecords)
+      .values({
+        id: newId('use'),
+        projectId,
+        engineId: 'claude-code',
+        model: 'opus',
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 5,
+        costSource: 'reported',
+      })
+      .run();
+    const id = await start();
+    expect(get(id).status).toBe('QUEUED');
+    expect(get(id).statusReason).toMatch(/Monthly budget reached/);
+    // Raising the cap lets it run.
+    await t.app.inject({
+      method: 'PATCH',
+      url: `/api/projects/${projectId}`,
+      payload: { pipeline: { monthlyBudgetUsd: 100 } },
+    });
+    await t.ctx.orchestrator.idle();
+    expect(get(id).status).toBe('DONE');
+  });
+
   it("doesn't start work on an engine whose window is exhausted", async () => {
     const resetSec = Math.floor(Date.now() / 1000) + 3600;
     await t.ctx.engines
@@ -351,6 +389,26 @@ describe('auto-pause and auto-resume', () => {
 });
 
 describe('usage analytics', () => {
+  it('backfills a null model from the engine default so "By model" isn’t all unknown', async () => {
+    t.ctx.db
+      .insert(usageRecords)
+      .values({
+        id: newId('use'),
+        projectId,
+        engineId: 'claude-code',
+        model: null, // an old row that recorded no model
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        costUsd: 0,
+        costSource: 'none',
+      })
+      .run();
+    const s = (await t.app.inject({ method: 'GET', url: '/api/usage/summary?days=7' })).json();
+    const models = s.byModel.map((b: { key: string }) => b.key);
+    expect(models).not.toContain('unknown');
+    expect(models).toContain('opus'); // claude-code's default/first model
+  });
+
   it('summarises tokens and cost by day, project, engine, role, task and task type', async () => {
     await t.app.inject({
       method: 'PATCH',

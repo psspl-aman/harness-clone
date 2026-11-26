@@ -289,6 +289,21 @@ describe('Codex adapter', () => {
     });
   });
 
+  it('falls back to the newest rollout for account-wide windows when the run has no thread match', async () => {
+    // A rollout from a *different* thread still carries the account's rate limits.
+    const day = join(codexHome, 'sessions', '2026', '11', '26');
+    mkdirSync(day, { recursive: true });
+    copyFileSync(
+      join(FIXTURES, 'codex-rollout.jsonl'),
+      join(day, 'rollout-2026-11-26T12-59-28-ffffffff-0000-0000-0000-000000000000.jsonl'),
+    );
+    fake.setResponses([{ match: 'exec', stdoutFile: join(FIXTURES, 'codex-success.jsonl') }]);
+    const { events } = await run(new CodexAdapter(env()), { model: 'gpt-5-codex' });
+    const limits = events.filter((e) => e.kind === 'rate_limit');
+    expect(limits).toHaveLength(1);
+    expect(limits[0]).toMatchObject({ windows: [{ name: 'five_hour' }, { name: 'seven_day' }] });
+  });
+
   it('falls back to config.toml, then "codex (default)", for the model', async () => {
     fake.setResponses([{ match: 'exec', stdoutFile: join(FIXTURES, 'codex-success.jsonl') }]);
     expect((await run(new CodexAdapter(env()))).result.usage.model).toBe(CODEX_DEFAULT_MODEL);

@@ -136,6 +136,42 @@ export function readCodexRollout(
 }
 
 /**
+ * The most recent `rate_limits` from any rollout file (newest day, newest file). Rate-limit
+ * windows are account-wide, so this is a fallback when the run's own rollout is missing or wrote
+ * no limits (e.g. a run that failed instantly at the usage cap and left no thread file).
+ */
+export function latestCodexRateLimits(home = codexHome()): unknown {
+  const root = join(home, 'sessions');
+  const desc = (dir: string) => {
+    try {
+      return readdirSync(dir).sort().reverse();
+    } catch {
+      return [];
+    }
+  };
+  let scanned = 0;
+  for (const y of desc(root))
+    for (const m of desc(join(root, y)))
+      for (const d of desc(join(root, y, m))) {
+        for (const file of desc(join(root, y, m, d))) {
+          if (!file.endsWith('.jsonl')) continue;
+          if (++scanned > 40) return null;
+          try {
+            const lines = readFileSync(join(root, y, m, d, file), 'utf8').split('\n');
+            for (let i = lines.length - 1; i >= 0; i--) {
+              if (!lines[i]!.includes('"rate_limits"')) continue;
+              const p = (JSON.parse(lines[i]!).payload ?? {}) as Json;
+              if (p.rate_limits) return p.rate_limits;
+            }
+          } catch {
+            /* skip unreadable/partial file */
+          }
+        }
+      }
+  return null;
+}
+
+/**
  * OpenAI Codex CLI (`codex exec --json`). Event contract from the Codex
  * docs and codex-rs/exec/src/exec_events.rs: thread.started{thread_id},
  * turn.started, turn.completed{usage}, turn.failed{error}, item.* {item},
@@ -317,8 +353,9 @@ export class CodexAdapter extends CliAdapter {
       if (e.kind === 'usage') e.usage.model = model;
       onEvent(e);
     }
-    if (!streamedLimits && rollout?.rateLimits) {
-      const ev = codexRateLimitEvent(rollout.rateLimits);
+    if (!streamedLimits) {
+      const limits = rollout?.rateLimits ?? latestCodexRateLimits();
+      const ev = limits ? codexRateLimitEvent(limits) : null;
       if (ev) onEvent(ev);
     }
     return result;

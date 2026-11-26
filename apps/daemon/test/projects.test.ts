@@ -203,6 +203,40 @@ describe('attach existing (local)', () => {
     expect(existsSync(join(dir, '.git'))).toBe(false);
   });
 
+  it('serves a static site (index.html, no run command) and blocks path traversal', async () => {
+    const p = (
+      await post({
+        mode: 'scratch',
+        name: 'Site',
+        location: { kind: 'local', parentDir: root, folderName: 'site' },
+      })
+    ).json();
+    const dir = join(root, 'site');
+    writeTree(dir, {
+      'index.html': '<h1>Tip Splitter</h1>',
+      'css/app.css': 'body{color:red}',
+    });
+    const detail = (await t.app.inject({ method: 'GET', url: `/api/projects/${p.id}` })).json();
+    expect(detail.hasStaticSite).toBe(true);
+
+    const home = await t.app.inject({ method: 'GET', url: `/api/projects/${p.id}/site/` });
+    expect(home.statusCode).toBe(200);
+    expect(home.headers['content-type']).toContain('text/html');
+    expect(home.body).toContain('Tip Splitter');
+
+    const css = await t.app.inject({ method: 'GET', url: `/api/projects/${p.id}/site/css/app.css` });
+    expect(css.statusCode).toBe(200);
+    expect(css.headers['content-type']).toContain('text/css');
+
+    // A real file just outside the project root must not be reachable by traversal.
+    writeTree(root, { 'secret.txt': 'TOP SECRET' });
+    const escape = await t.app.inject({
+      method: 'GET',
+      url: `/api/projects/${p.id}/site/..%2fsecret.txt`,
+    });
+    expect(escape.statusCode).toBe(404);
+  });
+
   it('stores per-project pipeline overrides and fallback engines', async () => {
     await installFakeEngine(t, 'codex');
     const p = (

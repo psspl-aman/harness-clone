@@ -44,6 +44,8 @@ export const RoutingRuleSchema = z.object({
   pipeline: z.enum(PIPELINE_PROFILES),
   /** Model to prefer for this complexity, applied only when the engine offers it. Null → engine default. */
   model: ModelIdSchema.nullable(),
+  /** Reasoning effort for this complexity on engines that support it. Null → fall through. */
+  effort: EffortSchema.nullable().default(null),
 });
 export type RoutingRule = z.infer<typeof RoutingRuleSchema>;
 
@@ -63,11 +65,11 @@ export type Routing = z.infer<typeof RoutingSchema>;
 export const DEFAULT_ROUTING: Routing = {
   enabled: false,
   profiles: {
-    xs: { pipeline: 'lite', model: 'haiku' },
-    s: { pipeline: 'lite', model: 'haiku' },
-    m: { pipeline: 'full', model: null },
-    l: { pipeline: 'full', model: 'opus' },
-    xl: { pipeline: 'full', model: 'opus' },
+    xs: { pipeline: 'lite', model: 'haiku', effort: null },
+    s: { pipeline: 'lite', model: 'haiku', effort: null },
+    m: { pipeline: 'full', model: null, effort: null },
+    l: { pipeline: 'full', model: 'opus', effort: null },
+    xl: { pipeline: 'full', model: 'opus', effort: null },
   },
 };
 
@@ -97,8 +99,8 @@ export function cheapRouting(base: Routing): Routing {
     enabled: true,
     profiles: {
       ...base.profiles,
-      xs: { pipeline: 'lite', model: null },
-      s: { pipeline: 'lite', model: null },
+      xs: { pipeline: 'lite', model: null, effort: 'low' },
+      s: { pipeline: 'lite', model: null, effort: 'low' },
     },
   };
 }
@@ -174,8 +176,12 @@ export const AppSettingsSchema = z.object({
   defaultEngines: RoleEnginesSchema,
   /** Per-role model overrides; a missing role uses the engine's own default model. */
   roleModels: RoleModelsSchema,
+  /** Default reasoning effort for every project (engines that support it). Null → each CLI's default. */
+  effort: EffortSchema.nullable().default(null),
   /** Map task complexity to a pipeline profile and model (off by default). */
   routing: RoutingSchema,
+  /** Soft monthly spend cap (USD); when a project's month-to-date cost reaches it, new tasks don't start. 0/null = off. */
+  monthlyBudgetUsd: z.number().min(0).max(1_000_000).nullable().default(null),
   /**
    * USD per 1M tokens, keyed by model id (e.g. "gpt-5-codex") or engine id.
    * Used only when the CLI doesn't report a cost itself.
@@ -217,7 +223,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     documenter: 'claude-code',
   },
   roleModels: {},
+  effort: null,
   routing: DEFAULT_ROUTING,
+  monthlyBudgetUsd: null,
 };
 
 export type DeepPartial<T> = T extends readonly unknown[]

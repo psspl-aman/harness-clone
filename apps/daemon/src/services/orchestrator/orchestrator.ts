@@ -47,6 +47,7 @@ import {
   taskDependencies,
   tasks,
   testResults,
+  usageRecords,
 } from '../../db/schema';
 import type { EngineRegistry } from '../../engines/registry';
 import type { EventBus } from '../../events/bus';
@@ -383,6 +384,22 @@ export class Orchestrator {
         (a, b) =>
           PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.orderIndex - b.orderIndex,
       );
+    // Soft monthly budget: don't start new tasks once the project is over its cap (running tasks
+    // finish their current step). Already-running work isn't interrupted.
+    const budget = this.budgetFor(projectId);
+    if (budget !== null && queued.length) {
+      const spent = this.monthToDateCostUsd(projectId);
+      if (spent >= budget) {
+        const reason = `Monthly budget reached ($${spent.toFixed(2)} of $${budget.toFixed(2)}) — raise it in project settings to continue`;
+        for (const t of queued) {
+          if (t.statusReason !== reason) {
+            this.d.db.update(tasks).set({ statusReason: reason }).where(eq(tasks.id, t.id)).run();
+            this.d.tasks.touch(t.id);
+          }
+        }
+        return;
+      }
+    }
     for (const t of queued) {
       if (free <= 0) break;
       const engine = this.safeEngine(this.engineFor(t, this.roleFor('IN_DEVELOPMENT', t)));
@@ -1522,7 +1539,15 @@ export class Orchestrator {
           );
           return null;
         }
-        if (++failures < 2) {
+        // A transient network error gets more attempts and a short backoff; a hard failure
+        // (bad tool, crash) fails after the usual 2 so it doesn't spin.
+        const transient = e?.kind === 'NETWORK';
+        const maxAttempts = transient ? 3 : 2;
+        if (++failures < maxAttempts) {
+          if (transient) {
+            await new Promise((r) => setTimeout(r, Math.min(2000 * 2 ** (failures - 1), 15_000)));
+            if (signal.aborted) return null;
+          }
           resume = null;
           nextPrompt = prompt;
           continue;
@@ -2147,13 +2172,46 @@ export class Orchestrator {
   /** Reasoning effort: task → project → null (CLI default); dropped for engines without it. */
   private effortFor(task: TaskRow, engineId: string): Effort | null {
     if (!this.safeEngine(engineId)?.capabilities.effort) return null;
+    // task → project → routing (by complexity) → global default → CLI default.
     if (task.effort) return task.effort;
+    const projectEffort = this.d.db
+      .select({ e: projectSettings.effort })
+      .from(projectSettings)
+      .where(eq(projectSettings.projectId, task.projectId))
+      .get()?.e;
+    if (projectEffort) return projectEffort;
+    const rule = this.routingRule(task);
+    if (rule?.effort) return rule.effort;
+    return this.d.settings.get().effort ?? null;
+  }
+
+  /** Effective monthly budget (USD) for a project: its own cap, else the global cap, else null (off). */
+  private budgetFor(projectId: string): number | null {
+    const p = this.d.db
+      .select({ b: projectSettings.monthlyBudgetUsd })
+      .from(projectSettings)
+      .where(eq(projectSettings.projectId, projectId))
+      .get()?.b;
+    const global = this.d.settings.get().monthlyBudgetUsd;
+    const cap = p ?? global ?? null;
+    return cap && cap > 0 ? cap : null;
+  }
+
+  /** This project's recorded spend (USD) since the start of the current month. */
+  private monthToDateCostUsd(projectId: string): number {
+    const d = new Date();
+    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
     return (
       this.d.db
-        .select({ e: projectSettings.effort })
-        .from(projectSettings)
-        .where(eq(projectSettings.projectId, task.projectId))
-        .get()?.e ?? null
+        .select({ c: sql<number>`coalesce(sum(${usageRecords.costUsd}), 0)` })
+        .from(usageRecords)
+        .where(
+          and(
+            eq(usageRecords.projectId, projectId),
+            sql`${usageRecords.recordedAt} >= ${monthStart}`,
+          ),
+        )
+        .get()?.c ?? 0
     );
   }
 
