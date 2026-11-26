@@ -108,7 +108,7 @@ export default function SettingsPage() {
     });
 
   return (
-    <div className="portal-content max-w-3xl py-8 pb-28">
+    <div className="portal-content mx-auto max-w-3xl py-8 pb-28">
       <PageHeader
         title="Settings"
         description="Global defaults for every project. Projects can override most of these."
@@ -127,7 +127,8 @@ export default function SettingsPage() {
             description="Which engine and model run each role unless a project or task overrides it. Leave the model on “Engine default” to use the engine’s own default."
           >
             {AGENT_ROLES.map((role) => (
-              <div key={role} className="space-y-1 py-1 first:pt-0 last:pb-0">
+              // Group each role's engine + model tightly; the divider separates roles.
+              <div key={role} className="space-y-2 py-3 first:pt-0 last:pb-0 [&>div]:py-0">
                 <EngineField
                   id={`engine-${role}`}
                   label={ROLE_LABELS[role]}
