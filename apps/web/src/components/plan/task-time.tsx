@@ -10,6 +10,14 @@ import { cn } from '@/lib/utils';
 export const fmtMinutes = (ms: number) =>
   ms < 60_000 ? '<1m' : formatDuration(Math.round(ms / 60_000) * 60);
 
+/** Compact USD ("$0.42", "<$0.01", "$1.2k"). */
+export const fmtCost = (usd: number) =>
+  usd > 0 && usd < 0.01
+    ? '<$0.01'
+    : usd >= 1000
+      ? `$${(usd / 1000).toFixed(1)}k`
+      : `$${usd.toFixed(2)}`;
+
 const basisText = (t: TaskDto) =>
   t.timing.estimateBasis === 'history'
     ? `typical for your finished ${t.complexity.toUpperCase()} tasks`
@@ -37,10 +45,21 @@ export function TaskTimeChip({ task, className }: { task: TaskDto; className?: s
     label = `~${fmtMinutes(est)}`;
     title = `Estimated agent time: ${basisText(task)}`;
   }
+  // A cost forecast (median of your finished tasks of this complexity), shown only when there's
+  // history to base it on — never a fabricated figure.
+  const showCost = task.status !== 'DONE' && task.status !== 'CANCELLED' && task.timing.estCostUsd;
   return (
     <span className={cn('inline-flex items-center gap-1', className)} title={title}>
       <Clock className="size-3" aria-hidden />
       {label}
+      {showCost ? (
+        <span
+          className="text-muted-foreground"
+          title={`Estimated cost — median of your finished ${task.complexity.toUpperCase()} tasks`}
+        >
+          · ~{fmtCost(task.timing.estCostUsd!)} est.
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -68,9 +87,16 @@ export function TaskTimePanel({ task }: { task: TaskDto }) {
         : `~${fmtMinutes(left)}${over ? ' (over estimate)' : ''}`,
       'Estimate minus time spent',
     ],
+    [
+      'Est. cost',
+      t.estCostUsd != null ? `~${fmtCost(t.estCostUsd)}` : '—',
+      t.estCostUsd != null
+        ? `Median cost of your finished ${task.complexity.toUpperCase()} tasks`
+        : `No cost history yet for ${task.complexity.toUpperCase()} tasks — appears once a few finish`,
+    ],
   ];
   return (
-    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
       {items.map(([k, v, hint]) => (
         <div key={k} className="bg-muted/40 rounded-lg px-3 py-2" title={hint}>
           <dt className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">

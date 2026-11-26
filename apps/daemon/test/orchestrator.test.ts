@@ -161,109 +161,116 @@ const waitFor = async (fn: () => boolean, ms = 15_000) => {
 describe('pipeline: happy path', () => {
   // Windows: a multi-task pipeline spawning many engine CLIs through cmd.exe shims exceeds the test
   // budget (each spawn carries cmd.exe cold-start cost). The daemon runs it fine. Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('builds dependent tasks in worktrees and merges them into the working branch', async () => {
-    script(
-      developer('SA-1', { 'src/a.txt': 'feature a\n' }),
-      developer('SA-2', { 'src/b.txt': 'feature b\n' }),
-      reviewer(),
-      tester(),
-      documenter(),
-    );
-    const { planId, tasks } = plan(pt('T1', 'Feature A'), pt('T2', 'Feature B', ['T1']));
-    await approveAll(planId);
-    await t.ctx.orchestrator.tick();
-    expect(task(tasks[1]!.id)).toMatchObject({
-      status: 'BLOCKED',
-      statusReason: 'Waiting for SA-1',
-    });
-    await t.ctx.orchestrator.idle();
+  it.skipIf(process.platform === 'win32')(
+    'builds dependent tasks in worktrees and merges them into the working branch',
+    async () => {
+      script(
+        developer('SA-1', { 'src/a.txt': 'feature a\n' }),
+        developer('SA-2', { 'src/b.txt': 'feature b\n' }),
+        reviewer(),
+        tester(),
+        documenter(),
+      );
+      const { planId, tasks } = plan(pt('T1', 'Feature A'), pt('T2', 'Feature B', ['T1']));
+      await approveAll(planId);
+      await t.ctx.orchestrator.tick();
+      expect(task(tasks[1]!.id)).toMatchObject({
+        status: 'BLOCKED',
+        statusReason: 'Waiting for SA-1',
+      });
+      await t.ctx.orchestrator.idle();
 
-    for (const x of tasks) expect(task(x.id).status).toBe('DONE');
-    expect(statuses(tasks[0]!.id)).toEqual([
-      'DRAFT',
-      'APPROVED',
-      'QUEUED',
-      'IN_DEVELOPMENT',
-      'IN_REVIEW',
-      'IN_TESTING',
-      'DOCUMENTING',
-      'DONE',
-    ]);
-    expect(statuses(tasks[1]!.id)).toContain('BLOCKED');
-    // Both changes landed on main through no-ff merges; the user's checkout is clean.
-    expect(readFileSync(join(repo, 'src/a.txt'), 'utf8')).toBe('feature a\n');
-    expect(readFileSync(join(repo, 'src/b.txt'), 'utf8')).toBe('feature b\n');
-    expect(git(repo, 'log', '--merges', '--format=%s')).toMatch(
-      /Merge SA-2: Feature B\nMerge SA-1: Feature A/,
-    );
-    expect(git(repo, 'status', '--porcelain')).toBe('');
-    // Worktrees and task branches are cleaned up.
-    expect(git(repo, 'branch', '--list', 'af/*')).toBe('');
-    expect(existsSync(join(t.home, 'worktrees', projectId, 'SA-1'))).toBe(false);
-    // SA-2's developer saw SA-1's work (its worktree branched from the updated main).
-    const dev2 = agent
-      .calls()
-      .find((c) => c.stdin.includes('Task SA-2:') && c.stdin.includes('# Role: Developer'))!;
-    expect(dev2.stdin).toContain('## Already completed dependencies\n- SA-1 Feature A');
-    expect(dev2.args).toEqual(
-      expect.arrayContaining(['--permission-mode', 'acceptEdits', '--allowedTools', 'Bash']),
-    );
-    expect(agent.calls().find((c) => c.stdin.includes('# Role: Reviewer'))!.args).toEqual(
-      expect.arrayContaining(['--permission-mode', 'dontAsk']),
-    );
+      for (const x of tasks) expect(task(x.id).status).toBe('DONE');
+      expect(statuses(tasks[0]!.id)).toEqual([
+        'DRAFT',
+        'APPROVED',
+        'QUEUED',
+        'IN_DEVELOPMENT',
+        'IN_REVIEW',
+        'IN_TESTING',
+        'DOCUMENTING',
+        'DONE',
+      ]);
+      expect(statuses(tasks[1]!.id)).toContain('BLOCKED');
+      // Both changes landed on main through no-ff merges; the user's checkout is clean.
+      expect(readFileSync(join(repo, 'src/a.txt'), 'utf8')).toBe('feature a\n');
+      expect(readFileSync(join(repo, 'src/b.txt'), 'utf8')).toBe('feature b\n');
+      expect(git(repo, 'log', '--merges', '--format=%s')).toMatch(
+        /Merge SA-2: Feature B\nMerge SA-1: Feature A/,
+      );
+      expect(git(repo, 'status', '--porcelain')).toBe('');
+      // Worktrees and task branches are cleaned up.
+      expect(git(repo, 'branch', '--list', 'af/*')).toBe('');
+      expect(existsSync(join(t.home, 'worktrees', projectId, 'SA-1'))).toBe(false);
+      // SA-2's developer saw SA-1's work (its worktree branched from the updated main).
+      const dev2 = agent
+        .calls()
+        .find((c) => c.stdin.includes('Task SA-2:') && c.stdin.includes('# Role: Developer'))!;
+      expect(dev2.stdin).toContain('## Already completed dependencies\n- SA-1 Feature A');
+      expect(dev2.args).toEqual(
+        expect.arrayContaining(['--permission-mode', 'acceptEdits', '--allowedTools', 'Bash']),
+      );
+      expect(agent.calls().find((c) => c.stdin.includes('# Role: Reviewer'))!.args).toEqual(
+        expect.arrayContaining(['--permission-mode', 'dontAsk']),
+      );
 
-    // Records: runs per role, review, tests, report and memory.
-    const runs = t.ctx.db.select().from(agentRuns).where(eq(agentRuns.taskId, tasks[0]!.id)).all();
-    // The second Reviewer run is the test review, after the tests pass.
-    expect(runs.map((r) => r.role)).toEqual([
-      'developer',
-      'reviewer',
-      'tester',
-      'reviewer',
-      'documenter',
-    ]);
-    expect(runs[0]!.filesChanged).toEqual(['src/a.txt']);
-    expect(runs[0]!.diff).toContain('+feature a');
-    const report = (
-      await t.app.inject({ method: 'GET', url: `/api/tasks/${tasks[0]!.id}/report` })
-    ).json();
-    expect(report.content).toContain('# SA-1: Feature A');
-    expect(report.content).toContain('`src/a.txt` — added, +1 −0');
-    expect(report.content).toContain('| developer | 1 |');
-    expect(report.content).toContain('No UI yet');
-    expect(
-      t.ctx.db
+      // Records: runs per role, review, tests, report and memory.
+      const runs = t.ctx.db
+        .select()
+        .from(agentRuns)
+        .where(eq(agentRuns.taskId, tasks[0]!.id))
+        .all();
+      // The second Reviewer run is the test review, after the tests pass.
+      expect(runs.map((r) => r.role)).toEqual([
+        'developer',
+        'reviewer',
+        'tester',
+        'reviewer',
+        'documenter',
+      ]);
+      expect(runs[0]!.filesChanged).toEqual(['src/a.txt']);
+      expect(runs[0]!.diff).toContain('+feature a');
+      const report = (
+        await t.app.inject({ method: 'GET', url: `/api/tasks/${tasks[0]!.id}/report` })
+      ).json();
+      expect(report.content).toContain('# SA-1: Feature A');
+      expect(report.content).toContain('`src/a.txt` — added, +1 −0');
+      expect(report.content).toContain('| developer | 1 |');
+      expect(report.content).toContain('No UI yet');
+      expect(
+        t.ctx.db
+          .select()
+          .from(memoryEntries)
+          .where(eq(memoryEntries.source, 'documenter'))
+          .all()
+          .map((m) => m.title),
+      ).toEqual(expect.arrayContaining(['SA-1: Feature A', 'Plain text storage']));
+      // Task memory carries the summary, decisions, files touched and limitations.
+      const taskMem = t.ctx.db
         .select()
         .from(memoryEntries)
-        .where(eq(memoryEntries.source, 'documenter'))
+        .where(eq(memoryEntries.scope, 'task'))
         .all()
-        .map((m) => m.title),
-    ).toEqual(expect.arrayContaining(['SA-1: Feature A', 'Plain text storage']));
-    // Task memory carries the summary, decisions, files touched and limitations.
-    const taskMem = t.ctx.db
-      .select()
-      .from(memoryEntries)
-      .where(eq(memoryEntries.scope, 'task'))
-      .all()
-      .find((m) => m.title === 'SA-1: Feature A')!;
-    expect(taskMem.content).toContain('Delivered the feature.');
-    expect(taskMem.content).toContain(
-      'Decisions:\n- Plain text storage: Features are stored as .txt files.',
-    );
-    expect(taskMem.content).toMatch(/Files touched: .*src\/a\.txt/);
-    expect(taskMem.content).toContain('Known limitations: No UI yet');
-    const diff = (
-      await t.app.inject({ method: 'GET', url: `/api/tasks/${tasks[0]!.id}/diff` })
-    ).json();
-    expect(diff.files.map((f: { path: string }) => f.path).sort()).toEqual([
-      'README.md',
-      'src/a.txt',
-    ]);
-    expect(task(tasks[0]!.id).pipeline.tokens).toBeGreaterThan(0);
-    expect(events.some((e) => e.type === 'notification' && e.payload.title === 'SA-1 done')).toBe(
-      true,
-    );
-  });
+        .find((m) => m.title === 'SA-1: Feature A')!;
+      expect(taskMem.content).toContain('Delivered the feature.');
+      expect(taskMem.content).toContain(
+        'Decisions:\n- Plain text storage: Features are stored as .txt files.',
+      );
+      expect(taskMem.content).toMatch(/Files touched: .*src\/a\.txt/);
+      expect(taskMem.content).toContain('Known limitations: No UI yet');
+      const diff = (
+        await t.app.inject({ method: 'GET', url: `/api/tasks/${tasks[0]!.id}/diff` })
+      ).json();
+      expect(diff.files.map((f: { path: string }) => f.path).sort()).toEqual([
+        'README.md',
+        'src/a.txt',
+      ]);
+      expect(task(tasks[0]!.id).pipeline.tokens).toBeGreaterThan(0);
+      expect(events.some((e) => e.type === 'notification' && e.payload.title === 'SA-1 done')).toBe(
+        true,
+      );
+    },
+  );
 
   it('never commits secret files the agent creates, and tells the Reviewer why', async () => {
     script(
@@ -605,6 +612,40 @@ describe('pipeline: failures and pauses', () => {
     expect(task(id).status).toBe('DONE');
   });
 
+  it('gives a transient network failure an extra retry (3 attempts) and recovers', async () => {
+    // A network error (ECONNRESET) gets up to 3 attempts; a hard error would fail after 2. Two
+    // network failures then a success proves the extra, transient-only retry.
+    const netFail = {
+      match: '-p',
+      stdinIncludes: '# Role: Developer',
+      stdout: '',
+      stderr: 'read ECONNRESET',
+      exitCode: 1,
+      once: true,
+    };
+    script(
+      netFail,
+      netFail,
+      developer('SA-1', { 'src/a.txt': 'recovered\n' }),
+      reviewer(),
+      tester(),
+      documenter(),
+    );
+    const { planId, tasks } = plan(pt('T1', 'Feature A'));
+    const id = tasks[0]!.id;
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+    expect(task(id).status).toBe('DONE');
+    // Three developer attempts were recorded (two transient failures, then success).
+    const devRuns = t.ctx.db
+      .select()
+      .from(agentRuns)
+      .where(eq(agentRuns.taskId, id))
+      .all()
+      .filter((r) => r.role === 'developer');
+    expect(devRuns).toHaveLength(3);
+  });
+
   it('pauses, resumes and cancels running tasks', async () => {
     script(
       developer('SA-1', { 'src/a.txt': 'a' }, { sleepMs: 4000, once: true }),
@@ -838,40 +879,43 @@ describe('pipeline: failures and pauses', () => {
 describe('pipeline: merging', () => {
   // Windows: this pipeline spawns engine CLIs through cmd.exe shims; under parallel forks the
   // added cold-start cost makes the task finish differently within the budget. Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('creates a conflict-resolution task when main moved underneath', async () => {
-    const commitOnMain = `cd ${repo} && printf 'main side\\n' > shared.txt && git add shared.txt && git ${GIT_ID.join(' ')} commit -qm 'main change'`;
-    const resolve = `git ${GIT_ID.join(' ')} merge main -q || true; printf 'resolved\\n' > shared.txt; git add shared.txt; git ${GIT_ID.join(' ')} commit -q --no-edit`;
-    script(
-      developer('SA-1', { 'shared.txt': 'task side\n' }, { shell: commitOnMain }),
-      role('Developer', 'Resolved conflicts.', {
-        stdinIncludes: 'You resolve merge conflicts',
-        shell: resolve,
-      }),
-      reviewer(),
-      tester(),
-      documenter(),
-    );
-    const { planId, tasks } = plan(pt('T1', 'Shared file'));
-    await approveAll(planId);
-    await t.ctx.orchestrator.idle();
-    const original = task(tasks[0]!.id);
-    expect(original.status).toBe('DONE');
-    expect(statuses(original.id)).toContain('BLOCKED');
-    const follow = t.ctx.tasks.board(projectId).tasks.find((x) => x.origin === 'conflict')!;
-    expect(follow).toMatchObject({
-      key: 'SA-2',
-      title: 'Resolve merge conflicts for SA-1',
-      status: 'DONE',
-    });
-    expect(t.ctx.tasks.history(original.id).at(-1)!.reason).toBe(
-      'Merged via SA-2 (conflict resolution)',
-    );
-    expect(
-      agent.calls().find((c) => c.stdin.includes('You resolve merge conflicts'))!.stdin,
-    ).toContain('conflict in: shared.txt');
-    expect(readFileSync(join(repo, 'shared.txt'), 'utf8')).toBe('resolved\n');
-    expect(git(repo, 'branch', '--list', 'af/*')).toBe('');
-  });
+  it.skipIf(process.platform === 'win32')(
+    'creates a conflict-resolution task when main moved underneath',
+    async () => {
+      const commitOnMain = `cd ${repo} && printf 'main side\\n' > shared.txt && git add shared.txt && git ${GIT_ID.join(' ')} commit -qm 'main change'`;
+      const resolve = `git ${GIT_ID.join(' ')} merge main -q || true; printf 'resolved\\n' > shared.txt; git add shared.txt; git ${GIT_ID.join(' ')} commit -q --no-edit`;
+      script(
+        developer('SA-1', { 'shared.txt': 'task side\n' }, { shell: commitOnMain }),
+        role('Developer', 'Resolved conflicts.', {
+          stdinIncludes: 'You resolve merge conflicts',
+          shell: resolve,
+        }),
+        reviewer(),
+        tester(),
+        documenter(),
+      );
+      const { planId, tasks } = plan(pt('T1', 'Shared file'));
+      await approveAll(planId);
+      await t.ctx.orchestrator.idle();
+      const original = task(tasks[0]!.id);
+      expect(original.status).toBe('DONE');
+      expect(statuses(original.id)).toContain('BLOCKED');
+      const follow = t.ctx.tasks.board(projectId).tasks.find((x) => x.origin === 'conflict')!;
+      expect(follow).toMatchObject({
+        key: 'SA-2',
+        title: 'Resolve merge conflicts for SA-1',
+        status: 'DONE',
+      });
+      expect(t.ctx.tasks.history(original.id).at(-1)!.reason).toBe(
+        'Merged via SA-2 (conflict resolution)',
+      );
+      expect(
+        agent.calls().find((c) => c.stdin.includes('You resolve merge conflicts'))!.stdin,
+      ).toContain('conflict in: shared.txt');
+      expect(readFileSync(join(repo, 'shared.txt'), 'utf8')).toBe('resolved\n');
+      expect(git(repo, 'branch', '--list', 'af/*')).toBe('');
+    },
+  );
 
   it('waits for your review before merging, and handles requested changes', async () => {
     await t.app.inject({

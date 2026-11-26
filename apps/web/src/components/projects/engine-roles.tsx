@@ -299,7 +299,7 @@ export function EffortSelect({
         </span>
         <p className="text-muted-foreground text-xs">
           {supported.length
-            ? `Applies to ${supported.join(' and ')}; other engines ignore it.`
+            ? `Applies to ${supported.join(' and ')}; other engines ignore it. Extra high / Max are Claude Code only — Codex uses High.`
             : 'No installed engine supports an effort setting.'}
         </p>
       </div>

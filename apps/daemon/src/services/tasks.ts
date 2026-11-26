@@ -1046,10 +1046,47 @@ export class TaskService {
     return medians;
   }
 
+  private costCache: { at: number; medians: Map<Complexity, number> } | null = null;
+
+  /**
+   * Median total USD cost of finished tasks per complexity (all projects, most recent 200),
+   * used to estimate a new task's cost. Only set once there are enough samples — no figure is
+   * invented without history. Cached briefly.
+   */
+  private learnedCostEstimates(): Map<Complexity, number> {
+    if (this.costCache && Date.now() - this.costCache.at < 60_000) return this.costCache.medians;
+    const rows = this.db
+      .select({
+        complexity: tasks.complexity,
+        cost: sql<number>`sum(coalesce(${agentRuns.costUsd}, 0))`,
+      })
+      .from(tasks)
+      .innerJoin(agentRuns, eq(agentRuns.taskId, tasks.id))
+      .where(eq(tasks.status, 'DONE'))
+      .groupBy(tasks.id)
+      .orderBy(desc(tasks.updatedAt))
+      .limit(200)
+      .all();
+    const medians = new Map<Complexity, number>();
+    for (const c of COMPLEXITIES) {
+      const xs = rows
+        .filter((r) => r.complexity === c && Number(r.cost) > 0)
+        .map((r) => Number(r.cost))
+        .sort((a, b) => a - b);
+      if (xs.length >= ESTIMATE_MIN_SAMPLES) {
+        const mid = Math.floor(xs.length / 2);
+        medians.set(c, xs.length % 2 ? xs[mid]! : (xs[mid - 1]! + xs[mid]!) / 2);
+      }
+    }
+    this.costCache = { at: Date.now(), medians };
+    return medians;
+  }
+
   private toDtos(rows: TaskRow[]): TaskDto[] {
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
     const medians = this.learnedEstimates();
+    const costMedians = this.learnedCostEstimates();
     const usage = new Map(
       this.db
         .select({
@@ -1170,9 +1207,12 @@ export class TaskService {
       timing: (() => {
         const u = usage.get(r.id);
         const learned = medians.get(r.complexity);
+        const learnedCost = costMedians.get(r.complexity);
         return {
           estimateMs: learned ?? DEFAULT_ESTIMATE_MS[r.complexity],
           estimateBasis: learned ? ('history' as const) : ('default' as const),
+          estCostUsd: learnedCost ?? null,
+          estCostBasis: learnedCost !== undefined ? ('history' as const) : ('none' as const),
           spentMs: Number(u?.spent ?? 0),
           runningSince: u?.runningSince != null ? Number(u.runningSince) : null,
           startedAt: u?.startedAt != null ? Number(u.startedAt) : null,

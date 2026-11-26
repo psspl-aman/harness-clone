@@ -48,6 +48,26 @@ describe('reasoning effort', () => {
     expect(none!.args.join(' ')).not.toContain('model_reasoning_effort');
   });
 
+  it('Codex clamps the Claude-only xhigh/max down to high', async () => {
+    fake.setResponses([{ match: 'exec', stdoutFile: join(FIXTURES, 'codex-success.jsonl') }]);
+    const a = new CodexAdapter(env());
+    await run(a, { effort: 'xhigh' });
+    await run(a, { effort: 'max' });
+    const [xhigh, max] = fake.calls();
+    expect(xhigh!.args[xhigh!.args.indexOf('-c') + 1]).toBe('model_reasoning_effort="high"');
+    expect(max!.args[max!.args.indexOf('-c') + 1]).toBe('model_reasoning_effort="high"');
+  });
+
+  it('Claude Code passes xhigh/max through unchanged', async () => {
+    fake.setResponses([{ match: '-p', stdoutFile: join(FIXTURES, 'claude-success.jsonl') }]);
+    const a = new ClaudeCodeAdapter(env());
+    await run(a, { effort: 'xhigh' });
+    await run(a, { effort: 'max' });
+    const [xhigh, max] = fake.calls();
+    expect(xhigh!.args).toEqual(expect.arrayContaining(['--effort', 'xhigh']));
+    expect(max!.args).toEqual(expect.arrayContaining(['--effort', 'max']));
+  });
+
   it('engines without an effort setting advertise it and ignore it', async () => {
     fake.setResponses([{ match: '', stdoutFile: join(FIXTURES, 'gemini-success.jsonl') }]);
     const a = new GeminiCliAdapter(env());

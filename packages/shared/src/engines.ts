@@ -46,7 +46,7 @@ export interface AgentRunInputDto {
   cwd: string;
   model?: string | null;
   /** Reasoning effort; only passed to engines with `capabilities.effort`. null → CLI default. */
-  effort?: 'low' | 'medium' | 'high' | null;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null;
   /** Resume a previous CLI conversation when the engine supports it. */
   resumeSessionId?: string | null;
   systemPrompt?: string | null;
