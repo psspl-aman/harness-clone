@@ -17,13 +17,21 @@ export function Markdown({ children, className }: { children: string; className?
         '[&_pre]:bg-muted [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0',
         '[&_a]:text-primary [&_a]:underline-offset-2 hover:[&_a]:underline',
         '[&_blockquote]:text-muted-foreground [&_blockquote]:border-l-2 [&_blockquote]:pl-3',
-        '[&_table]:my-2 [&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1',
+        '[&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_td]:align-top [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left',
         className,
       )}
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        components={{ a: (props) => <a {...props} target="_blank" rel="noreferrer" /> }}
+        components={{
+          a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+          // Wide tables scroll inside their own box instead of widening the chat/panel.
+          table: ({ node: _node, ...props }) => (
+            <div className="my-2 max-w-full overflow-x-auto">
+              <table {...props} />
+            </div>
+          ),
+        }}
       >
         {children}
       </ReactMarkdown>
