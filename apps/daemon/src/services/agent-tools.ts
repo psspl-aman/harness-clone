@@ -4,6 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client';
 import { documents, errors, tasks } from '../db/schema';
+import type { EnvKeyService } from './env-keys';
 import type { MemoryService } from './memory';
 import type { Session } from './safety';
 import type { TaskService } from './tasks';
@@ -19,7 +20,7 @@ const WRITERS = new Set(['developer', 'fixer', 'tester', 'documenter', 'planner'
  * tasks and their reports, and the project's open errors.
  */
 export function buildAgentTools(
-  d: { db: Db; memory: MemoryService; tasks: TaskService },
+  d: { db: Db; memory: MemoryService; tasks: TaskService; envKeys?: EnvKeyService },
   s: Readonly<Session>,
 ): McpServer {
   const server = new McpServer({ name: 'agentforge', version: '0.1.0' });
@@ -72,6 +73,39 @@ export function buildAgentTools(
         return text(`Saved to project memory as "${e.title}".`);
       },
     );
+
+  if (d.envKeys && (s.role === 'developer' || s.role === 'fixer' || s.role === 'tester')) {
+    const envKeys = d.envKeys;
+    server.registerTool(
+      'request_env_var',
+      {
+        description:
+          'Declare an environment variable the project needs from the user (e.g. OPENAI_API_KEY for a chatbot). The user types the real value in AgentForge and it is written to the project’s gitignored .env — you never see it. Only the NAME: never pass, invent or hardcode a value. Also add `NAME=` (empty) to the .env.example in the same folder, read it from the environment in code, and mock it in tests.',
+        inputSchema: {
+          name: z.string().min(1).max(128).describe('Variable name, e.g. OPENAI_API_KEY'),
+          folder: z
+            .string()
+            .max(300)
+            .optional()
+            .describe(
+              'Folder (relative to the project) whose .env should hold it, e.g. "api"; empty = project root',
+            ),
+          why: z.string().max(300).optional().describe('What it is used for, shown to the user'),
+          secret: z.boolean().optional().describe('true for API keys, tokens and passwords'),
+        },
+      },
+      async ({ name, folder, why, secret }) => {
+        if (!projectId) return noProject;
+        const key = s.taskId ? d.tasks.get(s.taskId).key : null;
+        const r = envKeys.request(projectId, { name, folder: folder ?? '', why, secret }, key);
+        return text(
+          r.status === 'set'
+            ? `${r.name} is already set in ${r.file}. Read it from the environment; you can’t see its value.`
+            : `Asked the user for ${r.name}; the value will go into ${r.file}. It is not available to you: read process.env.${r.name} (or the equivalent) in code, add ${r.name}= to the .env.example next to it, and mock it in tests.`,
+        );
+      },
+    );
+  }
 
   server.registerTool(
     'task_details',

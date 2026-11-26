@@ -102,21 +102,76 @@ export async function withheldSecrets(worktree: string): Promise<string[]> {
   return out.split('\0').filter((f) => f && isSecretFile(f));
 }
 
-/** Stage everything, never secrets, and commit. Returns the new commit or null when nothing changed. */
+/**
+ * Staged files whose added lines contain one of `values` (exact match; multi-line values
+ * such as PEM keys also match on any of their longer lines). Values are never logged.
+ */
+export async function filesContainingSecrets(dir: string, values: string[]): Promise<string[]> {
+  const needles = new Set<string>();
+  for (const v of values) {
+    if (v.length >= 8) needles.add(v);
+    if (v.includes('\n'))
+      for (const l of v.split('\n')) if (l.trim().length >= 16) needles.add(l.trim());
+  }
+  if (!needles.size) return [];
+  const patch = (
+    await git(dir, ['diff', '--cached', '--no-color', '--text', '-U0', '--no-renames'])
+  ).out;
+  const added = new Map<string, string[]>();
+  let file: string | null = null;
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+++ ')) {
+      file = line === '+++ /dev/null' ? null : line.replace(/^\+\+\+ (b\/)?/, '');
+      continue;
+    }
+    if (file && line.startsWith('+')) added.set(file, [...(added.get(file) ?? []), line.slice(1)]);
+  }
+  const out: string[] = [];
+  for (const [f, lines] of added) {
+    const text = lines.join('\n');
+    for (const n of needles)
+      if (text.includes(n)) {
+        out.push(f);
+        break;
+      }
+  }
+  return out;
+}
+
+/**
+ * Stage everything and commit — never secret files, and never a file containing a known
+ * secret value (it stays in the worktree, unstaged). Returns null when nothing changed.
+ */
 export async function commitAll(
   worktree: string,
   message: string,
-): Promise<{ commit: string | null; files: string[]; skippedSecrets: string[] }> {
+  opts: { secretValues?: string[] } = {},
+): Promise<{
+  commit: string | null;
+  files: string[];
+  skippedSecrets: string[];
+  leakedSecrets: string[];
+}> {
   await git(worktree, ['add', '-A']);
   const staged = (await git(worktree, ['diff', '--cached', '--name-only'])).out
     .split('\n')
     .filter(Boolean);
   const secrets = staged.filter((f) => isSecretFile(f));
   if (secrets.length) await git(worktree, ['rm', '--cached', '--quiet', '--', ...secrets]);
-  const files = staged.filter((f) => !secrets.includes(f));
-  if (!files.length) return { commit: null, files: [], skippedSecrets: secrets };
+  const leaked = opts.secretValues?.length
+    ? await filesContainingSecrets(worktree, opts.secretValues)
+    : [];
+  if (leaked.length) await git(worktree, ['reset', '-q', '--', ...leaked]);
+  const files = staged.filter((f) => !secrets.includes(f) && !leaked.includes(f));
+  if (!files.length)
+    return { commit: null, files: [], skippedSecrets: secrets, leakedSecrets: leaked };
   await git(worktree, [...(await identityArgs(worktree)), 'commit', '--no-verify', '-m', message]);
-  return { commit: await revParse(worktree, 'HEAD'), files, skippedSecrets: secrets };
+  return {
+    commit: await revParse(worktree, 'HEAD'),
+    files,
+    skippedSecrets: secrets,
+    leakedSecrets: leaked,
+  };
 }
 
 export async function diff(dir: string, from: string, to = 'HEAD'): Promise<TaskDiffDto> {

@@ -53,6 +53,8 @@ export const EventPayloads = {
   'engine.removed': z.object({ engineId: z.string() }),
   'sheet.source': z.object({ source: z.custom<SheetSourceDto>() }),
   'sheet.removed': z.object({ projectId: z.string(), sourceId: z.string() }),
+  /** Env keys the project needs changed (names/status only — never values). */
+  'project.env_keys': z.object({ projectId: z.string() }),
   'project.command_suggestion': z.object({ suggestion: z.custom<CommandSuggestionDto>() }),
   /** Branches, commits or the checkout changed (refetch the Git tab). */
   'project.git': z.object({ projectId: z.string(), action: z.string() }),

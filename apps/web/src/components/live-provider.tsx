@@ -212,6 +212,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               l?.filter((y) => y.id !== e.payload.sourceId),
             );
             break;
+          case 'project.env_keys':
+            void queryClient.invalidateQueries({ queryKey: qk.envKeys(e.payload.projectId) });
+            break;
           case 'project.command_suggestion':
             queryClient.setQueryData(qk.commandSuggestion(e.payload.suggestion.projectId), {
               suggestion: e.payload.suggestion,
@@ -219,6 +222,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             break;
           case 'project.git':
             void queryClient.invalidateQueries({ queryKey: qk.git(e.payload.projectId) });
+            // A merge can add names to a .env.example: re-check which keys are needed.
+            void queryClient.invalidateQueries({ queryKey: qk.envKeys(e.payload.projectId) });
             break;
           case 'terminal.exit':
             void queryClient.invalidateQueries({ queryKey: ['terminals'] });

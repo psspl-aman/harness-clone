@@ -64,6 +64,26 @@ async function connect(role: string) {
 const textOf = (r: unknown) => (r as { content: { text: string }[] }).content[0]!.text;
 
 describe('agent tools MCP server', () => {
+  it('lets a developer declare an env key by name only', async () => {
+    const { client } = await connect('developer');
+    const out = textOf(
+      await client.callTool({
+        name: 'request_env_var',
+        arguments: { name: 'OPENAI_API_KEY', why: 'Chatbot replies', secret: true },
+      }),
+    );
+    expect(out).toMatch(/Asked the user for OPENAI_API_KEY; the value will go into \.env/);
+    expect(t.ctx.envKeys.list(projectId).find((k) => k.name === 'OPENAI_API_KEY')).toMatchObject({
+      status: 'pending',
+      source: 'agent',
+      why: 'Chatbot replies',
+    });
+    // Reviewers and planners can't ask for keys.
+    const { client: reviewer } = await connect('reviewer');
+    const names = (await reviewer.listTools()).tools.map((x) => x.name);
+    expect(names).not.toContain('request_env_var');
+  });
+
   it('gives agents project memory, their task and related work', async () => {
     const { client, guard } = await connect('developer');
     expect(guard.config.mcp!.url).toBe(`${base}/mcp`);
@@ -73,6 +93,7 @@ describe('agent tools MCP server', () => {
       'project_memory_add',
       'project_memory_search',
       'project_tasks',
+      'request_env_var',
       'task_details',
       'task_report',
     ]);

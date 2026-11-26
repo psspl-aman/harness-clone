@@ -24,6 +24,7 @@ import { useNow } from '@/hooks/use-now';
 import { api, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { EnvKeysStrip } from './env-keys';
 import { SheetTasksStrip } from './sheet-tasks';
 import { Composer, type ComposerDraft } from './composer';
 
@@ -360,6 +361,7 @@ export function ChatPanel({
           )
         )}
       </div>
+      <EnvKeysStrip projectId={projectId} />
       <SheetTasksStrip projectId={projectId} tasks={board.data?.tasks ?? []} />
       <Composer
         key={draft.n}

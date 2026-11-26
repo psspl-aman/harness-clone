@@ -26,6 +26,7 @@ import type { MemoryService } from './services/memory';
 import type { DocsService } from './services/docs';
 import type { SafetyService } from './services/safety';
 import type { GitManager } from './services/git-manager';
+import type { EnvKeyService } from './services/env-keys';
 
 /** Everything route handlers and services need; built once in `buildApp`. */
 export interface AppContext {
@@ -57,6 +58,7 @@ export interface AppContext {
   docs: DocsService;
   safety: SafetyService;
   git: GitManager;
+  envKeys: EnvKeyService;
   workspaceRoot: () => string;
   startedAt: number;
 }

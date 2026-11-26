@@ -78,6 +78,8 @@ import type {
   MemoryScope,
   SafetyApprovalDto,
   PausedTaskDto,
+  EnvKeyRequestDto,
+  EnvKeySetResultDto,
 } from '@agentforge/shared';
 
 export const DAEMON_URL = (
@@ -191,6 +193,17 @@ export const api = {
     dismissSuggestion: (id: string) =>
       request<void>('DELETE', `/api/projects/${id}/commands/suggestion`),
     cost: (id: string) => request<ProjectCostDto>('GET', `/api/projects/${id}/cost`),
+  },
+  /** Env keys the project needs. Values go into the project's .env and are never returned. */
+  envKeys: {
+    list: (projectId: string) =>
+      request<EnvKeyRequestDto[]>('GET', `/api/projects/${projectId}/env-keys`),
+    setValue: (projectId: string, id: string, value: string) =>
+      request<EnvKeySetResultDto>('PUT', `/api/projects/${projectId}/env-keys/${id}/value`, {
+        value,
+      }),
+    skip: (projectId: string, id: string) =>
+      request<EnvKeyRequestDto>('POST', `/api/projects/${projectId}/env-keys/${id}/skip`),
   },
   fs: {
     browse: (path?: string, hidden = false) =>
@@ -488,6 +501,7 @@ export const qk = {
   projects: ['projects'] as const,
   project: (id: string) => ['projects', id] as const,
   archivedProjects: ['archived-projects'] as const,
+  envKeys: (projectId: string) => ['env-keys', projectId] as const,
   requirements: (id: string) => ['projects', id, 'requirements'] as const,
   fsBrowse: (path: string | undefined, hidden: boolean) =>
     ['fs', 'browse', path ?? '~', hidden] as const,

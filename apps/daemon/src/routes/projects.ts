@@ -24,6 +24,20 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: AppContext): vo
 
   app.get('/api/projects/:id', async (req) => ctx.projects.get(IdParams.parse(req.params).id));
 
+  // ── Env keys the project needs (values are write-only: written to .env, never returned) ──
+  const KeyParams = z.object({ id: z.string().min(1).max(64), key: z.string().min(1).max(64) });
+  app.get('/api/projects/:id/env-keys', async (req) =>
+    ctx.envKeys.list(IdParams.parse(req.params).id),
+  );
+  app.put('/api/projects/:id/env-keys/:key/value', async (req) => {
+    const { id, key } = KeyParams.parse(req.params);
+    return ctx.envKeys.setValue(id, key, req.body);
+  });
+  app.post('/api/projects/:id/env-keys/:key/skip', async (req) => {
+    const { id, key } = KeyParams.parse(req.params);
+    return ctx.envKeys.skip(id, key);
+  });
+
   app.patch('/api/projects/:id', async (req) => {
     const { id } = IdParams.parse(req.params);
     const body = req.body as {

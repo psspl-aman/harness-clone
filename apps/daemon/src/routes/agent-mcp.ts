@@ -18,7 +18,10 @@ export function registerAgentMcpRoutes(app: FastifyInstance, ctx: AppContext): v
         error: { code: -32001, message: 'Unknown or expired run token' },
         id: null,
       });
-    const server = buildAgentTools({ db: ctx.db, memory: ctx.memory, tasks: ctx.tasks }, session);
+    const server = buildAgentTools(
+      { db: ctx.db, memory: ctx.memory, tasks: ctx.tasks, envKeys: ctx.envKeys },
+      session,
+    );
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     reply.hijack();
     reply.raw.on('close', () => {

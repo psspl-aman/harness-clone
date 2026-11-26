@@ -121,6 +121,8 @@ export interface OrchestratorDeps {
   /** Run the scheduler automatically (off in tests, which call tick()). */
   autoStart?: boolean;
   tickMs?: number;
+  /** Known secret values: a file containing one is never committed. */
+  secretValues?: () => string[];
 }
 
 /**
@@ -988,7 +990,9 @@ export class Orchestrator {
     if (t.worktreePath && existsSync(t.worktreePath)) {
       // Keep the partial work on the task branch (the worktree itself is removed).
       await gitops
-        .commitAll(t.worktreePath, `WIP ${t.key}: ${t.title} (cancelled)`)
+        .commitAll(t.worktreePath, `WIP ${t.key}: ${t.title} (cancelled)`, {
+          secretValues: this.d.secretValues?.(),
+        })
         .catch((err: Error) => this.d.log.warn({ err, taskId }, 'could not save cancelled work'));
       await gitops.removeWorktree(this.project(t.projectId).localPath, t.worktreePath);
     }
@@ -1411,6 +1415,7 @@ export class Orchestrator {
         const c = await gitops.commitAll(
           cwd,
           `${task.key}: ${role}${result.status === 'succeeded' ? '' : ` (${result.status})`}\n\n${task.title}`,
+          { secretValues: this.d.secretValues?.() },
         );
         if (c.commit && head)
           extra = {
@@ -1422,6 +1427,23 @@ export class Orchestrator {
             { taskId: task.id, files: c.skippedSecrets },
             'refused to commit secret-looking files',
           );
+        if (c.leakedSecrets.length) {
+          this.d.log.warn(
+            { taskId: task.id, files: c.leakedSecrets },
+            'refused to commit files containing a secret value',
+          );
+          this.d.bus.emit(
+            'notification',
+            {
+              level: 'warning',
+              title: `${task.key}: a secret value was kept out of git`,
+              message: `The ${role} wrote the value of a secret into ${c.leakedSecrets.join(', ')}. Those changes were not committed — the code should read it from the environment instead.`,
+              projectId: task.projectId,
+              taskId: task.id,
+            },
+            [Topics.global, Topics.project(task.projectId)],
+          );
+        }
       }
 
       // Implementers report finished subtasks; tick them off so nobody has to.

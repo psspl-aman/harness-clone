@@ -67,6 +67,7 @@ const WORKTREE_RULES = (ctx: RoleContext) => `## Rules
 - You are in a git worktree on branch \`${ctx.branch}\` (created from \`${ctx.workingBranch}\`). Work only inside this directory.
 - Do NOT commit, push, merge, rebase or switch branches — AgentForge commits your changes after you finish.
 - Never create, modify or print .env files, keys or other secrets.
+- If the code needs a new environment variable (e.g. an API key): read it from the environment, add \`NAME=\` (empty) to the \`.env.example\` in the same folder, and call \`request_env_var\` if you have the \`agentforge\` tools. The user enters the real value in AgentForge — never ask for, invent or hardcode one, and mock it in tests.
 - Keep changes focused on this task; follow the project's conventions.
 - If you have the \`agentforge\` tools: search project memory before design decisions (\`project_memory_search\`) and record lasting decisions or pitfalls with \`project_memory_add\`.`;
 

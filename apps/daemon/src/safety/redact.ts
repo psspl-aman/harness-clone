@@ -8,6 +8,8 @@ const MASK = '[REDACTED]';
 const PATTERNS: RegExp[] = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, // gforge:allow — detection pattern
   /\b(?:sk|rk)-(?:ant-|proj-|live-|test-)?[A-Za-z0-9_-]{20,}/g, // gforge:allow — detection pattern
+  /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/g, // gforge:allow — Stripe secret / restricted key
+  /\bwhsec_[A-Za-z0-9+/=]{16,}/g, // gforge:allow — Stripe webhook signing secret
   /\bgh[pousr]_[A-Za-z0-9]{30,}\b/g, // gforge:allow — detection pattern
   /\bgithub_pat_[A-Za-z0-9_]{40,}\b/g, // gforge:allow — detection pattern
   /\bxox[abposr]-[A-Za-z0-9-]{10,}/g, // gforge:allow — detection pattern
@@ -16,9 +18,12 @@ const PATTERNS: RegExp[] = [
   /\bglpat-[A-Za-z0-9_-]{20,}\b/g, // gforge:allow — detection pattern
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, // gforge:allow — JWT shape
 ];
-/** `Authorization: Bearer x`, `password=x`, `API_KEY: "x"` … keep the key, mask the value. */
+/**
+ * `Authorization: Bearer x`, `password=x`, `API_KEY: "x"`, `OPENAI_API_KEY=x`… keep the key,
+ * mask the value. The name may carry a prefix/suffix (`STRIPE_SECRET_KEY`, `DB_PASSWORD`).
+ */
 const ASSIGNMENT =
-  /\b((?:authorization|bearer|api[_-]?key|access[_-]?token|auth[_-]?token|secret|client[_-]?secret|password|passwd|pwd|token)\b["']?\s*[:=]\s*(?:bearer\s+)?["']?)([^\s"'`,;]{8,})/gi; // gforge:allow — detection pattern
+  /\b((?:[A-Za-z0-9]+[_-])*(?:authorization|bearer|api[_-]?key|access[_-]?token|auth[_-]?token|secret|client[_-]?secret|password|passwd|pwd|token|private[_-]?key|secret[_-]?key|signing[_-]?key)(?:[_-][A-Za-z0-9]+)*\b["']?\s*[:=]\s*(?:bearer\s+)?["']?)([^\s"'`,;]{8,})/gi; // gforge:allow — detection pattern
 
 export type Redactor = (text: string) => string;
 

@@ -49,6 +49,7 @@ import { registerSettingsRoutes } from './routes/settings';
 import { registerSystemRoutes } from './routes/system';
 import { FsService } from './services/fs';
 import { GithubService, type GithubServiceOptions } from './services/github';
+import { EnvKeyService } from './services/env-keys';
 import { AttachmentStore } from './services/attachments';
 import { ProjectService } from './services/projects';
 import { SecretStore } from './services/secrets';
@@ -151,10 +152,14 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   const files = new FileService(dbHandle.db);
   const runs = new RunRecorder(dbHandle.db, bus, () => settings.get().pricing);
   // Secrets are masked in run logs and terminals (Settings → Safety).
-  const redactor = createRedactor(
-    () => secrets.values(),
-    () => settings.get().safety.redactSecrets,
-  );
+  // Env keys the user typed into the chat live only in the project's .env; their values
+  // are read back from there to mask them in logs and keep them out of commits.
+  const envKeys = new EnvKeyService({ db: dbHandle.db, bus });
+  bus.subscribe((e) => {
+    if (e.type === 'project.deleted') envKeys.removeAll(e.payload.projectId);
+  });
+  const secretValues = () => [...secrets.values(), ...envKeys.knownValues()];
+  const redactor = createRedactor(secretValues, () => settings.get().safety.redactSecrets);
   runs.setRedactor(redactor);
   terminals.setRedactor(redactor);
   const safety = new SafetyService({
@@ -192,6 +197,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     home: config.home,
     log: app.log,
     autoStart: opts.orchestrator?.autoStart ?? process.env.NODE_ENV !== 'test',
+    secretValues,
   });
   // Markdown handoff notes (.agentforge/PROJECT.md, tasks/<KEY>.md) so any agent can pick up a task.
   const handoff = new HandoffService({
@@ -309,7 +315,9 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
       projects,
       github,
       lock: (projectId, fn) => orchestrator.withMergeLock(projectId, fn),
+      secretValues,
     }),
+    envKeys,
     workspaceRoot,
     startedAt: Date.now(),
   };

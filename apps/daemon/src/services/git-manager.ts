@@ -39,6 +39,8 @@ export interface GitManagerDeps {
   github: GithubService;
   /** Serialises with the orchestrator's merges for the same project. */
   lock: <T>(projectId: string, fn: () => Promise<T>) => Promise<T>;
+  /** Known secret values: a commit containing one is refused. */
+  secretValues?: () => string[];
 }
 
 const SEP = '\x1f';
@@ -487,6 +489,18 @@ export class GitManager {
       .filter(Boolean);
     const secrets = staged.filter((f) => isSecretFile(f));
     if (secrets.length) await this.git(dir, ['rm', '--cached', '--quiet', '--', ...secrets]);
+    const leaked = await gitops.filesContainingSecrets(dir, this.d.secretValues?.() ?? []);
+    if (leaked.length) {
+      await this.git(
+        dir,
+        (await gitops.revParse(dir, 'HEAD'))
+          ? ['reset', '-q', '--', ...leaked]
+          : ['rm', '--cached', '--quiet', '--', ...leaked],
+      );
+      throw badRequest(
+        `Not committed: ${leaked.join(', ')} contain${leaked.length === 1 ? 's' : ''} a secret value. Read it from the environment (.env) instead.`,
+      );
+    }
     const files = staged.length - secrets.length;
     if (!files && !(await this.operation(dir)))
       throw badRequest(
