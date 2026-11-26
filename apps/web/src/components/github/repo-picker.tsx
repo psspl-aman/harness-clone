@@ -58,6 +58,7 @@ export function RepoPicker({
             {repos.data?.map((r) => (
               <li key={r.fullName}>
                 <button
+                  type="button"
                   role="option"
                   aria-selected={value === r.fullName}
                   onClick={() => onChange(r)}
@@ -67,15 +68,21 @@ export function RepoPicker({
                   )}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                      {r.fullName} {r.private && <Lock className="text-muted-foreground size-3" />}
+                    <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                      <span className="truncate">{r.fullName}</span>
+                      {r.private && (
+                        <Lock
+                          className="text-muted-foreground size-3 shrink-0"
+                          aria-label="Private"
+                        />
+                      )}
                     </p>
                     <p className="text-muted-foreground truncate text-xs">
                       {r.description ?? 'No description'} · updated{' '}
                       {timeAgo(r.updatedAt ? Date.parse(r.updatedAt) : null)}
                     </p>
                   </div>
-                  {value === r.fullName && <Check className="text-primary size-4" />}
+                  {value === r.fullName && <Check className="text-primary size-4 shrink-0" />}
                 </button>
               </li>
             ))}

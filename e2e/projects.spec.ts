@@ -178,3 +178,46 @@ test('integrations page offers GitHub token connection', async ({ page }) => {
   await expect(page.getByLabel('Personal access token')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeDisabled();
 });
+
+test('connecting GitHub inside the new-project wizard keeps the wizard open', async ({ page }) => {
+  // Stub the daemon calls so the test never reaches github.com and starts disconnected.
+  await page.route('**/api/github/status', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        connected: false,
+        login: null,
+        name: null,
+        avatarUrl: null,
+        scopes: [],
+        source: null,
+        ghCliAvailable: false,
+      }),
+    }),
+  );
+  let connectCalls = 0;
+  await page.route('**/api/github/connect', async (route) => {
+    connectCalls++;
+    await route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'BAD_REQUEST', message: 'GitHub rejected this token' },
+      }),
+    });
+  });
+
+  await page.goto('/projects/new?mode=existing');
+  await page
+    .getByRole('button', { name: /GitHub/ })
+    .first()
+    .click();
+  // A nested <form> would submit natively and reset the wizard.
+  await expect(page.locator('form form')).toHaveCount(0);
+  await page.getByLabel('Personal access token').fill('ghp_not_a_real_token_0123456789'); // gforge:allow — fake test token
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+
+  await expect(page.getByText('GitHub rejected this token')).toBeVisible();
+  await expect(page).toHaveURL(/mode=existing/);
+  expect(connectCalls).toBe(1);
+});
