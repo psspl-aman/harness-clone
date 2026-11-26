@@ -186,7 +186,7 @@ export function PlanTab({
   }
 
   return (
-    <div className="mx-auto max-w-[1260px] space-y-4 p-4">
+    <div className="portal-content space-y-4 py-4">
       <div className="bg-card flex flex-wrap items-start justify-between gap-4 rounded-xl border p-3.5 shadow-xs">
         <div className="min-w-0 flex-1">
           {plan ? (

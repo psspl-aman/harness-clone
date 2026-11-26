@@ -728,7 +728,7 @@ function Wizard({ mode }: { mode: Mode }) {
         {mode === 'scratch' ? 'Start from scratch' : 'Attach existing project'}
       </h1>
 
-      <div className="mt-8 grid gap-8 md:grid-cols-[180px_1fr]">
+      <div className="mt-8 grid gap-8 md:grid-cols-[180px_minmax(0,1fr)]">
         <ol className="flex gap-2 overflow-x-auto md:flex-col md:gap-1" aria-label="Steps">
           {steps.map((s, i) => {
             const done = i < stepIdx;
@@ -764,7 +764,7 @@ function Wizard({ mode }: { mode: Mode }) {
         </ol>
 
         <form
-          className="bg-card flex min-h-[420px] flex-col rounded-2xl border p-6 shadow-xs"
+          className="bg-card flex min-h-[420px] min-w-0 flex-col rounded-2xl border p-4 shadow-xs sm:p-6"
           onSubmit={(e) => {
             e.preventDefault();
             next();

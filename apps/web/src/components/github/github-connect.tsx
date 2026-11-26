@@ -71,6 +71,7 @@ export function GithubConnect({ compact = false }: { compact?: boolean }) {
         </div>
         {!compact && (
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => disconnect.mutate()}
@@ -89,7 +90,12 @@ export function GithubConnect({ compact = false }: { compact?: boolean }) {
         <div className="bg-accent/50 flex flex-wrap items-center gap-3 rounded-lg border p-3">
           <Terminal className="text-primary size-4" />
           <p className="flex-1 text-sm">You’re logged in to the GitHub CLI on this machine.</p>
-          <Button size="sm" onClick={() => importCli.mutate()} disabled={importCli.isPending}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => importCli.mutate()}
+            disabled={importCli.isPending}
+          >
             {importCli.isPending ? (
               <Loader2 className="animate-spin" />
             ) : (
@@ -99,13 +105,9 @@ export function GithubConnect({ compact = false }: { compact?: boolean }) {
           </Button>
         </div>
       )}
-      <form
-        className="space-y-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (token.trim()) connect.mutate();
-        }}
-      >
+      {/* Not a <form>: this renders inside the new-project wizard's form, and a nested form
+          submits natively (reloading the page) instead of connecting. */}
+      <div className="space-y-2">
         <Label htmlFor="gh-token">Personal access token</Label>
         <div className="flex gap-2">
           <Input
@@ -116,9 +118,19 @@ export function GithubConnect({ compact = false }: { compact?: boolean }) {
             placeholder="ghp_… or github_pat_…"
             value={token}
             onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              // Keep Enter from submitting an enclosing form (e.g. the wizard).
+              e.preventDefault();
+              if (token.trim() && !connect.isPending) connect.mutate();
+            }}
             className="font-mono"
           />
-          <Button type="submit" disabled={!token.trim() || connect.isPending}>
+          <Button
+            type="button"
+            onClick={() => connect.mutate()}
+            disabled={!token.trim() || connect.isPending}
+          >
             {connect.isPending && <Loader2 className="animate-spin" />} Connect
           </Button>
         </div>
@@ -134,7 +146,7 @@ export function GithubConnect({ compact = false }: { compact?: boolean }) {
             Create a token <ExternalLink className="size-3" />
           </a>
         </p>
-      </form>
+      </div>
     </div>
   );
 }
