@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AgentForge — idea to merged code</title>
+<meta name="description" content="Harness-grade animated hero + knowledge graph for AgentForge, in the iris/paper design language.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:light;
+  --accent:#4d4dce;--accent-hover:#3f3db8;--accent-ink:#4244b9;--accent-soft:#efefff;--on-accent:#fff;
+  --sans:Geist,system-ui,"Segoe UI",sans-serif;--mono:"Geist Mono",ui-monospace,Consolas,monospace;
+  --paper:#fafaf7;--card:#fffefb;--wash:#f0eff0;--line:#e0ddd6;--ink2:#1b1c20;--muted2:#5a5c58;
+  --accent2:var(--accent-ink);--ok2:#246449;--ok2-soft:#e8f2ec;--warn2:#9a3d22;--warn2-soft:#fbeee8;
+  --shadow:0 1px 2px #1620370a;--lift:0 18px 44px #1a183016;--r-sm:6px;--r:9px;--r-lg:13px;--speed:160ms;
+  /* isometric cube palette */
+  --cube-top:#ecebfd;--cube-left:#c4c3f1;--cube-right:#d6d5f8;--cube-edge:#9c9bea;--cube-fade:#e4e4fb;
+  --wire:#cdcbc3;--wire2:#bbb9b0;--dot:#8988e2;--glow:#b3b4ff;
+  --hero-bg:radial-gradient(120% 120% at 82% 8%, #ececfb 0%, #f4f3fa 34%, var(--paper) 66%);
+  --grid-ln:#1b1c2008;
+}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --accent:#b3b4ff;--accent-hover:#c6c5ff;--accent-ink:#bbbaff;--accent-soft:#2d2b4f;--on-accent:#1d1a35;
+  --paper:#141519;--card:#1d1f24;--wash:#262830;--line:#343640;--ink2:#f3f2ec;--muted2:#b7b8b2;
+  --ok2:#9ce5bd;--ok2-soft:#1d3930;--warn2:#ffb09a;--warn2-soft:#412a22;
+  --shadow:0 1px 2px #0003;--lift:0 18px 44px #0006;
+  --cube-top:#3a3a66;--cube-left:#242444;--cube-right:#2e2e54;--cube-edge:#7f7ed8;--cube-fade:#2a2a48;
+  --wire:#46484f;--wire2:#55575f;--dot:#9a99ef;--glow:#6e6dff;
+  --hero-bg:radial-gradient(120% 120% at 82% 8%, #23233f 0%, #191a26 36%, var(--paper) 68%);
+  --grid-ln:#ffffff09;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font:14px/1.45 var(--sans);color:var(--ink2);background:var(--paper)}
+h1,h2,h3,p{margin:0}a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+:focus-visible{outline:2px solid var(--accent2);outline-offset:3px;border-radius:5px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.icon{width:16px;height:16px;flex:none}.icon-xs{width:13px;height:13px}
+.shell{width:min(1320px,calc(100% - clamp(32px,8vw,132px)));margin-inline:auto}
+
+/* header */
+.hdr{height:66px;display:flex;align-items:center;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:8;background:color-mix(in srgb,var(--paper),transparent 10%);backdrop-filter:blur(8px)}
+.hdr .shell{display:flex;align-items:center}
+.brand{display:flex;align-items:center;gap:9px;font-weight:690;font-size:19px;letter-spacing:-.05em}
+.brand-mark{display:grid;place-items:center;width:31px;height:31px;border-radius:7px;background:var(--ink2);color:var(--paper)}
+.brand-mark .icon{width:22px;height:22px}
+.brand-mark .spark{animation:sparkle 3.6s ease-in-out infinite;transform-origin:center}
+@keyframes sparkle{0%,90%,100%{opacity:1}95%{opacity:.4}}
+.navlinks{margin-left:28px;display:flex;gap:20px}
+.navlinks a{font-size:13px;color:var(--muted2);font-weight:520}.navlinks a:hover{color:var(--ink2)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:9px}
+.seg{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--wash)}
+.seg button{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 9px;border-radius:5px;color:var(--muted2);font:560 11.5px var(--sans);white-space:nowrap;transition:all var(--speed)}
+.seg button:hover{color:var(--ink2)}
+.seg button[aria-pressed=true]{background:var(--card);color:var(--ink2);box-shadow:var(--shadow)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:37px;padding:0 14px;border:1px solid var(--line);border-radius:7px;background:var(--card);box-shadow:var(--shadow);font:560 12.5px var(--sans);white-space:nowrap;transition:all var(--speed)}
+.btn:hover{background:var(--wash)}
+.btn .icon{transition:transform 180ms cubic-bezier(.2,.75,.3,1)}.btn:hover .icon{transform:translateX(2px)}
+.btn.ink{background:var(--ink2);border-color:var(--ink2);color:var(--paper);font-weight:580}
+.btn.ink:hover{background:var(--accent2);border-color:var(--accent2);color:var(--on-accent)}
+.btn.soft{color:var(--accent2);border-color:var(--line)}.btn.soft:hover{background:var(--accent-soft)}
+
+/* hero */
+.hero-wrap{background:var(--hero-bg)}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:clamp(24px,4vw,56px);align-items:center;padding:clamp(40px,5.5vw,92px) 0 clamp(36px,4vw,70px)}
+.overline{display:flex;align-items:center;gap:10px;font:600 10.5px/1.3 var(--mono);text-transform:uppercase;letter-spacing:.14em;color:var(--muted2)}
+.overline>span{width:20px;height:7px;background:repeating-linear-gradient(-55deg,var(--accent2) 0 2px,transparent 2px 5px)}
+.hero h1{margin:20px 0;font:560 clamp(46px,5.5vw,92px)/.98 var(--sans);letter-spacing:-.052em;color:var(--ink2);text-wrap:balance}
+.hero h1 em{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-style:italic;color:var(--accent2);letter-spacing:-.03em}
+.lede{font-size:clamp(15px,1.1vw,18px);line-height:1.55;color:var(--muted2);max-width:440px;text-wrap:pretty}
+.hero-actions{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
+.hero-actions .btn{min-height:42px;padding-inline:17px}
+.hero-stats{display:flex;gap:26px;margin-top:34px;padding-top:22px;border-top:1px solid var(--line)}
+.hero-stats div{display:flex;flex-direction:column;gap:2px}
+.hero-stats b{font:600 20px var(--sans);letter-spacing:-.03em}
+.hero-stats span{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted2)}
+.heroArt{position:relative;min-width:0}
+.heroArt svg{display:block;width:100%;height:auto;overflow:visible}
+
+/* cube animation */
+.cube{opacity:0;animation:cin .7s ease var(--din,0s) forwards, bob 7s ease-in-out var(--d,0s) infinite}
+@keyframes cin{from{opacity:0}to{opacity:1}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.cube .edge{stroke:var(--cube-edge);stroke-width:1;fill:none;stroke-linejoin:round}
+.wireCube .face{fill:none;stroke:var(--wire);stroke-width:1.1;stroke-dasharray:3 3;stroke-linejoin:round}
+.wireCube .deco{stroke:var(--wire2);fill:none;stroke-width:1}
+.glowAura{fill:var(--glow);opacity:.0;animation:aura 3.4s ease-in-out infinite}
+@keyframes aura{0%,100%{opacity:.16;transform:scale(.9)}50%{opacity:.4;transform:scale(1.08)}}
+.selbox{stroke:var(--accent2);stroke-width:1;stroke-dasharray:4 4;fill:none;opacity:.5}
+.selhandle{fill:var(--card);stroke:var(--accent2);stroke-width:1}
+.cdot{fill:var(--dot)}
+.travel{fill:var(--accent2);filter:drop-shadow(0 0 5px var(--accent2))}
+
+/* section */
+.sec{padding:clamp(48px,6vw,96px) 0;border-top:1px solid var(--line)}
+.sec-head{text-align:center;max-width:680px;margin:0 auto clamp(34px,4vw,56px)}
+.sec-head .overline{justify-content:center}
+.sec-head h2{margin:14px 0 12px;font:560 clamp(30px,3.4vw,52px)/1.04 var(--sans);letter-spacing:-.05em}
+.sec-head p{color:var(--muted2);font-size:15px;line-height:1.6;max-width:560px;margin:0 auto;text-wrap:pretty}
+
+/* knowledge graph 3-col */
+.kg{display:grid;grid-template-columns:minmax(180px,.72fr) minmax(0,1.5fr) minmax(220px,.95fr);gap:clamp(16px,2.4vw,40px);align-items:center}
+.kg-col-label{font:600 10.5px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:16px}
+.ctx-list{display:flex;flex-direction:column;gap:5px}
+.ctx{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 14px;border:1px solid transparent;border-radius:10px;color:var(--muted2);font:550 13px var(--sans);text-align:left;transition:all var(--speed)}
+.ctx:hover{color:var(--ink2);background:var(--wash)}
+.ctx .cdoti{width:7px;height:7px;border-radius:50%;background:var(--line);transition:all var(--speed)}
+.ctx[aria-pressed=true]{background:var(--card);border-color:var(--line);color:var(--ink2);box-shadow:var(--shadow)}
+.ctx[aria-pressed=true] .cdoti{background:var(--ok2);box-shadow:0 0 7px var(--ok2)}
+.kg-graph{position:relative}
+.kg-graph svg{display:block;width:100%;height:auto;overflow:visible}
+.kg-cap{text-align:center;font:600 10.5px var(--mono);letter-spacing:.06em;color:var(--muted2);margin-bottom:10px}
+.bgdot{fill:var(--line)}
+.kedge{stroke:var(--line);stroke-width:1.4;fill:none;transition:stroke var(--speed)}
+.kedge.hot{stroke:var(--accent2)}
+.knode circle{fill:var(--card);stroke:var(--line);stroke-width:1.5;transition:all var(--speed)}
+.knode text{fill:var(--muted2);font:560 11px var(--sans);transition:fill var(--speed)}
+.knode.pri circle{fill:var(--accent-soft);stroke:var(--accent2)}
+.knode.pri text{fill:var(--ink2);font-weight:600}
+.knode.hot circle{fill:var(--accent2);stroke:var(--accent2);r:7}
+.knode.hot text{fill:var(--ink2);font-weight:650}
+.kpulse{fill:var(--accent2);filter:drop-shadow(0 0 6px var(--accent2));opacity:0}
+
+/* reasoning card */
+.reason{border:1px solid var(--line);background:var(--card);border-radius:13px;box-shadow:var(--lift);overflow:hidden}
+.reason .task{display:flex;align-items:center;gap:9px;padding:14px 15px;border-bottom:1px solid var(--line)}
+.reason .task b{font:600 13px var(--sans);letter-spacing:-.01em}
+.reason .task .ok{margin-left:auto;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:var(--ok2-soft);color:var(--ok2)}
+.reason .task .ok svg{width:13px;height:13px}
+.reason .body{padding:14px 15px;display:flex;flex-direction:column;gap:14px}
+.agentline .who{display:flex;align-items:center;gap:7px;font:600 10.5px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--accent2);margin-bottom:5px}
+.agentline .who .d{width:6px;height:6px;border-radius:50%;background:var(--accent2);animation:blink 1.4s ease-in-out infinite}
+@keyframes blink{50%{opacity:.3}}
+.agentline p{font-size:12.5px;line-height:1.55;color:var(--muted2)}
+.agentline p .hl{color:var(--ink2);font-weight:560}
+.suggest{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--wash)}
+.suggest span{font:550 12px var(--sans)}
+.suggest .acts{margin-left:auto;display:flex;gap:5px}
+.suggest .acts button{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;border:1px solid var(--line);background:var(--card);color:var(--muted2)}
+.suggest .acts .y{color:var(--ok2);border-color:color-mix(in srgb,var(--ok2),transparent 65%)}
+.suggest .acts svg{width:13px;height:13px}
+
+.ctl-row{display:flex;justify-content:center;gap:9px;margin-top:34px}
+.foot{display:flex;align-items:center;gap:12px;padding:20px 0 34px;color:var(--muted2);font:10.5px var(--mono);border-top:1px solid var(--line)}
+.foot b{color:var(--ink2);font:600 13px var(--sans);letter-spacing:-.03em}.foot a{margin-left:auto}
+
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:1ms!important}.glowAura{opacity:.3}}
+@media(max-width:980px){.hero{grid-template-columns:1fr;gap:30px}.hero h1{font-size:clamp(44px,9vw,68px)}.heroArt{max-width:520px}.kg{grid-template-columns:1fr;gap:28px}.kg-graph{order:-1}}
+@media(max-width:560px){.shell{width:calc(100% - 30px)}.navlinks{display:none}.hero-stats{gap:16px}}
+</style>
+</head>
+<body>
+<header class="hdr"><div class="shell">
+  <a class="brand" href="#"><span class="brand-mark" id="brandMark"></span><span>AgentForge</span></a>
+  <nav class="navlinks"><a href="#">How it works</a><a href="#">Agents</a><a href="#">Docs</a></nav>
+  <div class="hdr-right">
+    <div class="seg" role="group" aria-label="Theme">
+      <button data-theme-set="light" aria-pressed="true" title="Light">☀</button>
+      <button data-theme-set="dark" aria-pressed="false" title="Dark">☾</button>
+    </div>
+    <a class="btn ink" href="#">Open portal <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+</div></header>
+
+<div class="hero-wrap"><div class="shell">
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="overline"><span></span> The local-first SDLC harness</p>
+      <h1>Your requirement,<br>from idea to <em>merged</em> code.</h1>
+      <p class="lede">AgentForge turns a plain requirement into a task, builds it in an isolated worktree, and governs every check — so you approve the merge with the evidence in front of you.</p>
+      <div class="hero-actions">
+        <a class="btn ink" href="#">Open portal <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <button class="btn soft" id="replayHero"><svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4"/></svg> Replay</button>
+      </div>
+      <div class="hero-stats">
+        <div><b>6</b><span>Agent roles</span></div>
+        <div><b>1</b><span>Human gate</span></div>
+        <div><b>100%</b><span>Local-first</span></div>
+      </div>
+    </div>
+    <div class="heroArt" id="heroArt"></div>
+  </section>
+</div></div>
+
+<div class="shell">
+  <section class="sec" id="kgSec">
+    <div class="sec-head">
+      <p class="overline"><span></span> Shared context</p>
+      <h2>One knowledge graph<br>behind every agent.</h2>
+      <p>Each agent reads the same context — your repository, requirement, tests and run history — reasons over it, and hands the next agent a change you can inspect.</p>
+    </div>
+    <div class="kg">
+      <div>
+        <div class="kg-col-label">Raw context</div>
+        <div class="ctx-list" id="ctxList"></div>
+      </div>
+      <div class="kg-graph">
+        <div class="kg-cap">AGENTFORGE KNOWLEDGE GRAPH</div>
+        <div id="kgGraph"></div>
+      </div>
+      <div>
+        <div class="kg-col-label">Reasoning &amp; orchestration</div>
+        <div class="reason" id="reason"></div>
+      </div>
+    </div>
+    <div class="ctl-row">
+      <button class="btn soft" id="kgReplay"><svg class="icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play the run</button>
+    </div>
+  </section>
+
+  <footer class="foot"><b>AgentForge</b><span>Local-first development workspace · illustrative sample</span><a class="btn" href="#">Back to top</a></footer>
+</div>
+
+<script>
+'use strict';
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const root=document.documentElement;
+$('#brandMark').innerHTML='<svg class="icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M4 19 11 5h2l7 14M7.3 14h9.4M9.4 19h5.2"/><path class="spark" fill="currentColor" d="M19.1 3l.7 1.9 2 .6-2 .7-.7 2-.6-2-2-.7 2-.6z"/></svg>';
+function setTheme(t){root.dataset.theme=t;$$('[data-theme-set]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeSet===t)));}
+$$('[data-theme-set]').forEach(b=>b.onclick=()=>setTheme(b.dataset.themeSet));
+
+/* ─────────── ISOMETRIC CUBE HERO ─────────── */
+const A=34; // half-width
+// cube drawn around top vertex at origin
+function facePaths(a){
+  const T=[0,0],R=[a,a/2],B=[0,a],L=[-a,a/2],L2=[-a,a/2+a],B2=[0,2*a],R2=[a,a/2+a];
+  const P=p=>p.join(' ');
+  return {
+    top:`M${P(T)} L${P(R)} L${P(B)} L${P(L)} Z`,
+    left:`M${P(L)} L${P(B)} L${P(B2)} L${P(L2)} Z`,
+    right:`M${P(R)} L${P(B)} L${P(B2)} L${P(R2)} Z`,
+    pts:{T,R,B,L,L2,B2,R2}
+  };
+}
+function solidCube(a,fade){
+  const f=facePaths(a);
+  const op=fade?'opacity="'+fade+'"':'';
+  return `<g ${op}>
+    <path d="${f.top}" fill="var(--cube-top)"/><path d="${f.left}" fill="var(--cube-left)"/><path d="${f.right}" fill="var(--cube-right)"/>
+    <path class="edge" d="${f.top}"/><path class="edge" d="${f.left}"/><path class="edge" d="${f.right}"/>
+  </g>`;
+}
+function wireCube(a,deco){
+  const f=facePaths(a);let d='';
+  if(deco==='circle'){ d=`<ellipse class="deco" cx="0" cy="${a*0.62}" rx="${a*0.5}" ry="${a*0.28}"/><ellipse class="deco" cx="0" cy="${a*0.62}" rx="${a*0.2}" ry="${a*0.5}" transform="rotate(0)"/>`; }
+  if(deco==='layers'){ for(let i=1;i<=3;i++){const y=a*0.5*i*0.62;d+=`<path class="deco" d="M0 ${y} L${a} ${y+a/2} L0 ${y+a} L${-a} ${y+a/2} Z"/>`;} }
+  if(deco==='dots'){ let dots='';for(let r=0;r<3;r++)for(let c=0;c<3;c++){dots+=`<circle class="cdot" cx="${-a*0.55+c*a*0.35}" cy="${a*0.7+r*a*0.3+c*a*0.17}" r="1.7" opacity=".8"/>`;} d=dots; }
+  return `<g class="wireCube">
+    <path class="face" d="${f.top}"/><path class="face" d="${f.left}"/><path class="face" d="${f.right}"/>${d}
+  </g>`;
+}
+function selbox(a){ // iso dashed selection rhombus + 4 handles, around a cube footprint
+  const w=a*1.5, pts=[[0,-a*0.3],[w,a*0.75-a*0.3],[0,a*1.8-a*0.3],[-w,a*0.75-a*0.3]];
+  const P=p=>p.join(' ');
+  const poly=`M${P(pts[0])} L${P(pts[1])} L${P(pts[2])} L${P(pts[3])} Z`;
+  const h=pts.map(p=>`<rect class="selhandle" x="${p[0]-2.6}" y="${p[1]-2.6}" width="5.2" height="5.2" transform="rotate(45 ${p[0]} ${p[1]})"/>`).join('');
+  return `<path class="selbox" d="${poly}"/>${h}`;
+}
+function buildHero(){
+  const baseX=408,baseY=18,stepX=-40,stepY=58;
+  const seq=[
+    {deco:'circle',kind:'wire'},
+    {deco:'layers',kind:'wire'},
+    {deco:'dots',kind:'wire'},
+    {kind:'half'},
+    {kind:'glow'},
+    {kind:'solid'},
+    {kind:'solid',fade:.9},
+    {kind:'solid',fade:.5,small:true}
+  ];
+  let cubes='';
+  seq.forEach((c,i)=>{
+    const x=baseX+stepX*i, y=baseY+stepY*i, a=c.small?A*0.82:A;
+    let inner='';
+    if(c.kind==='wire') inner=wireCube(a,c.deco);
+    else if(c.kind==='half'){ inner=`<g opacity=".6">${solidCube(a,.55)}</g>`+wireCube(a,'dots'); }
+    else if(c.kind==='glow') inner=solidCube(a);
+    else inner=solidCube(a,c.fade);
+    const aura = c.kind==='glow'?`<circle class="glowAura" cx="0" cy="${a}" r="${a*1.5}"/>`:'';
+    const sel = (i===4||i===1)?selbox(a):'';
+    cubes+=`<g transform="translate(${x} ${y})">${aura}<g class="cube" style="--din:${i*0.09}s;--d:${(i*0.5).toFixed(2)}s">${inner}${sel}</g></g>`;
+  });
+  // a couple of connector dots
+  const dots=`<circle class="cdot" cx="372" cy="150" r="2.4" opacity=".6"/><circle class="cdot" cx="300" cy="300" r="2.4" opacity=".55"/><circle class="cdot" cx="250" cy="236" r="2.4"/>`;
+  // travelling spark along the diagonal
+  const travel=`<circle class="travel" r="3.5" opacity="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M408 52 L168 400" keyPoints="0;1" keyTimes="0;1" calcMode="linear"/><animate attributeName="opacity" dur="3.6s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;.15;.3;.85;1"/></circle>`;
+  $('#heroArt').innerHTML=`<svg viewBox="40 0 430 540" role="img" aria-label="Isometric view of a requirement materialising into merged code">${dots}${cubes}${travel}</svg>`;
+}
+buildHero();
+$('#replayHero').onclick=()=>{ buildHero(); };
+
+/* ─────────── KNOWLEDGE GRAPH SECTION ─────────── */
+const CTX=[
+  {id:'req',label:'Requirement'},{id:'repo',label:'Repository'},{id:'tests',label:'Tests'},
+  {id:'mem',label:'Memory'},{id:'hist',label:'Run history'},{id:'cost',label:'Cost'}
+];
+// primary labelled nodes (coords in 460x360)
+const NODES=[
+  {id:'plan',label:'Plan',x:150,y:96},{id:'build',label:'Build',x:250,y:150},
+  {id:'review',label:'Review',x:355,y:110},{id:'test',label:'Test',x:360,y:230},
+  {id:'fix',label:'Fix',x:250,y:272},{id:'merge',label:'Merge',x:150,y:220}
+];
+const EDGES=[['plan','build'],['build','review'],['review','test'],['test','fix'],['fix','build'],['build','merge'],['test','merge']];
+const SEQ=['plan','build','review','test','fix','test','merge'];
+const REASON={
+  plan:{who:'Planner agent',txt:'Turning the requirement into one acceptance rule: a <span class="hl">second approval of the same request must be rejected</span>.',sug:'Create task HRMS-014'},
+  build:{who:'Developer agent',txt:'Editing <span class="hl">LeaveApprovalService.cs</span> in an isolated worktree. Keeping the change minimal and behind the existing guard.',sug:'2 files changed'},
+  review:{who:'Reviewer agent',txt:'The guard now covers repeat submissions, and the approval rule stays in <span class="hl">one place</span>.',sug:'Review passed'},
+  test:{who:'Tester agent',txt:'Running approval edge cases. A <span class="hl">duplicate approval returned success</span> — this should have been rejected.',sug:'1 of 3 checks failing',tone:'warn'},
+  fix:{who:'Fixer agent',txt:'This path touches approvals with no new coverage. Patching the guard and <span class="hl">adding a duplicate-approval test</span>.',sug:'Add duplicate-approval test'},
+  merge:{who:'Ready for you',txt:'3 checks passed · 2 files changed. Inspect the change and checks, then <span class="hl">approve the merge</span>.',sug:'Approve & merge',tone:'ok'}
+};
+
+$('#ctxList').innerHTML=CTX.map((c,i)=>`<button class="ctx" data-ctx="${c.id}" aria-pressed="${i===0}"><span class="cdoti"></span>${c.label}</button>`).join('');
+
+function buildGraph(){
+  const nAt=id=>NODES.find(n=>n.id===id);
+  // faint background constellation
+  let bg='';for(let i=0;i<34;i++){const x=20+Math.random()*420,y=20+Math.random()*320,r=0.8+Math.random()*1.6;bg+=`<circle class="bgdot" cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r.toFixed(1)}" opacity="${(0.12+Math.random()*0.3).toFixed(2)}"/>`;}
+  const edges=EDGES.map(([a,b])=>{const p=nAt(a),q=nAt(b);return `<path class="kedge" data-edge="${a}-${b}" d="M${p.x} ${p.y} L${q.x} ${q.y}"/>`;}).join('');
+  const nodes=NODES.map(n=>`<g class="knode pri" data-node="${n.id}" transform="translate(${n.x} ${n.y})"><circle r="5.5"/><text x="0" y="${n.y>180?20:-11}" text-anchor="middle">${n.label}</text></g>`).join('');
+  $('#kgGraph').innerHTML=`<svg viewBox="0 0 460 360" role="img" aria-label="AgentForge knowledge graph">
+    ${bg}<g>${edges}</g><g>${nodes}</g><circle class="kpulse" id="kpulse" r="4"/></svg>`;
+}
+buildGraph();
+
+function renderReason(id){
+  const r=REASON[id];const tone=r.tone||'';
+  $('#reason').innerHTML=`
+    <div class="task"><span class="cdoti" style="width:7px;height:7px;border-radius:50%;background:var(--accent2)"></span><b>HRMS-014 · Prevent double approval</b>
+      <span class="ok" style="${tone==='warn'?'background:var(--warn2-soft);color:var(--warn2)':tone==='ok'?'':'background:var(--accent-soft);color:var(--accent2)'}">
+      ${tone==='warn'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>'}</span></div>
+    <div class="body">
+      <div class="agentline"><div class="who"><span class="d"></span>${r.who}</div><p>${r.txt}</p></div>
+      <div class="suggest"><span>${r.sug}</span><div class="acts"><button class="y"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></button><button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div></div>
+    </div>`;
+}
+function highlight(id){
+  $$('.knode',$('#kgGraph')).forEach(n=>n.classList.toggle('hot',n.dataset.node===id));
+  $$('.kedge',$('#kgGraph')).forEach(e=>e.classList.toggle('hot',e.dataset.edge.startsWith(id+'-')||e.dataset.edge.endsWith('-'+id)));
+  const n=NODES.find(x=>x.id===id),pulse=$('#kpulse');
+  if(n&&pulse){pulse.setAttribute('cx',n.x);pulse.setAttribute('cy',n.y);pulse.style.opacity=1;pulse.style.transition='cx .5s,cy .5s';}
+  renderReason(id);
+}
+let kgTimer=null,kgI=0;
+function kgPlay(){
+  clearInterval(kgTimer);kgI=0;
+  highlight(SEQ[0]);
+  kgTimer=setInterval(()=>{kgI=(kgI+1)%SEQ.length;highlight(SEQ[kgI]);
+    const curCtx=['req','repo','repo','tests','tests','repo'][kgI%6];
+    $$('.ctx').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.ctx===curCtx)));
+  },2100);
+}
+$$('.ctx').forEach(b=>b.onclick=()=>{$$('.ctx').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));clearInterval(kgTimer);
+  const map={req:'plan',repo:'build',tests:'test',mem:'fix',hist:'review',cost:'merge'};highlight(map[b.dataset.ctx]||'plan');});
+$('#kgReplay').onclick=kgPlay;
+renderReason('plan');highlight('plan');
+
+/* autostart knowledge graph when scrolled into view */
+const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){kgPlay();io.disconnect();}});},{threshold:.3});
+io.observe($('#kgSec'));
+</script>
+</body>
+</html>

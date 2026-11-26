@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AgentForge — UI/UX redesign concept</title>
+<meta name="description" content="A redesign concept for the AgentForge workspace: forge identity, live workflow strip, and a de-rainbowed status system.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ──────────────────────────────────────────────────────────────────────────
+   DESIGN TOKENS  (one spacing / radius / motion / color system everywhere)
+   ────────────────────────────────────────────────────────────────────────── */
+:root{
+  color-scheme:dark;
+  --sans:"Geist",ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+
+  /* spacing scale */
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
+  /* radius scale */
+  --r-sm:7px;--r:10px;--r-lg:14px;--r-xl:20px;
+  /* motion */
+  --fast:140ms cubic-bezier(.2,.6,.2,1);--base:200ms cubic-bezier(.2,.6,.2,1);
+
+  /* signature ember accent (shared light/dark) */
+  --ember:#f97316;--ember-600:#ea580c;--ember-300:#fdba74;
+}
+
+/* DARK (default — the presentation hero) */
+:root,:root[data-theme="dark"]{
+  --bg:#0d0f12;--surface:#15181d;--surface-2:#1b1f26;--inset:#0f1216;
+  --sidebar:#101317;--border:#ffffff14;--border-strong:#ffffff24;
+  --ink:#e9ebee;--muted:#8b929b;--faint:#5c636c;
+  --primary:#f2f3f5;--on-primary:#15181c;
+  --ember-soft:#f973161f;--ember-line:#f9731655;
+  --good:#22c55e;--good-soft:#22c55e1f;
+  --bad:#ef4444;--bad-soft:#ef44441f;
+  --warn:#f0a830;--warn-soft:#f0a8301f;
+  --info:#7f94b4;
+  --shadow:0 1px 2px #0006, 0 12px 28px -12px #000a;
+  --glow:0 0 0 1px #f9731644, 0 0 32px -4px #f9731688;
+}
+/* LIGHT */
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#fafafb;--surface:#ffffff;--surface-2:#f4f5f7;--inset:#f6f7f9;
+  --sidebar:#f6f7f9;--border:#e7e9ed;--border-strong:#d7dadf;
+  --ink:#15181c;--muted:#656b73;--faint:#9aa0a8;
+  --primary:#15181c;--on-primary:#ffffff;
+  --ember-soft:#fff1e6;--ember-line:#f9731655;
+  --good:#16a34a;--good-soft:#e8f6ec;
+  --bad:#dc2626;--bad-soft:#fdecec;
+  --warn:#b45309;--warn-soft:#fdf0db;
+  --info:#5b7288;
+  --shadow:0 1px 2px #1b1f2610, 0 12px 28px -14px #1b1f2630;
+  --glow:0 0 0 1px #f9731633, 0 0 30px -6px #f9731666;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;
+  font-feature-settings:'cv11','ss01';
+  overflow:hidden;
+}
+h1,h2,h3,h4,p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+:focus-visible{outline:2px solid var(--ember);outline-offset:2px;border-radius:4px}
+::selection{background:#f9731633}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:20px;border:3px solid transparent;background-clip:padding-box}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   APP SHELL
+   ────────────────────────────────────────────────────────────────────────── */
+.app{display:grid;grid-template-columns:232px 1fr;height:100%;min-height:0}
+.app[data-collapsed="true"]{grid-template-columns:64px 1fr}
+
+.sidebar{
+  background:var(--sidebar);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;min-height:0;transition:width var(--base);
+}
+.brand{display:flex;align-items:center;gap:10px;height:56px;padding:0 var(--s4);flex-shrink:0}
+.brand .name{font-weight:650;font-size:15px;letter-spacing:-.02em;white-space:nowrap}
+.app[data-collapsed="true"] .brand{justify-content:center;padding:0}
+.app[data-collapsed="true"] .brand .name{display:none}
+
+.navlabel{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:var(--s4) var(--s4) var(--s2)}
+.app[data-collapsed="true"] .navlabel{opacity:0;height:8px;padding:0}
+.nav{display:flex;flex-direction:column;gap:2px;padding:0 var(--s2);flex:1;min-height:0;overflow:auto}
+.navitem{
+  position:relative;display:flex;align-items:center;gap:11px;height:36px;padding:0 11px;
+  border-radius:var(--r-sm);color:var(--muted);font-weight:500;transition:background var(--fast),color var(--fast);
+}
+.navitem svg{width:17px;height:17px;flex-shrink:0}
+.navitem .lbl{white-space:nowrap}
+.app[data-collapsed="true"] .navitem{justify-content:center;padding:0}
+.app[data-collapsed="true"] .navitem .lbl,.app[data-collapsed="true"] .navitem .count{display:none}
+.navitem:hover{background:var(--surface-2);color:var(--ink)}
+.navitem[aria-current="page"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.navitem[aria-current="page"]::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2.5px;border-radius:3px;background:var(--ember)}
+.navitem .count{margin-left:auto;font:500 11px var(--mono);color:var(--faint)}
+.navitem .dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--ember);box-shadow:0 0 8px var(--ember)}
+
+.sidefoot{border-top:1px solid var(--border);padding:var(--s3);display:flex;align-items:center;gap:var(--s2);justify-content:space-between}
+.conn{display:flex;align-items:center;gap:7px;font:500 12px var(--mono);color:var(--muted)}
+.conn::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
+.iconbtn{display:grid;place-items:center;width:30px;height:30px;border-radius:var(--r-sm);color:var(--muted);transition:background var(--fast),color var(--fast)}
+.iconbtn:hover{background:var(--surface-2);color:var(--ink)}
+.app[data-collapsed="true"] .sidefoot{flex-direction:column}
+.app[data-collapsed="true"] .conn span{display:none}
+
+/* main column */
+.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.topbar{
+  height:56px;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg);
+  display:flex;align-items:center;gap:var(--s4);padding:0 var(--s5);
+}
+.crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-width:0}
+.crumb b{color:var(--ink);font-weight:600}
+.crumb svg{width:14px;height:14px;color:var(--faint)}
+.spacer{flex:1}
+
+/* segmented concept switcher */
+.seg{display:flex;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:3px;gap:2px}
+.seg button{padding:6px 12px;border-radius:7px;font-weight:550;font-size:13px;color:var(--muted);transition:all var(--fast)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+.content{flex:1;min-height:0;overflow:auto;scroll-behavior:smooth}
+.view{display:none}
+.view.active{display:block;animation:fade var(--base)}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PRIMITIVES
+   ────────────────────────────────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 14px;border-radius:var(--r-sm);font-weight:560;font-size:13px;border:1px solid transparent;transition:all var(--fast);white-space:nowrap}
+.btn svg{width:15px;height:15px}
+.btn.sm{height:30px;padding:0 10px;font-size:12px}
+.btn.primary{background:var(--primary);color:var(--on-primary)}
+.btn.primary:hover{opacity:.9}
+.btn.outline{background:var(--surface);border-color:var(--border-strong);color:var(--ink)}
+.btn.outline:hover{background:var(--surface-2)}
+.btn.ghost{color:var(--muted)}
+.btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
+.btn.ember{background:var(--ember);color:#1a0d02;font-weight:600}
+.btn.ember:hover{background:var(--ember-600)}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;font:550 11px/1 var(--sans);border:1px solid var(--border-strong);color:var(--muted);background:var(--surface-2);white-space:nowrap}
+.chip svg{width:12px;height:12px}
+.chip.ember{color:var(--ember);background:var(--ember-soft);border-color:var(--ember-line)}
+.chip.good{color:var(--good);background:var(--good-soft);border-color:transparent}
+.chip.bad{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+.chip.warn{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+.stat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+.page{max-width:1180px;margin:0 auto;padding:var(--s6) var(--s6) var(--s7)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);margin-bottom:var(--s5)}
+.pagehead h1{font-size:26px;letter-spacing:-.03em;font-weight:650}
+.pagehead .sub{color:var(--muted);font-size:13px;margin-top:3px}
+.row{display:flex;align-items:center;gap:var(--s2)}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PROJECTS VIEW
+   ────────────────────────────────────────────────────────────────────────── */
+.attn{
+  display:flex;align-items:center;gap:var(--s3);padding:13px 16px;margin-bottom:var(--s5);
+  border:1px solid var(--ember-line);background:var(--ember-soft);border-radius:var(--r-lg);
+}
+.attn .ic{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--ember);color:#1a0d02;flex-shrink:0}
+.attn .ic svg{width:17px;height:17px}
+.attn b{font-weight:600}
+.attn .links{margin-left:auto;display:flex;gap:var(--s2)}
+.attn a.pill{font:550 12px var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--border-strong);padding:6px 11px;border-radius:999px;transition:all var(--fast)}
+.attn a.pill:hover{border-color:var(--ember);color:var(--ember)}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
+.pcard{display:flex;flex-direction:column;gap:var(--s3);padding:var(--s5);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);transition:border-color var(--base),transform var(--base),box-shadow var(--base);cursor:pointer}
+.pcard:hover{border-color:var(--border-strong);transform:translateY(-2px);box-shadow:0 1px 2px #0006,0 20px 40px -20px #000c}
+.pcard .top{display:flex;align-items:flex-start;gap:var(--s3)}
+.pcard .ficon{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);flex-shrink:0}
+.pcard .ficon svg{width:19px;height:19px;color:var(--muted)}
+.pcard h3{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.pcard .src{display:flex;align-items:center;gap:6px;font:500 11.5px var(--mono);color:var(--faint);margin-top:2px}
+.pcard .src svg{width:13px;height:13px}
+.pcard .nextline{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:var(--r-sm);background:var(--surface-2);font-size:12.5px;font-weight:500}
+.pcard .nextline.ember{background:var(--ember-soft);color:var(--ember)}
+.pcard .nextline.good{background:var(--good-soft);color:var(--good)}
+.pcard .nextline svg{width:15px;height:15px;flex-shrink:0}
+.pcard .nextline .stat-dot{width:7px;height:7px}
+.pcard .counts{display:flex;gap:14px;font-size:12px;color:var(--muted)}
+.pcard .counts b{color:var(--ink);font-weight:600}
+.pcard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:var(--s2);font-size:11.5px;color:var(--faint)}
+.pcard .stack{display:flex;flex-wrap:wrap;gap:5px}
+.minibar{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;display:flex}
+.minibar i{display:block;height:100%}
+.minibar i.d{background:var(--good)}.minibar i.a{background:var(--ember)}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   RUN / WORKSPACE VIEW — the centerpiece
+   ────────────────────────────────────────────────────────────────────────── */
+.run{max-width:1180px;margin:0 auto;padding:var(--s5) var(--s6) var(--s7)}
+.runhead{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s4);margin-bottom:var(--s5)}
+.runhead h1{font-size:22px;letter-spacing:-.02em;font-weight:650}
+.runhead .meta{display:flex;align-items:center;gap:var(--s4);margin-top:6px;font:500 12px var(--mono);color:var(--muted);flex-wrap:wrap}
+.runhead .meta a,.runhead .meta span{display:flex;align-items:center;gap:6px}
+.runhead .meta svg{width:14px;height:14px;color:var(--faint)}
+.runctl{display:flex;align-items:center;gap:var(--s2)}
+.sel{height:36px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);padding:0 10px;font:500 13px var(--sans)}
+
+/* ── the forge workflow strip ── */
+.forge{position:relative;border-radius:var(--r-xl);background:
+   radial-gradient(120% 140% at 15% -20%, #f9731610, transparent 55%),
+   var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);
+   padding:var(--s5) var(--s5) var(--s4);margin-bottom:var(--s4);overflow:hidden}
+.forge .fhead{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s5)}
+.forge .fhead .k{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.forge .fhead .now{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:550}
+.forge .fhead .now .t{font-family:var(--mono);color:var(--muted);font-weight:500}
+
+.strip{display:flex;align-items:flex-start;gap:0;position:relative}
+.stage{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:9px;min-width:0}
+.stage .bead{
+  position:relative;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:var(--surface-2);border:1px solid var(--border-strong);color:var(--muted);
+  transition:all var(--base);z-index:2}
+.stage .bead svg{width:20px;height:20px}
+.stage .nm{font-size:12px;font-weight:550;color:var(--muted);transition:color var(--base);text-align:center}
+.stage .sub{font:500 10px var(--mono);color:var(--faint);height:12px;white-space:nowrap}
+/* connector line between beads */
+.stage::before{content:"";position:absolute;top:23px;left:-50%;width:100%;height:2px;background:var(--border-strong);z-index:1;transition:background var(--base)}
+.stage:first-child::before{display:none}
+
+.stage.done .bead{background:var(--good-soft);border-color:transparent;color:var(--good)}
+.stage.done .nm{color:var(--ink)}
+.stage.done::before{background:var(--good)}
+.stage.active .bead{background:var(--ember);border-color:var(--ember);color:#1a0d02;box-shadow:var(--glow);animation:breathe 2.2s ease-in-out infinite}
+.stage.active .nm{color:var(--ember);font-weight:650}
+.stage.active::before{background:linear-gradient(90deg,var(--good),var(--ember))}
+.stage.fail .bead{background:var(--bad-soft);border-color:transparent;color:var(--bad);animation:none}
+.stage.fail .nm{color:var(--bad);font-weight:650}
+.stage.fail::before{background:var(--bad)}
+.stage.fix .bead{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.stage.fix .nm{color:var(--warn)}
+.stage.pending .bead{opacity:.85}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 1px #f9731644,0 0 22px -6px #f9731688}50%{box-shadow:0 0 0 1px #f9731466,0 0 40px -2px #f97316cc}}
+
+/* fix loop marker */
+.strip .loop{position:absolute;top:-6px;font:500 10px var(--mono);color:var(--warn);background:var(--warn-soft);padding:2px 7px;border-radius:999px;display:none}
+.strip.has-fix .loop{display:block}
+
+/* run status line under strip */
+.runstatus{display:flex;align-items:center;gap:var(--s3);padding:11px 14px;border-radius:var(--r);background:var(--inset);border:1px solid var(--border);font-size:13px}
+.runstatus .lead{display:flex;align-items:center;gap:9px;font-weight:550}
+.runstatus .evt{color:var(--muted);font-family:var(--mono);font-size:12px}
+.runstatus .el{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--faint)}
+
+/* run grid */
+.rungrid{display:grid;grid-template-columns:1.6fr .9fr;gap:var(--s4);margin-top:var(--s4);align-items:start}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.panel .ph{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:13px 16px;border-bottom:1px solid var(--border)}
+.panel .ph h3{font-size:13px;font-weight:600;letter-spacing:.01em}
+.panel .ph .tally{font:500 11px var(--mono);color:var(--faint)}
+.panel .pb{padding:var(--s3) var(--s4) var(--s4)}
+
+/* task rows */
+.task{display:flex;align-items:center;gap:var(--s3);padding:11px 8px;border-radius:var(--r-sm);transition:background var(--fast);cursor:pointer;border-bottom:1px solid var(--border)}
+.task:last-child{border-bottom:0}
+.task:hover{background:var(--surface-2)}
+.task.sel{background:var(--surface-2);box-shadow:inset 2.5px 0 var(--ember)}
+.task .tk{font:500 11px var(--mono);color:var(--faint);width:62px;flex-shrink:0}
+.task .ti{min-width:0;flex:1}
+.task .ti .tt{font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task .ti .tm{font-size:11.5px;color:var(--muted);margin-top:1px}
+.task .ti .tm.blocked{color:var(--warn)}
+
+/* gate card */
+.gate{margin-top:var(--s4);border-radius:var(--r-lg);padding:var(--s4) var(--s5);display:none}
+.gate.show{display:block;animation:fade var(--base)}
+.gate.needs{background:var(--ember-soft);border:1px solid var(--ember-line)}
+.gate.fail{background:var(--bad-soft);border:1px solid #ef444455}
+.gate.good{background:var(--good-soft);border:1px solid #22c55e55}
+.gate .gk{font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px}
+.gate.needs .gk{color:var(--ember)}.gate.fail .gk{color:var(--bad)}.gate.good .gk{color:var(--good)}
+.gate h4{font-size:16px;letter-spacing:-.01em;margin-bottom:4px}
+.gate p{font-size:13px;color:var(--muted);margin-bottom:var(--s3)}
+.gate .acts{display:flex;gap:var(--s2);flex-wrap:wrap}
+
+/* evidence tabs */
+.etabs{display:flex;gap:2px;padding:6px 8px 0}
+.etabs button{padding:8px 11px;font-size:12.5px;font-weight:550;color:var(--muted);border-bottom:2px solid transparent;border-radius:6px 6px 0 0;transition:all var(--fast)}
+.etabs button[aria-pressed="true"]{color:var(--ink);border-color:var(--ember)}
+.etabs button:hover{background:var(--surface-2)}
+.estream{display:flex;flex-direction:column}
+.estream .el{display:grid;grid-template-columns:52px 1fr;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);font-size:12.5px}
+.estream .el:last-child{border:0}
+.estream .el time{font:500 11px var(--mono);color:var(--faint)}
+.estream .el .ck{display:flex;align-items:center;gap:7px}
+.estream .el .ck svg{width:14px;height:14px}
+.empty{padding:22px 4px;color:var(--faint);font-size:12.5px;text-align:center}
+.diff{margin-top:10px;background:var(--inset);border:1px solid var(--border);border-radius:var(--r-sm);padding:11px;font:12px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.diff .add{color:var(--good)}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   DESIGN SYSTEM VIEW
+   ────────────────────────────────────────────────────────────────────────── */
+.ds section{margin-bottom:var(--s7)}
+.ds h2{font-size:18px;letter-spacing:-.02em;margin-bottom:var(--s2)}
+.ds .lede{color:var(--muted);font-size:13px;margin-bottom:var(--s4);max-width:62ch}
+.logos{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
+.logobox{padding:var(--s5);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:var(--s4);align-items:flex-start}
+.logobox .big{display:flex;align-items:center;gap:12px}
+.logobox .big .name{font-weight:650;font-size:18px;letter-spacing:-.02em}
+.logobox .cap{font-size:12px;color:var(--muted)}
+.logobox .cap b{color:var(--ink);font-weight:600}
+.logobox .marks{display:flex;align-items:center;gap:14px;padding-top:4px;border-top:1px solid var(--border);width:100%}
+
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--s3)}
+.sw{border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.sw .cap{height:66px}
+.sw .lab{padding:9px 11px;font-size:12px}
+.sw .lab b{display:block;font-weight:600}
+.sw .lab .hex{font:500 11px var(--mono);color:var(--muted)}
+
+.scale{display:flex;flex-direction:column;gap:10px}
+.scale .r{display:flex;align-items:baseline;gap:var(--s4)}
+.scale .r .tag{font:500 11px var(--mono);color:var(--faint);width:70px}
+.spacerow{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap}
+.spacerow .b{height:30px;background:var(--ember-soft);border:1px solid var(--ember-line);border-radius:5px;display:grid;place-items:center;font:500 10px var(--mono);color:var(--ember);padding:0 2px}
+.specimen{display:flex;flex-wrap:wrap;gap:var(--s3);align-items:center}
+.radiibox{display:flex;gap:var(--s4);flex-wrap:wrap}
+.radiibox .rb{width:76px;height:60px;background:var(--surface-2);border:1px solid var(--border-strong)}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5)}
+@media(max-width:1080px){.grid{grid-template-columns:repeat(2,1fr)}.rungrid{grid-template-columns:1fr}.logos{grid-template-columns:1fr}.cols2{grid-template-columns:1fr}}
+@media(max-width:720px){.grid{grid-template-columns:1fr}.strip .nm{font-size:10px}.page,.run{padding:var(--s4)}.attn{flex-wrap:wrap}.attn .links{margin-left:0;width:100%}}
+
+/* reduced motion */
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:1ms!important;scroll-behavior:auto!important}}
+.disclaimer{max-width:1180px;margin:0 auto;padding:0 var(--s6) var(--s6);color:var(--faint);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="app" id="app" data-collapsed="false">
+
+  <!-- ░░ SIDEBAR ░░ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMark"></span>
+      <span class="name">AgentForge</span>
+    </div>
+    <div class="navlabel">Workspace</div>
+    <nav class="nav">
+      <a class="navitem" aria-current="page" data-go="projects" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span class="lbl">Projects</span><span class="count">4</span>
+      </a>
+      <a class="navitem" data-go="run" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+        <span class="lbl">Active run</span><span class="dot"></span>
+      </a>
+      <a class="navitem" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 10h.01M15 10h.01M9 15h6"/></svg>
+        <span class="lbl">Agents &amp; Accounts</span>
+      </a>
+      <a class="navitem" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/></svg>
+        <span class="lbl">Usage</span>
+      </a>
+      <a class="navitem" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 8V5a2 2 0 0 1 2-2 2 2 0 0 1 2 2v3M13 8V5a2 2 0 0 1 2-2 2 2 0 0 1 2 2v3M5 8h14v8a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/></svg>
+        <span class="lbl">Integrations</span>
+      </a>
+      <a class="navitem" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 7 19.3a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 2.5 14H2a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4 7"/></svg>
+        <span class="lbl">Settings</span>
+      </a>
+    </nav>
+    <div class="sidefoot">
+      <span class="conn mono"><span>Daemon connected</span></span>
+      <button class="iconbtn" id="collapseBtn" aria-label="Collapse sidebar" title="Collapse (⌘B)">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ░░ MAIN ░░ -->
+  <div class="main">
+    <header class="topbar">
+      <nav class="crumb" id="crumb"><b>Projects</b></nav>
+      <div class="spacer"></div>
+      <div class="seg" role="group" aria-label="Concept preview">
+        <button data-go="projects" aria-pressed="true">Projects</button>
+        <button data-go="run" aria-pressed="false">Run workspace</button>
+        <button data-go="design" aria-pressed="false">Design system</button>
+      </div>
+      <button class="iconbtn" id="themeBtn" aria-label="Toggle theme" title="Toggle light / dark">
+        <svg id="themeIcon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+      </button>
+    </header>
+
+    <div class="content" id="content">
+
+      <!-- ══════════ PROJECTS ══════════ -->
+      <section class="view active" id="view-projects">
+        <div class="page">
+          <div class="pagehead">
+            <div><h1>Projects</h1><div class="sub">4 projects · 1 needs your attention</div></div>
+            <div class="row">
+              <button class="btn outline sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Attach existing</button>
+              <button class="btn primary sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New project</button>
+            </div>
+          </div>
+
+          <div class="attn" role="status">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+            <div><b>1 task needs your review</b> <span class="muted">· 1 task blocked behind a dependency</span></div>
+            <div class="links">
+              <a class="pill" data-go="run" href="#">Review HRMS‑014 →</a>
+              <a class="pill" href="#">See blocker</a>
+            </div>
+          </div>
+
+          <div class="grid" id="projGrid"></div>
+        </div>
+      </section>
+
+      <!-- ══════════ RUN WORKSPACE ══════════ -->
+      <section class="view" id="view-run">
+        <div class="run">
+          <div class="runhead">
+            <div>
+              <h1>Prevent double approval</h1>
+              <div class="meta">
+                <span class="mono">HRMS‑014</span>
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M8.3 7.3 15.7 10"/></svg> feat/leave-approval-guard</span>
+                <a href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.5-1.1-4.5-5a3.9 3.9 0 0 1 1-2.7c-.1-.3-.5-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.3.2 2.3.1 2.6a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.5 5 .3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> psspl/hrms</a>
+              </div>
+            </div>
+            <div class="runctl">
+              <select class="sel" id="scenario" aria-label="Demo scenario">
+                <option value="happy">Happy path</option>
+                <option value="fail" selected>Test failure &amp; fix</option>
+              </select>
+              <button class="btn ember" id="playBtn"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> <span id="playLbl">Play run</span></button>
+            </div>
+          </div>
+
+          <!-- forge strip -->
+          <div class="forge">
+            <div class="fhead">
+              <span class="k">Live pipeline</span>
+              <div class="now"><span class="stat-dot" id="nowDot" style="background:var(--muted)"></span><span id="nowText">Ready to run</span> <span class="t" id="nowTime"></span></div>
+            </div>
+            <div class="strip" id="strip"></div>
+          </div>
+
+          <div class="runstatus">
+            <div class="lead"><span class="stat-dot" id="sDot" style="background:var(--muted)"></span><span id="sLead">Idle</span></div>
+            <div class="evt" id="sEvt">No events yet — press Play run</div>
+            <div class="el" id="sEl"></div>
+          </div>
+
+          <div class="rungrid">
+            <!-- tasks + gate -->
+            <div>
+              <div class="panel">
+                <div class="ph"><h3>Tasks in this run</h3><span class="tally" id="taskTally">1 active · 3 queued</span></div>
+                <div class="pb" id="taskList"></div>
+              </div>
+              <div class="gate" id="gate"></div>
+            </div>
+            <!-- evidence -->
+            <div class="panel">
+              <div class="ph"><h3>Run evidence</h3><span class="tally" id="evTally">—</span></div>
+              <div class="etabs" role="tablist">
+                <button data-ev="activity" aria-pressed="true">Activity</button>
+                <button data-ev="checks" aria-pressed="false">Checks</button>
+                <button data-ev="changes" aria-pressed="false">Changes</button>
+              </div>
+              <div class="pb" id="evBody" style="padding-top:4px"></div>
+            </div>
+          </div>
+        </div>
+        <p class="disclaimer">Simulated HRMS run · all events, checks and diffs are fixtures for the concept.</p>
+      </section>
+
+      <!-- ══════════ DESIGN SYSTEM ══════════ -->
+      <section class="view" id="view-design">
+        <div class="page ds">
+          <div class="pagehead"><div><h1>Design system</h1><div class="sub">The one set of tokens, marks and components every screen draws from.</div></div></div>
+
+          <section>
+            <h2>Logo — three directions</h2>
+            <p class="lede">Replaces the generic gradient sparkle. The metaphor is a <b>forge</b>: agents shaping raw requirements into shipped code. Ember is the only brand color; it also marks live, “in the forge” work across the app.</p>
+            <div class="logos" id="logoGrid"></div>
+          </section>
+
+          <section>
+            <h2>Color — ember + graphite, de‑rainbowed status</h2>
+            <p class="lede">Neutral graphite UI with an ink primary (restraint, not the generic AI indigo). A single ember accent carries identity and “active work”. Status collapses from seven hues to four meanings — every one paired with an icon and label, never color alone.</p>
+            <div class="cols2">
+              <div><h3 style="font-size:13px;margin-bottom:10px" class="muted mono">BRAND &amp; SURFACE</h3><div class="swatches" id="swBrand"></div></div>
+              <div><h3 style="font-size:13px;margin-bottom:10px" class="muted mono">SEMANTIC STATUS</h3><div class="swatches" id="swStatus"></div></div>
+            </div>
+          </section>
+
+          <section>
+            <h2>Typography — Geist</h2>
+            <p class="lede">The app font, kept. Sans for everything; mono reserved for task IDs, paths, branches, timestamps and logs.</p>
+            <div class="scale card" style="padding:var(--s5)">
+              <div class="r"><span class="tag">26 / 650</span><span style="font-size:26px;letter-spacing:-.03em;font-weight:650">Prevent double approval</span></div>
+              <div class="r"><span class="tag">18 / 600</span><span style="font-size:18px;font-weight:600;letter-spacing:-.02em">Tasks in this run</span></div>
+              <div class="r"><span class="tag">14 / 400</span><span style="font-size:14px">Body copy — the Reviewer checks the approval guard covers repeat submissions.</span></div>
+              <div class="r"><span class="tag">12 / mono</span><span class="mono" style="font-size:12px;color:var(--muted)">HRMS‑014 · feat/leave-approval-guard · 00:42</span></div>
+            </div>
+          </section>
+
+          <section>
+            <h2>Spacing, radius &amp; motion</h2>
+            <div class="cols2">
+              <div class="card" style="padding:var(--s5)">
+                <h3 style="font-size:13px;margin-bottom:12px" class="muted mono">SPACING — 4·8·12·16·24·32</h3>
+                <div class="spacerow">
+                  <span class="b" style="width:4px">4</span><span class="b" style="width:8px">8</span><span class="b" style="width:12px">12</span>
+                  <span class="b" style="width:16px">16</span><span class="b" style="width:24px">24</span><span class="b" style="width:32px">32</span>
+                </div>
+                <h3 style="font-size:13px;margin:22px 0 12px" class="muted mono">RADIUS — 7·10·14·20</h3>
+                <div class="radiibox">
+                  <div class="rb" style="border-radius:7px"></div><div class="rb" style="border-radius:10px"></div>
+                  <div class="rb" style="border-radius:14px"></div><div class="rb" style="border-radius:20px"></div>
+                </div>
+              </div>
+              <div class="card" style="padding:var(--s5)">
+                <h3 style="font-size:13px;margin-bottom:12px" class="muted mono">MOTION</h3>
+                <p style="font-size:13px;color:var(--muted);margin-bottom:16px">140–200 ms for state changes. Motion only to explain a transition — a stage igniting, a test failing, a fix looping back. The ember “breathes” on exactly one active stage.</p>
+                <div class="strip" style="max-width:280px"><div class="stage done"><div class="bead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></div><span class="nm">Done</span></div><div class="stage active"><div class="bead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 4 5 15h5l-1 5 9-11h-5z"/></svg></div><span class="nm">Active</span></div></div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h2>Components</h2>
+            <div class="card" style="padding:var(--s5);display:flex;flex-direction:column;gap:20px">
+              <div class="specimen">
+                <button class="btn primary">Approve &amp; merge</button>
+                <button class="btn ember">Play run</button>
+                <button class="btn outline">Request changes</button>
+                <button class="btn ghost">Archive</button>
+              </div>
+              <div class="specimen">
+                <span class="chip ember"><span class="stat-dot" style="background:currentColor"></span>Developing</span>
+                <span class="chip good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>Done</span>
+                <span class="chip bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg>Failed</span>
+                <span class="chip warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Needs you</span>
+                <span class="chip">Draft</span>
+                <span class="chip">Queued</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+
+/* ── icons ── */
+const I={
+  dev:'<path d="M8 9 4 12l4 3M16 9l4 3-4 3M13 5l-2 14"/>',
+  review:'<circle cx="11" cy="11" r="6"/><path d="m21 21-4.3-4.3"/>',
+  test:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>',
+  fix:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-2.1z"/>',
+  doc:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h4"/>',
+  merge:'<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 4-5 2.5-5 6.5"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  bolt:'<path d="M14 4 5 15h5l-1 5 9-11h-5z"/>', clock:'<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>'
+};
+const svg=(p,sw=1.8)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+/* ── brand mark (ember "A" forge glyph) ── */
+function markTile(size=30){
+  const id='g'+Math.random().toString(36).slice(2,7);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fdba74"/><stop offset=".5" stop-color="#f97316"/><stop offset="1" stop-color="#ea580c"/>
+    </linearGradient></defs>
+    <rect width="32" height="32" rx="8.5" fill="#15181c"/>
+    <rect width="32" height="32" rx="8.5" fill="url(#${id})" opacity=".08"/>
+    <path d="M10.5 24 16 8l5.5 16" fill="none" stroke="url(#${id})" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13 18.3h6" fill="none" stroke="url(#${id})" stroke-width="3" stroke-linecap="round"/>
+  </svg>`;
+}
+$('#brandMark').innerHTML=markTile(30);
+
+/* ── theme ── */
+const root=document.documentElement;
+const sun='<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>';
+const moon='<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+function paintTheme(){ $('#themeIcon').innerHTML = root.dataset.theme==='dark'?moon:sun; }
+$('#themeBtn').onclick=()=>{ root.dataset.theme = root.dataset.theme==='dark'?'light':'dark'; paintTheme(); };
+paintTheme();
+
+/* ── collapse ── */
+$('#collapseBtn').onclick=()=>{ const a=$('#app'); a.dataset.collapsed = a.dataset.collapsed==='true'?'false':'true'; };
+document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='b'){e.preventDefault();$('#collapseBtn').click();} });
+
+/* ── view routing ── */
+const crumbs={projects:'<b>Projects</b>',run:'Projects <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> HRMS <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> <b>HRMS‑014</b>',design:'<b>Design system</b>'};
+function go(v){
+  $$('.view').forEach(s=>s.classList.toggle('active',s.id==='view-'+v));
+  $$('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.go===v)));
+  $$('.nav .navitem').forEach(n=>n.removeAttribute('aria-current'));
+  const nav = v==='run' ? $('.nav .navitem[data-go="run"]') : $('.nav .navitem[data-go="projects"]');
+  nav&&nav.setAttribute('aria-current','page');
+  $('#crumb').innerHTML=crumbs[v]||crumbs.projects;
+  $('#content').scrollTop=0;
+}
+$$('[data-go]').forEach(el=>el.addEventListener('click',e=>{e.preventDefault();go(el.dataset.go);}));
+
+/* ── projects data ── */
+const projects=[
+  {name:'HRMS',src:'psspl/hrms',gh:true,next:{t:'HRMS‑014 ready to review',cls:'ember'},done:8,total:14,active:1,stack:['.NET','React','SQL'],run:'running',ago:'2m ago'},
+  {name:'Storefront',src:'psspl/storefront',gh:true,next:{t:'3 tasks running',cls:''},done:21,total:30,active:3,stack:['Next.js','Stripe'],run:'running',ago:'just now'},
+  {name:'billing-service',src:'~/code/billing-service',gh:false,next:{t:'All tasks done',cls:'good'},done:12,total:12,active:0,stack:['Go','Postgres'],run:'stopped',ago:'1h ago'},
+  {name:'design-tokens',src:'psspl/design-tokens',gh:true,next:{t:'Awaiting plan approval',cls:''},done:0,total:6,active:0,stack:['TS'],run:'stopped',ago:'3h ago'},
+];
+const runDot={running:'var(--good)',starting:'var(--warn)',stopped:'var(--faint)',crashed:'var(--bad)'};
+const ghIcon='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.5-1.1-4.5-5a3.9 3.9 0 0 1 1-2.7c-.1-.3-.5-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.3.2 2.3.1 2.6a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.5 5 .3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>';
+const hdIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11h.01"/></svg>';
+$('#projGrid').innerHTML=projects.map(p=>{
+  const dpct=Math.round(p.done/p.total*100), apct=Math.round(p.active/p.total*100);
+  return `<article class="pcard" ${p.name==='HRMS'?'data-go="run"':''}>
+    <div class="top">
+      <div class="ficon">${svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 4v5"/>')}</div>
+      <div style="min-width:0;flex:1">
+        <h3>${p.name}</h3>
+        <div class="src">${p.gh?ghIcon:hdIcon}<span>${p.src}</span></div>
+      </div>
+    </div>
+    <div class="nextline ${p.next.cls}">${p.next.cls==='good'?svg(I.check,2.4):p.next.cls==='ember'?'<span class="stat-dot" style="background:currentColor"></span>':svg(I.clock)}${p.next.t}</div>
+    <div class="minibar"><i class="d" style="width:${dpct}%"></i><i class="a" style="width:${apct}%"></i></div>
+    <div class="counts"><span><b>${p.done}</b>/${p.total} done</span>${p.active?`<span style="color:var(--ember)"><b>${p.active}</b> active</span>`:''}</div>
+    <div class="stack">${p.stack.map(s=>`<span class="chip">${s}</span>`).join('')}</div>
+    <div class="foot">
+      <span class="row" style="gap:6px"><span class="stat-dot" style="background:${runDot[p.run]}"></span>${p.run[0].toUpperCase()+p.run.slice(1)}</span>
+      <span>Active ${p.ago}</span>
+    </div>
+  </article>`;
+}).join('');
+$$('#projGrid [data-go]').forEach(el=>el.addEventListener('click',()=>go('run')));
+
+/* ──────────────── RUN SIMULATION ──────────────── */
+const STAGES=[
+  {k:'dev',label:'Develop'},{k:'review',label:'Review'},{k:'test',label:'Test'},
+  {k:'fix',label:'Fix',cond:true},{k:'doc',label:'Document'},{k:'merge',label:'Merge'}
+];
+const strip=$('#strip');
+function renderStrip(state){
+  // state: map stage.k -> 'done'|'active'|'fail'|'fix'|'pending'
+  const showFix = state.__fix;
+  strip.classList.toggle('has-fix',!!showFix);
+  strip.innerHTML = STAGES.filter(s=>!s.cond||showFix).map(s=>{
+    const st=state[s.k]||'pending';
+    const ic = st==='done'?svg(I.check,2.4):svg(I[s.k]);
+    const sub = state.__sub&&state.__sub.k===s.k?`<span class="sub">${state.__sub.t}</span>`:'<span class="sub"></span>';
+    return `<div class="stage ${st}"><div class="bead">${ic}</div><span class="nm">${s.label}</span>${sub}</div>`;
+  }).join('');
+}
+renderStrip({});
+
+const scen=$('#scenario'), playBtn=$('#playBtn');
+let events=[], checks=null, hasDiff=false, evTab='activity', t0=0, timers=[], playing=false, decided=false;
+
+function clock(ms){const s=Math.floor(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+function addEvt(t){events.unshift({at:clock(Date.now()-t0),t});}
+function setNow(dot,text){$('#nowDot').style.background=dot;$('#nowText').textContent=text;}
+function setStatus(dot,lead,evt){$('#sDot').style.background=dot;$('#sLead').textContent=lead;$('#sEvt').textContent=evt;}
+
+// scripted steps: [delay, fn]
+function buildScript(fail){
+  const S=[];
+  S.push([0,()=>{ renderStrip({dev:'active',__sub:{k:'dev',t:'editing'}}); setNow('var(--ember)','Developing'); setStatus('var(--ember)','Developing','Developer started LeaveApprovalService.cs'); addEvt('Developer opened the approval service'); hasDiff=true; }]);
+  S.push([1600,()=>{ renderStrip({dev:'done',review:'active'}); setNow('var(--ember)','Reviewing'); setStatus('var(--ember)','Reviewing','Reviewer checking 2 changed files'); addEvt('Review: approval guard lives in one place'); }]);
+  S.push([1500,()=>{ renderStrip({dev:'done',review:'done',test:'active',__sub:{k:'test',t:'3 checks'}}); setNow('var(--ember)','Testing'); setStatus('var(--ember)','Testing','Running approval edge cases'); addEvt('Started 3 approval checks'); }]);
+  if(fail){
+    S.push([1900,()=>{ renderStrip({dev:'done',review:'done',test:'fail',__fix:true}); checks='fail'; setNow('var(--bad)','Test failed'); setStatus('var(--bad)','Test failed','A second approval still returned success'); addEvt('✕ Failed: second approval returned success'); gate('fail'); evTab='checks'; paintEv(); }]);
+  } else {
+    S.push([1900,()=>{ renderStrip({dev:'done',review:'done',test:'done',doc:'active'}); checks='pass'; setNow('var(--ember)','Documenting'); addEvt('✓ 3 of 3 checks passed'); setStatus('var(--ember)','Documenting','Writing the change note'); }]);
+    S.push([1300,()=>{ renderStrip({dev:'done',review:'done',test:'done',doc:'done',merge:'active'}); setNow('var(--ember)','Ready to merge'); setStatus('var(--warn)','Needs you','3 checks passed · waiting for merge approval'); addEvt('Awaiting merge approval'); gate('needs'); }]);
+  }
+  return S;
+}
+function runFixBranch(){ // user pressed "Watch fix & retest"
+  clearTimers(); gate(null);
+  const seq=[
+    [0,()=>{ renderStrip({dev:'done',review:'done',test:'fail',fix:'active',__fix:true,__sub:{k:'fix',t:'attempt 1'}}); setNow('var(--warn)','Fixing'); setStatus('var(--warn)','Fixing','Fixer tightening the approval guard'); addEvt('Fix attempt 1 changed the approval guard'); }],
+    [1600,()=>{ renderStrip({dev:'done',review:'done',test:'active',fix:'done',__fix:true,__sub:{k:'test',t:'retest'}}); setNow('var(--ember)','Re‑testing'); setStatus('var(--ember)','Testing','Re‑running the same acceptance checks'); addEvt('Started attempt 2 of the approval checks'); }],
+    [1900,()=>{ renderStrip({dev:'done',review:'done',test:'done',fix:'done',doc:'done',merge:'active',__fix:true}); checks='pass'; setNow('var(--ember)','Ready to merge'); setStatus('var(--warn)','Needs you','3 checks passed after fix · waiting for merge approval'); addEvt('✓ 3 of 3 checks passed after fix'); gate('needs'); evTab='checks'; paintEv(); }],
+  ];
+  schedule(seq);
+}
+function clearTimers(){timers.forEach(clearTimeout);timers=[];}
+function schedule(seq){ let acc=0; seq.forEach(([d,fn])=>{acc+=d;timers.push(setTimeout(()=>{fn();paintEv();tickEl();},acc));}); }
+
+let elTimer;
+function tickEl(){ $('#sEl').textContent=playing||decided?clock(Date.now()-t0)+' elapsed':''; }
+
+function play(){
+  clearTimers(); clearInterval(elTimer);
+  events=[];checks=null;hasDiff=false;decided=false;evTab='activity';
+  t0=Date.now();playing=true;
+  playBtn.innerHTML=svg('<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',0)+' <span id="playLbl">Restart</span>';
+  gate(null); paintEv();
+  elTimer=setInterval(tickEl,500);
+  schedule(buildScript(scen.value==='fail'));
+}
+playBtn.onclick=play;
+scen.onchange=()=>{ clearTimers();clearInterval(elTimer);playing=false;decided=false;events=[];checks=null;hasDiff=false;
+  renderStrip({});setNow('var(--muted)','Ready to run');setStatus('var(--muted)','Idle','No events yet — press Play run');$('#sEl').textContent='';gate(null);paintEv();
+  playBtn.innerHTML=svg('<path d="M8 5v14l11-7z"/>',0).replace('fill="none"','fill="currentColor"')+' <span id="playLbl">Play run</span>';
+};
+
+/* ── gate card ── */
+const GATES={
+  fail:['fail','Test failure · attempt 1','Second approval unexpectedly succeeded','The duplicate‑approval check passed when it should have been rejected. Inspect it, then run the Fix → Test branch.',[['Watch fix &amp; retest','ember','fix'],['See failing check','outline','checks']]],
+  needs:['needs','Needs your decision','Approve the sample merge','3 checks passed · 2 files changed. Review the evidence, then merge or ask for changes.',[['Approve &amp; merge','ember','merge'],['View changes','outline','changes']]],
+  good:['good','Run complete','Merged into main','3 checks passed · 2 files changed · merged. The dependent audit task is now unblocked.',[['See report','outline','activity']]],
+};
+function gate(kind){
+  const g=$('#gate');
+  if(!kind){g.className='gate';g.innerHTML='';return;}
+  const [cls,k,title,body,acts]=GATES[kind];
+  g.className='gate show '+cls;
+  g.innerHTML=`<div class="gk">${k}</div><h4>${title}</h4><p>${body}</p><div class="acts">${
+    acts.map(([l,st,a])=>`<button class="btn ${st}" data-act="${a}">${l}</button>`).join('')}</div>`;
+  $$('#gate [data-act]').forEach(b=>b.onclick=()=>{
+    const a=b.dataset.act;
+    if(a==='fix'){runFixBranch();}
+    else if(a==='merge'){decided=true;clearTimers();renderStrip({dev:'done',review:'done',test:'done',fix:'done',doc:'done',merge:'done',__fix:strip.classList.contains('has-fix')});setNow('var(--good)','Merged');setStatus('var(--good)','Done','Developer approved · merged into main');addEvt('✓ Developer approved — merged into main');gate('good');playing=false;paintEv();tickEl();}
+    else {evTab=a;paintEv();}
+  });
+}
+
+/* ── evidence ── */
+$$('.etabs button').forEach(b=>b.onclick=()=>{evTab=b.dataset.ev;paintEv();});
+function paintEv(){
+  $$('.etabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.ev===evTab)));
+  const body=$('#evBody'); let html='';
+  if(evTab==='activity'){
+    $('#evTally').textContent=events.length+' events';
+    html = events.length? `<div class="estream">${events.map(e=>`<div class="el"><time>${e.at}</time><span>${e.t}</span></div>`).join('')}</div>`
+      : `<div class="empty">Run activity appears here once you press Play run.</div>`;
+  } else if(evTab==='checks'){
+    const names=['First approval succeeds','Second approval is rejected','Approved status is stored'];
+    $('#evTally').textContent = checks==='pass'?'3 passing':checks==='fail'?'1 failing':'pending';
+    if(checks){
+      html=`<div class="estream">${names.map((n,i)=>{const f=checks==='fail'&&i===1;return `<div class="el"><span class="ck" style="color:${f?'var(--bad)':'var(--good)'}">${svg(f?I.x:I.check,2.4)}</span><span>${n}</span></div>`;}).join('')}</div>`;
+    } else html=`<div class="empty">Checks show results after the test commands finish.</div>`;
+  } else {
+    $('#evTally').textContent=hasDiff?'2 files':'pending';
+    if(hasDiff){
+      html=`<div class="estream">
+        <div class="el"><span class="ck mono" style="color:var(--warn)">M</span><span class="mono" style="font-size:12px">LeaveApprovalService.cs</span></div>
+        <div class="el"><span class="ck mono" style="color:var(--good)">+</span><span class="mono" style="font-size:12px">LeaveApprovalTests.cs</span></div>
+      </div><div class="diff">Approval guard\n<span class="add">+ if (request.Status != LeaveStatus.Pending)</span>\n<span class="add">+     return ApprovalResult.AlreadyProcessed;</span></div>`;
+    } else html=`<div class="empty">Changed files appear once the Developer starts.</div>`;
+  }
+  body.innerHTML=html;
+}
+paintEv();
+
+/* ── tasks ── */
+const TASKS=[
+  {k:'HRMS‑014',t:'Prevent double approval',m:'Active in this run',cls:'',sel:true},
+  {k:'HRMS‑015',t:'Add the audit log entry',m:'Blocked · waiting on HRMS‑014 to merge',cls:'blocked'},
+  {k:'HRMS‑012',t:'Leave balance accrual job',m:'Queued',cls:''},
+  {k:'HRMS‑009',t:'Approver notification email',m:'Queued',cls:''},
+];
+$('#taskList').innerHTML=TASKS.map(t=>`<div class="task ${t.sel?'sel':''}">
+  <span class="tk">${t.k}</span>
+  <div class="ti"><div class="tt">${t.t}</div><div class="tm ${t.cls}">${t.m}</div></div>
+</div>`).join('');
+$$('#taskList .task').forEach(el=>el.onclick=()=>{$$('#taskList .task').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');});
+
+/* ── design-system fillers ── */
+$('#logoGrid').innerHTML=[
+  ['Ember mark','Primary','The “A” struck like hot metal; crossbar glows. Works at favicon size.',markTile(40)],
+  ['Pipeline triad','Alt','Three agents (plan · build · verify) wired into an A — the workflow as the mark.',
+    `<svg width="40" height="40" viewBox="0 0 32 32"><rect width="32" height="32" rx="8.5" fill="#15181c"/><g stroke="#f97316" stroke-width="2" fill="#f97316"><path d="M16 8 8 23M16 8l8 15M10.5 20h11" fill="none" stroke-linecap="round"/><circle cx="16" cy="8" r="2.6"/><circle cx="8" cy="23" r="2.6"/><circle cx="24" cy="23" r="2.6"/></g></svg>`],
+  ['Forge spark','Alt','A single struck spark — most abstract, reads as pure energy / “running”.',
+    `<svg width="40" height="40" viewBox="0 0 32 32"><rect width="32" height="32" rx="8.5" fill="#15181c"/><path d="M17.5 6 10 17h4.5L13 26l9-12h-4.8z" fill="#f97316" stroke="#fdba74" stroke-width=".6" stroke-linejoin="round"/></svg>`]
+].map(([t,tag,cap,mk])=>`<div class="logobox">
+  <div class="big">${mk}<span class="name">AgentForge</span></div>
+  <div class="cap"><b>${t}</b> · ${tag}<br>${cap}</div>
+  <div class="marks">${markTileSmall(mk)}</div>
+</div>`).join('');
+function markTileSmall(mk){
+  return `<span style="opacity:.9">${mk.replace(/width="40" height="40"/,'width="22" height="22"')}</span>
+          <span style="opacity:.9">${mk.replace(/width="40" height="40"/,'width="16" height="16"')}</span>
+          <span class="mono" style="font-size:11px;color:var(--muted);margin-left:auto">favicon · sidebar · avatar</span>`;
+}
+
+const brandSw=[
+  ['Ember','#F97316','active work · brand'],['Ember 600','#EA580C','hover'],
+  ['Ink / primary','#15181C','buttons · text'],['Graphite bg','#0D0F12','app (dark)'],
+  ['Surface','#15181D','cards (dark)'],['Border','#FFFFFF / 14%','hairlines'],
+];
+const statSw=[
+  ['Active','#F97316','in the forge'],['Pass','#22C55E','checks · done'],
+  ['Fail','#EF4444','failed check'],['Needs you','#F0A830','paused · decision'],
+  ['Idle','#8B929B','draft · queued'],
+];
+const swHTML=(arr)=>arr.map(([n,hex,use])=>`<div class="sw"><div class="cap" style="background:${hex.includes('/')?'repeating-linear-gradient(45deg,#8886,#8886 6px,transparent 6px,transparent 12px)':hex}"></div><div class="lab"><b>${n}</b><span class="hex">${hex}</span><div class="muted" style="font-size:11px;margin-top:2px">${use}</div></div></div>`).join('');
+$('#swBrand').innerHTML=swHTML(brandSw);
+$('#swStatus').innerHTML=swHTML(statSw);
+</script>
+</body>
+</html>
