@@ -49,6 +49,7 @@ export function RoutingBadge({
       {lite && <Zap className="size-3" />}
       {lite ? 'Lite' : 'Full'}
       {rule.model ? ` · ${rule.model}` : ''}
+      {rule.effort ? ` · ${rule.effort} effort` : ''}
     </span>
   );
 }

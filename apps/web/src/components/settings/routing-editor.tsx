@@ -2,7 +2,10 @@
 
 import {
   COMPLEXITIES,
+  EFFORT_LABELS,
+  EFFORTS,
   type Complexity,
+  type Effort,
   type PipelineProfile,
   type Routing,
 } from '@agentforge/shared';
@@ -83,13 +86,32 @@ export function RoutingEditor({
                   }
                   className="h-8 w-44 font-mono text-xs"
                 />
+                <Select
+                  value={rule.effort ?? '__default'}
+                  onValueChange={(v) =>
+                    setProfile(c, { effort: v === '__default' ? null : (v as Effort) })
+                  }
+                >
+                  <SelectTrigger size="sm" className="w-36" aria-label={`${c} effort`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default">Default effort</SelectItem>
+                    {EFFORTS.map((e) => (
+                      <SelectItem key={e} value={e}>
+                        {EFFORT_LABELS[e]} effort
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             );
           })}
           <p className="text-muted-foreground px-3 py-2 text-xs">
             Lite skips Review, Test and Document. The model is applied only when the role’s engine
             offers it (e.g. “haiku”/“opus” for Claude, “gpt-5-codex” for Codex); otherwise the
-            engine’s own default is used.
+            engine’s own default is used. Effort applies to engines that support it (Claude Code,
+            Codex) and is used when the task and project set none.
           </p>
         </div>
       )}
