@@ -58,6 +58,7 @@ export function RepoPicker({
             {repos.data?.map((r) => (
               <li key={r.fullName}>
                 <button
+                  type="button"
                   role="option"
                   aria-selected={value === r.fullName}
                   onClick={() => onChange(r)}
