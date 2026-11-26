@@ -1,4 +1,4 @@
-import type { AgentEvent, UsageWindow } from '@agentforge/shared';
+import type { AgentEvent, UsageWindow } from '@ai-harness/shared';
 import { readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -366,7 +366,7 @@ export class CodexAdapter extends CliAdapter {
       return {
         status: 'ACTIVE',
         accountLabel: 'API key',
-        detail: 'Using the OpenAI API key stored in AgentForge',
+        detail: 'Using the OpenAI API key stored in AI Harness',
       };
     const r = await this.exec(await this.requireBinary(), ['login', 'status']);
     const text = `${r.stdout}\n${r.stderr}`.trim();

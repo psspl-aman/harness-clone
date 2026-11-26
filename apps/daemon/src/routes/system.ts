@@ -1,13 +1,14 @@
-import type { SystemInfo } from '@agentforge/shared';
+import type { SystemInfo } from '@ai-harness/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context';
+import { PRODUCT_SLUG } from '../lib/product';
 
 export function registerSystemRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.get('/api/health', async () => ({ ok: true, epoch: ctx.bus.epoch }));
 
   app.get('/api/system', async (): Promise<SystemInfo> => {
     return {
-      name: 'agentforge',
+      name: PRODUCT_SLUG,
       version: ctx.config.version,
       nodeVersion: process.version,
       platform: `${process.platform}-${process.arch}`,

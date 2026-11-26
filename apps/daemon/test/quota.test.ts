@@ -1,4 +1,4 @@
-import type { PlannerTask } from '@agentforge/shared';
+import type { PlannerTask } from '@ai-harness/shared';
 import { rmSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

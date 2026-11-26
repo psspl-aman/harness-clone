@@ -1,6 +1,6 @@
 'use client';
 
-import type { McpServerDto, McpServerInput, McpTransport } from '@agentforge/shared';
+import type { McpServerDto, McpServerInput, McpTransport } from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -155,7 +155,7 @@ export function McpServerDialog({
         <DialogHeader>
           <DialogTitle>{server ? `Edit ${server.name}` : 'Add MCP server'}</DialogTitle>
           <DialogDescription>
-            AgentForge connects to MCP servers to reach your issue tracker. Secrets are encrypted on
+            AI Harness connects to MCP servers to reach your issue tracker. Secrets are encrypted on
             this machine.
           </DialogDescription>
         </DialogHeader>

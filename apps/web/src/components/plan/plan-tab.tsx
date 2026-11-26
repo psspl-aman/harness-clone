@@ -1,6 +1,6 @@
 'use client';
 
-import { planRemaining, spentNow, type PlanDto, type TaskDto } from '@agentforge/shared';
+import { planRemaining, spentNow, type PlanDto, type TaskDto } from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,

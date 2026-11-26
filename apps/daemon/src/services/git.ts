@@ -22,7 +22,7 @@ function samePath(a: string, b: string): boolean {
   return canon(a) === canon(b);
 }
 
-/** Patterns AgentForge always keeps out of git. */
+/** Patterns AI Harness always keeps out of git. */
 export const SECRET_IGNORE_PATTERNS = [
   '.env',
   '.env.*',
@@ -54,7 +54,7 @@ export function isSecretFile(path: string): boolean {
   return SECRET_FILE_RE.test(path) && !ENV_TEMPLATE_RE.test(path);
 }
 
-const FALLBACK_IDENTITY = ['user.name=AgentForge', 'user.email=agentforge@localhost'];
+const FALLBACK_IDENTITY = ['user.name=AI Harness', 'user.email=ai-harness@localhost'];
 
 export function git(dir: string, config: string[] = []): SimpleGit {
   return simpleGit({ baseDir: dir, config, timeout: { block: 120_000 } });
@@ -71,7 +71,7 @@ export async function isRepoRoot(dir: string): Promise<boolean> {
   }
 }
 
-/** Use the user's git identity when configured; otherwise a neutral fallback for AgentForge's own commits. */
+/** Use the user's git identity when configured; otherwise a neutral fallback for AI Harness's own commits. */
 export async function identityConfig(dir: string): Promise<string[]> {
   try {
     const email = await git(dir).raw(['config', '--get', 'user.email']);
@@ -93,7 +93,7 @@ export async function ensureSafeGitignore(dir: string): Promise<string[]> {
   ];
   const missing = wanted.filter((l) => !have.has(l) && !have.has(l.replace(/\/$/, '')));
   if (missing.length === 0) return [];
-  const block = `${current && !current.endsWith('\n') ? '\n' : ''}\n# Added by AgentForge — keep secrets and build output out of git\n${missing.join('\n')}\n`;
+  const block = `${current && !current.endsWith('\n') ? '\n' : ''}\n# Added by AI Harness — keep secrets and build output out of git\n${missing.join('\n')}\n`;
   if (current) await appendFile(path, block);
   else await writeFile(path, block.trimStart());
   return missing;
@@ -121,8 +121,8 @@ export async function initRepo(
   const staged = (await g.diff(['--cached', '--name-only'])).split('\n').filter(Boolean);
   await g.commit(
     opts.commitExisting
-      ? 'chore: initial commit (AgentForge)'
-      : 'chore: initialize project (AgentForge)',
+      ? 'chore: initial commit (AI Harness)'
+      : 'chore: initialize project (AI Harness)',
     undefined,
     {
       '--allow-empty': null,

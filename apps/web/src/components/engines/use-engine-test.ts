@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentEvent, AgentRunResultDto } from '@agentforge/shared';
+import type { AgentEvent, AgentRunResultDto } from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useLiveEvent, useLiveTopic } from '@/components/live-provider';

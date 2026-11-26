@@ -1,4 +1,4 @@
-import { ApprovePlanInputSchema } from '@agentforge/shared';
+import { ApprovePlanInputSchema } from '@ai-harness/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context';

@@ -1,6 +1,6 @@
 'use client';
 
-import type { StagedAttachmentDto } from '@agentforge/shared';
+import type { StagedAttachmentDto } from '@ai-harness/shared';
 import { useMutation } from '@tanstack/react-query';
 import { FileText, Loader2, Paperclip, X } from 'lucide-react';
 import { useRef, useState } from 'react';

@@ -1,4 +1,4 @@
-import { ApiKeyInputSchema, TestRunInputSchema } from '@agentforge/shared';
+import { ApiKeyInputSchema, TestRunInputSchema } from '@ai-harness/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context';

@@ -2,7 +2,7 @@
 
 import { useLiveEvent, useLiveTopic } from '@/components/live-provider';
 import { VirtualLog, type LogLine } from '@/components/virtual-log';
-import type { AgentEvent, RunSummaryDto, TaskDto, TaskStatus } from '@agentforge/shared';
+import type { AgentEvent, RunSummaryDto, TaskDto, TaskStatus } from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,

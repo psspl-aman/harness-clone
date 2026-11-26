@@ -14,7 +14,7 @@ export default function IntegrationsPage() {
     <div className="portal-content mx-auto max-w-3xl py-8">
       <PageHeader
         title="Integrations"
-        description="Connections AgentForge uses on your behalf. Credentials are encrypted and stay on this machine."
+        description="Connections AI Harness uses on your behalf. Credentials are encrypted and stay on this machine."
       />
       <div className="space-y-6">
         <Card className="shadow-xs">

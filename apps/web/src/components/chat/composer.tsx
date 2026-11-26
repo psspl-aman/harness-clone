@@ -1,6 +1,6 @@
 'use client';
 
-import type { AttachmentDto, RequirementIntent, SheetKind } from '@agentforge/shared';
+import type { AttachmentDto, RequirementIntent, SheetKind } from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   ArrowUp,

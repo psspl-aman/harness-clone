@@ -351,7 +351,7 @@ describe('archive and restore', () => {
     await inject('POST', `/api/projects/${id}/archive`);
     const again = await post({ mode: 'existing', location: { kind: 'local', path: dir } });
     expect(again.statusCode).toBe(409);
-    expect(again.json().error.message).toMatch(/archived AgentForge project — restore it/);
+    expect(again.json().error.message).toMatch(/archived AI Harness project — restore it/);
 
     // Delete-forever still works for archived projects; the folder stays.
     const other = join(root, 'blog');

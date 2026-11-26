@@ -6,7 +6,7 @@ import {
   type TaskDto,
   type TaskReportDto,
   type TestResultDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { and, desc, eq } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ import type { Db } from '../db/client';
 import { errors, projects } from '../db/schema';
 import type { EngineRegistry } from '../engines/registry';
 import type { EventBus } from '../events/bus';
-import { excludeAgentforgeDir } from '../lib/agentforge-dir';
+import { excludeProjectDataDir, projectDataDir, projectDataDirName } from '../lib/project-data-dir';
 import type { SettingsService } from './settings';
 import type { TaskService } from './tasks';
 
@@ -27,11 +27,10 @@ export interface HandoffSource {
   report(taskId: string): TaskReportDto | null;
 }
 
-const DIR = '.agentforge';
 const PROJECT_FILE = 'PROJECT.md';
 const TASKS_DIR = 'tasks';
 const HEADER =
-  '> Maintained by AgentForge for every agent working on this project — regenerated automatically, so edits here are overwritten. Not committed to git.';
+  '> Maintained by AI Harness for every agent working on this project — regenerated automatically, so edits here are overwritten. Not committed to git.';
 
 const clip = (s: string, n: number) => {
   const t = s.trim();
@@ -55,12 +54,12 @@ const firstLine = (md: string) =>
  * Keeps markdown "handoff" files in the project so any agent — on any engine —
  * can pick up where another left off:
  *
- * - `.agentforge/PROJECT.md`: overview, plan and every task's status.
- * - `.agentforge/tasks/<KEY>.md`: one task's spec, status history, what each
+ * - `.ai-harness/PROJECT.md`: overview, plan and every task's status.
+ * - `.ai-harness/tasks/<KEY>.md`: one task's spec, status history, what each
  *   agent run did, the latest review and test results.
  *
  * Files are refreshed (debounced) as tasks change and copied into a task's
- * worktree right before each agent run. `.agentforge/` is excluded from git.
+ * worktree right before each agent run. `.ai-harness/` is excluded from git.
  */
 export class HandoffService {
   private source: HandoffSource | null = null;
@@ -149,7 +148,7 @@ export class HandoffService {
     try {
       const p = this.d.db.select().from(projects).where(eq(projects.id, projectId)).get();
       if (!p || !existsSync(p.localPath)) return;
-      const root = join(p.localPath, DIR);
+      const root = projectDataDir(p.localPath);
       if (!this.enabled) {
         rmSync(join(root, PROJECT_FILE), { force: true });
         rmSync(join(root, TASKS_DIR), { recursive: true, force: true });
@@ -158,7 +157,7 @@ export class HandoffService {
       this.seen.add(projectId);
       const board = this.d.tasks.board(projectId);
       mkdirSync(join(root, TASKS_DIR), { recursive: true });
-      excludeAgentforgeDir(p.localPath);
+      excludeProjectDataDir(p.localPath);
       writeFileSync(join(root, PROJECT_FILE), this.renderProject(projectId, board));
       const keep = new Set(board.tasks.map((t) => `${t.key}.md`));
       for (const t of board.tasks)
@@ -185,11 +184,12 @@ export class HandoffService {
     if (p && this.enabled) {
       this.flush(p.id, new Set([taskId]));
       if (cwd !== p.localPath) this.copyInto(p.localPath, cwd, task.key);
+      const dir = projectDataDirName(p.localPath);
       sections.push(`## Handoff notes
-AgentForge keeps shared notes for every agent on this project (out of git; regenerated, so don't edit them):
-- \`${DIR}/${TASKS_DIR}/${task.key}.md\` — this task: spec, status history, what each earlier agent did, review comments and test results.
-- \`${DIR}/${PROJECT_FILE}\` — the project overview, plan and every task's status.
-- \`${DIR}/memory.md\` — decisions, conventions and pitfalls.
+AI Harness keeps shared notes for every agent on this project (out of git; regenerated, so don't edit them):
+- \`${dir}/${TASKS_DIR}/${task.key}.md\` — this task: spec, status history, what each earlier agent did, review comments and test results.
+- \`${dir}/${PROJECT_FILE}\` — the project overview, plan and every task's status.
+- \`${dir}/memory.md\` — decisions, conventions and pitfalls.
 Read the task file first when earlier agents have already worked on this task.`);
     }
     const takeover = this.takeover(taskId, role, engineId);
@@ -410,8 +410,9 @@ Read the task file first when earlier agents have already worked on this task.`)
   private copyInto(projectRoot: string, cwd: string, key: string) {
     if (!existsSync(cwd)) return;
     try {
-      const from = join(projectRoot, DIR);
-      const to = join(cwd, DIR);
+      const dir = projectDataDirName(projectRoot);
+      const from = join(projectRoot, dir);
+      const to = join(cwd, dir);
       mkdirSync(join(to, TASKS_DIR), { recursive: true });
       for (const f of [PROJECT_FILE, 'memory.md', join(TASKS_DIR, `${key}.md`)])
         if (existsSync(join(from, f))) writeFileSync(join(to, f), readFileSync(join(from, f)));

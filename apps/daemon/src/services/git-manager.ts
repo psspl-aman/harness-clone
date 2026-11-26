@@ -18,7 +18,7 @@ import {
   type GitTaskRefDto,
   type GitWorkGroupDto,
   type TaskStatus,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { eq } from 'drizzle-orm';
 import { execa } from 'execa';
 import { existsSync } from 'node:fs';
@@ -588,7 +588,7 @@ export class GitManager {
       head: input.branch,
       base: baseBranch,
       title: input.title ?? (task ? `${task.key}: ${task.title}` : titleFromBranch(input.branch)),
-      body: input.body ?? (task ? task.description : `Opened from AgentForge.`),
+      body: input.body ?? (task ? task.description : `Opened from AI Harness.`),
     });
     if (task && !task.pullRequestUrl)
       this.d.db.update(tasks).set({ pullRequestUrl: pr.url }).where(eq(tasks.id, task.id)).run();

@@ -1,6 +1,6 @@
 'use client';
 
-import { statusProgress, type TaskDto } from '@agentforge/shared';
+import { statusProgress, type TaskDto } from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ExternalLink, Loader2, Pause, Play } from 'lucide-react';
 import { useState } from 'react';

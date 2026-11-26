@@ -1,4 +1,4 @@
-import type { DocDto, DocKind, DocSummaryDto } from '@agentforge/shared';
+import type { DocDto, DocKind, DocSummaryDto } from '@ai-harness/shared';
 import { and, desc, eq } from 'drizzle-orm';
 import { execa } from 'execa';
 import { stat } from 'node:fs/promises';
@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { Db } from '../db/client';
 import { documents, projects, tasks } from '../db/schema';
 import { badRequest, notFound } from '../http/errors';
+import { isProjectDataPath } from '../lib/project-data-dir';
 import type { FileService } from './files';
 
 const FILE_PREFIX = 'file:';
@@ -75,7 +76,7 @@ export class DocsService {
       .filter(
         (p) =>
           p &&
-          !p.startsWith('.agentforge/') &&
+          !isProjectDataPath(p) &&
           !/(^|\/)(node_modules|vendor|dist|build)\//.test(p) &&
           p.split('/').length <= 4,
       )
@@ -150,7 +151,7 @@ export class DocsService {
     const reports = list.filter((d) => d.kind === 'task_report').reverse();
     const parts: string[] = [
       `# ${p.name} — documentation`,
-      `_Exported from AgentForge on ${new Date().toISOString().slice(0, 10)}._`,
+      `_Exported from AI Harness on ${new Date().toISOString().slice(0, 10)}._`,
       `## Contents\n\n${[...files.map((d) => `- ${d.path}`), ...reports.map((d) => `- ${d.title}`)].join('\n')}`,
     ];
     for (const d of [...files, ...reports]) {

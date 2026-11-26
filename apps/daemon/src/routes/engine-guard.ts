@@ -1,4 +1,4 @@
-import { ROLE_LABELS, type AgentRole } from '@agentforge/shared';
+import { ROLE_LABELS, type AgentRole } from '@ai-harness/shared';
 import type { AppContext } from '../context';
 import { badRequest } from '../http/errors';
 

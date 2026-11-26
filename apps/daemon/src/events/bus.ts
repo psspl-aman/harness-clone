@@ -5,7 +5,7 @@ import {
   type AppEvent,
   type EventPayload,
   type EventType,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { newId } from '../lib/id';
 
 export type EventListener = (event: AnyAppEvent) => void;

@@ -1,4 +1,4 @@
-import type { MemoryEntryDto } from '@agentforge/shared';
+import type { MemoryEntryDto } from '@ai-harness/shared';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -149,14 +149,14 @@ describe('memory', () => {
     expect(tight).toEqual(['Functional components (your preference)']);
   });
 
-  it('mirrors project memory to .agentforge/memory.md, kept out of git', async () => {
+  it('mirrors project memory to .ai-harness/memory.md, kept out of git', async () => {
     await add({
       kind: 'decision',
       title: 'Payments via Stripe',
       content: 'Stripe Checkout only.',
       pinned: true,
     });
-    const file = join(repo, '.agentforge', 'memory.md');
+    const file = join(repo, '.ai-harness', 'memory.md');
     await until(
       () => existsSync(file) && readFileSync(file, 'utf8').includes('Payments via Stripe'),
     );
@@ -164,7 +164,7 @@ describe('memory', () => {
     expect(md).toContain('# Project memory — Shop');
     expect(md).toContain('## Decision');
     expect(md).toContain('### 📌 Payments via Stripe');
-    expect(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8')).toContain('.agentforge/');
+    expect(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8')).toContain('.ai-harness/');
 
     await t.app.inject({
       method: 'PATCH',

@@ -101,7 +101,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
   const workspaceRoot = () => settings.get().workspaceRoot ?? join(config.home, 'workspaces');
   const github = new GithubService(dbHandle.db, secrets, bus, opts.github);
   const fs = new FsService({
-    agentforgeHome: config.home,
+    aiHarnessHome: config.home,
     workspaceRoot,
     projectAtPath: (p) =>
       dbHandle.db
@@ -193,7 +193,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     log: app.log,
     autoStart: opts.orchestrator?.autoStart ?? process.env.NODE_ENV !== 'test',
   });
-  // Markdown handoff notes (.agentforge/PROJECT.md, tasks/<KEY>.md) so any agent can pick up a task.
+  // Markdown handoff notes (.ai-harness/PROJECT.md, tasks/<KEY>.md) so any agent can pick up a task.
   const handoff = new HandoffService({
     db: dbHandle.db,
     bus,

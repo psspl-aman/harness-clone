@@ -1,6 +1,6 @@
 'use client';
 
-import { resolveRouting, routingRuleFor, type Complexity } from '@agentforge/shared';
+import { resolveRouting, routingRuleFor, type Complexity } from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Zap } from 'lucide-react';
 import { api, qk } from '@/lib/api';

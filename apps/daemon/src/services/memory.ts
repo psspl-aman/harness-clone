@@ -7,7 +7,7 @@ import {
   type MemoryEntryDto,
   type MemoryKind,
   type MemoryScope,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
@@ -15,7 +15,7 @@ import type { Db } from '../db/client';
 import { memoryEntries, projects, tasks } from '../db/schema';
 import type { EventBus } from '../events/bus';
 import { notFound } from '../http/errors';
-import { excludeAgentforgeDir } from '../lib/agentforge-dir';
+import { excludeProjectDataDir, projectDataDir } from '../lib/project-data-dir';
 import { newId } from '../lib/id';
 import type { SettingsService } from './settings';
 
@@ -49,7 +49,7 @@ export interface PromptMemory {
 /**
  * Project, task and global memory: CRUD and search, relevance-ranked
  * selection for agent prompts (within a character budget), and a readable
- * mirror at `.agentforge/memory.md` in the project folder.
+ * mirror at `.ai-harness/memory.md` in the project folder.
  */
 export class MemoryService {
   private readonly pendingMirror = new Map<string, NodeJS.Timeout>();
@@ -202,11 +202,12 @@ export class MemoryService {
     return out;
   }
 
-  /** Write `.agentforge/memory.md` now (normally debounced after changes). */
+  /** Write `<project data dir>/memory.md` now (normally debounced after changes). */
   writeMirror(projectId: string): void {
     const p = this.db.select().from(projects).where(eq(projects.id, projectId)).get();
     if (!p) return;
-    const file = join(p.localPath, '.agentforge', 'memory.md');
+    const dir = projectDataDir(p.localPath);
+    const file = join(dir, 'memory.md');
     if (!this.settings.get().memory.mirrorFile) {
       rmSync(file, { force: true });
       return;
@@ -226,7 +227,7 @@ export class MemoryService {
     const taskNotes = this.toDtos(rows.filter((r) => r.scope === 'task'));
     const md = [
       `# Project memory — ${p.name}`,
-      '> Maintained by AgentForge (edit it in the app; changes to this file are overwritten). Not committed to git.',
+      '> Maintained by AI Harness (edit it in the app; changes to this file are overwritten). Not committed to git.',
       ...sections,
       taskNotes.length
         ? `## Completed tasks\n\n${taskNotes.map((t) => `- **${t.title}** — ${t.content.trim().replace(/\n+/g, ' ')}`).join('\n')}`
@@ -235,8 +236,8 @@ export class MemoryService {
       .filter(Boolean)
       .join('\n\n');
     try {
-      mkdirSync(join(p.localPath, '.agentforge'), { recursive: true });
-      excludeAgentforgeDir(p.localPath);
+      mkdirSync(dir, { recursive: true });
+      excludeProjectDataDir(p.localPath);
       writeFileSync(file, `${md}\n`);
     } catch {
       // The folder may be gone or read-only; the DB stays the source of truth.

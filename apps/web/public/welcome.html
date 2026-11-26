@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AgentForge — from idea to merged code</title>
-<meta name="description" content="AgentForge service page: a local-first agentic coding harness. Idea to merged code, with every check in front of you.">
+<title>AI Harness — from idea to merged code</title>
+<meta name="description" content="AI Harness service page: a local-first agentic coding harness. Idea to merged code, with every check in front of you.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
@@ -241,7 +241,7 @@ section[id]{scroll-margin-top:80px}
 </head>
 <body>
 <header class="hdr"><div class="shell">
-  <a class="brand" href="#top"><span class="brand-mark" id="brandMark"></span><span>AgentForge</span></a>
+  <a class="brand" href="#top"><span class="brand-mark" id="brandMark"></span><span>AI Harness</span></a>
   <nav class="navlinks"><a href="#how">How it works</a><a href="#run">Sample run</a><a href="#agents">Agents</a></nav>
   <div class="hdr-right">
     <div class="seg" role="group" aria-label="Theme"><button data-theme-set="light" aria-pressed="true" title="Light">☀</button><button data-theme-set="dark" aria-pressed="false" title="Dark">☾</button></div>
@@ -255,7 +255,7 @@ section[id]{scroll-margin-top:80px}
     <div class="hero-copy">
       <p class="overline"><span></span> The local-first SDLC harness</p>
       <h1>Your requirement,<br>from idea to <em>merged</em> code.</h1>
-      <p class="lede">AgentForge turns a plain requirement into a task, builds it in an isolated worktree, and governs every check — so you approve the merge with the evidence in front of you.</p>
+      <p class="lede">AI Harness turns a plain requirement into a task, builds it in an isolated worktree, and governs every check — so you approve the merge with the evidence in front of you.</p>
       <div class="hero-actions">
         <a class="btn ink" href="/"><span>Open portal</span> <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
         <a class="btn soft" href="#run"><svg class="icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> See a sample run</a>
@@ -271,7 +271,7 @@ section[id]{scroll-margin-top:80px}
     <div class="sec-head"><p class="overline"><span></span> Shared context</p><h2>One knowledge graph<br>behind <em>every</em> agent.</h2><p>Each agent reads the same context — your repository, requirement, tests and run history — reasons over it, and hands the next agent a change you can inspect.</p></div>
     <div class="kg">
       <div><div class="kg-col-label">Raw context</div><div class="ctx-list" id="ctxList"></div></div>
-      <div class="kg-graph"><div class="kg-cap">AGENTFORGE KNOWLEDGE GRAPH</div><div id="kgGraph"></div></div>
+      <div class="kg-graph"><div class="kg-cap">AI HARNESS KNOWLEDGE GRAPH</div><div id="kgGraph"></div></div>
       <div><div class="kg-col-label">Reasoning &amp; orchestration</div><div class="reason" id="reason"></div></div>
     </div>
     <div class="ctl-row"><button class="btn soft" id="kgReplay"><svg class="icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Replay reasoning</button></div>
@@ -316,7 +316,7 @@ section[id]{scroll-margin-top:80px}
     <a class="btn ink" href="/"><span>Open the portal</span> <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
   </section>
 
-  <footer class="foot"><b>AgentForge</b><span>Local-first development workspace · illustrative sample run</span><span class="fl"><a href="#how">How it works</a><a href="#run">Sample run</a><a href="#top">Back to top</a></span></footer>
+  <footer class="foot"><b>AI Harness</b><span>Local-first development workspace · illustrative sample run</span><span class="fl"><a href="#how">How it works</a><a href="#run">Sample run</a><a href="#top">Back to top</a></span></footer>
 </div>
 
 <script>
@@ -395,7 +395,7 @@ function buildHero(){
       `<text x="${lx.toFixed(1)}" y="${(top+10).toFixed(1)}" text-anchor="${anchor}" class="tag-s">${st.s}</text></g>`;
   });
   const pa=9,packet=`<g><g transform="translate(0 ${(-1.5*pa).toFixed(1)})">${(()=>{const f=facePaths(pa);return `<path d="${f.top}" style="fill:var(--accent2);fill-opacity:.55"/><path d="${f.left}" style="fill:var(--accent2)"/><path d="${f.right}" style="fill:var(--accent2);fill-opacity:.78"/>`;})()}</g><animateMotion dur="9s" repeatCount="indefinite" path="${packetD}"/><animate attributeName="opacity" dur="9s" repeatCount="indefinite" values="0;1;1;0" keyTimes="0;.06;.94;1"/></g>`;
-  $('#heroArt').innerHTML=`<svg viewBox="0 0 640 560" preserveAspectRatio="xMaxYMid meet" role="img" aria-label="AgentForge factory floor: a work item rides a conveyor through Requirement, Plan, Build, Review, Test (with a fix loop) and Merge">${defs}${fade}<g class="floorgrid" mask="url(#mFade)">${grid}</g><path class="belt-edge" d="${routeD}"/><path class="belt" d="${routeD}"/><path class="belt-run" d="${routeD}"/>${backlog}${packet}${fixRing}${stations}${labels}</svg>`;
+  $('#heroArt').innerHTML=`<svg viewBox="0 0 640 560" preserveAspectRatio="xMaxYMid meet" role="img" aria-label="AI Harness factory floor: a work item rides a conveyor through Requirement, Plan, Build, Review, Test (with a fix loop) and Merge">${defs}${fade}<g class="floorgrid" mask="url(#mFade)">${grid}</g><path class="belt-edge" d="${routeD}"/><path class="belt" d="${routeD}"/><path class="belt-run" d="${routeD}"/>${backlog}${packet}${fixRing}${stations}${labels}</svg>`;
 }
 buildHero();
 
@@ -424,7 +424,7 @@ function buildGraph(){const nAt=id=>NODES.find(n=>n.id===id);
     +SAT.map(s=>`<g class="sat" data-to="${s.to}" transform="translate(${s.x} ${s.y})"><circle r="2.4"/><text x="0" y="${s.lo}" text-anchor="middle">${s.l}</text></g>`).join('');
   const edges=EDGES.map(([a,b])=>{const p=nAt(a),q=nAt(b);return `<path class="kedge" data-edge="${a}-${b}" pathLength="1" d="M${p.x} ${p.y} L${q.x} ${q.y}"/>`;}).join('')+'<g id="kgSignals"></g>';
   const nodes=NODES.map(n=>`<g class="knode" data-node="${n.id}" transform="translate(${n.x} ${n.y})"><circle class="halo" r="${n.hub?15:11}"/><circle class="ring" r="7"/><circle class="core" r="${n.hub?6:4.5}"/><text x="0" y="${n.lo}" text-anchor="middle">${n.label}</text></g>`).join('');
-  $('#kgGraph').innerHTML=`<svg viewBox="0 0 460 380" role="img" aria-label="AgentForge knowledge graph: Plan, Build, Review, Test, Fix and Merge on a shared context sphere">${glow}<g id="kgSphere">${dots}</g>${sats}<g>${edges}</g><g>${nodes}</g></svg>`;
+  $('#kgGraph').innerHTML=`<svg viewBox="0 0 460 380" role="img" aria-label="AI Harness knowledge graph: Plan, Build, Review, Test, Fix and Merge on a shared context sphere">${glow}<g id="kgSphere">${dots}</g>${sats}<g>${edges}</g><g>${nodes}</g></svg>`;
   // evenly spread points on a unit sphere (Fibonacci), tilted and slowly rotated
   const pts=[],ga=Math.PI*(3-Math.sqrt(5));
   for(let i=0;i<N;i++){const y=1-(i/(N-1))*2,r=Math.sqrt(1-y*y),th=ga*i;pts.push([Math.cos(th)*r,y,Math.sin(th)*r]);}

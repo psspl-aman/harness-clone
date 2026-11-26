@@ -7,7 +7,7 @@ import {
   ROLE_LABELS,
   type AppSettings,
   type DeepPartial,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RotateCcw, Save } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -215,7 +215,7 @@ export default function SettingsPage() {
             <SwitchField
               id="checkTestsFailWithoutChange"
               label="Check that tests fail without the change"
-              hint="For features and bug fixes, AgentForge runs the tests again with the task's code changes reverted. If they still pass, they don't test the change and go back to be improved. Needs a Test command; uses no AI tokens."
+              hint="For features and bug fixes, AI Harness runs the tests again with the task's code changes reverted. If they still pass, they don't test the change and go back to be improved. Needs a Test command; uses no AI tokens."
               checked={draft.pipeline.checkTestsFailWithoutChange}
               onChange={(v) => set('pipeline', { checkTestsFailWithoutChange: v })}
             />
@@ -332,7 +332,7 @@ export default function SettingsPage() {
             />
             <SwitchField
               id="mirrorFile"
-              label="Mirror memory to .agentforge/memory.md"
+              label="Mirror memory to .ai-harness/memory.md"
               hint="A readable copy in each project folder, kept out of git."
               checked={draft.memory.mirrorFile}
               onChange={(v) => set('memory', { mirrorFile: v })}
@@ -340,7 +340,7 @@ export default function SettingsPage() {
             <SwitchField
               id="handoffFiles"
               label="Keep handoff notes for agents"
-              hint="Writes .agentforge/PROJECT.md and tasks/<KEY>.md (out of git): project status, each task's history, reviews and tests — so any agent, on any engine, can pick up where another left off."
+              hint="Writes .ai-harness/PROJECT.md and tasks/<KEY>.md (out of git): project status, each task's history, reviews and tests — so any agent, on any engine, can pick up where another left off."
               checked={draft.memory.handoffFiles}
               onChange={(v) => set('memory', { handoffFiles: v })}
             />
@@ -379,7 +379,7 @@ export default function SettingsPage() {
           </Section>
 
           {system.data && (
-            <Section title="System" description="The local AgentForge daemon.">
+            <Section title="System" description="The local AI Harness daemon.">
               {[
                 ['Version', system.data.version],
                 ['Data directory', system.data.homeDir],

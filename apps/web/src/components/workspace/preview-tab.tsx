@@ -53,7 +53,7 @@ export function PreviewTab({ projectId, onStart }: { projectId: string; onStart:
         <p className="text-muted-foreground max-w-sm text-sm">
           {live
             ? 'The app is running but hasn’t printed a local URL. Enter it below.'
-            : 'Run the project — AgentForge picks up the local URL your dev server prints.'}
+            : 'Run the project — AI Harness picks up the local URL your dev server prints.'}
         </p>
         <div className="flex gap-2">
           {!live && (

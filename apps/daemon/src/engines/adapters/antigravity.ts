@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@agentforge/shared';
+import type { AgentEvent } from '@ai-harness/shared';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { classifyEngineError } from '../errors';

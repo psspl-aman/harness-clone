@@ -1,10 +1,11 @@
-import type { GithubOwner, GithubRepo, GithubStatus } from '@agentforge/shared';
+import type { GithubOwner, GithubRepo, GithubStatus } from '@ai-harness/shared';
 import { Octokit } from '@octokit/rest';
 import { execa } from 'execa';
 import type { Db } from '../db/client';
 import { kvDelete, kvGet, kvSet } from '../db/kv';
 import type { EventBus } from '../events/bus';
 import { AppError, badRequest } from '../http/errors';
+import { PRODUCT_SLUG } from '../lib/product';
 import type { SecretStore } from './secrets';
 
 const TOKEN_SECRET = 'github.token'; // gforge:allow — secret name, not a value
@@ -88,7 +89,7 @@ export class GithubService {
     return new Octokit({
       auth: token,
       baseUrl: this.opts.baseUrl,
-      userAgent: 'agentforge',
+      userAgent: PRODUCT_SLUG,
       request: this.opts.fetch ? { fetch: this.opts.fetch } : undefined,
     });
   }

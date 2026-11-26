@@ -24,7 +24,7 @@ import {
   type ActivityItemDto,
   type PmsProvider,
   type PausedTaskDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {

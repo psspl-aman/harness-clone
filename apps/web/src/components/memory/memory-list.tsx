@@ -6,7 +6,7 @@ import {
   type MemoryEntryDto,
   type MemoryKind,
   type MemoryScope,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Brain, Loader2, Pencil, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -352,7 +352,7 @@ export function MemoryList({ projectId, budget }: { projectId: string | null; bu
           Agents get pinned entries, conventions, commands, pitfalls and the entries most relevant
           to their task
           {budget ? ` (up to ${budget.toLocaleString()} characters)` : ''}. A readable copy is kept
-          in <code className="font-mono">.agentforge/memory.md</code> (not committed).
+          in <code className="font-mono">.ai-harness/memory.md</code> (not committed).
         </p>
       )}
       {q.isPending ? (

@@ -80,10 +80,13 @@ import type {
   MemoryScope,
   SafetyApprovalDto,
   PausedTaskDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 
+// NEXT_PUBLIC_AGENTFORGE_DAEMON_URL is the pre-rename name, still honoured for existing builds.
 export const DAEMON_URL = (
-  process.env.NEXT_PUBLIC_AGENTFORGE_DAEMON_URL ?? 'http://127.0.0.1:4317'
+  process.env.NEXT_PUBLIC_AI_HARNESS_DAEMON_URL ??
+  process.env.NEXT_PUBLIC_AGENTFORGE_DAEMON_URL ??
+  'http://127.0.0.1:4317'
 ).replace(/\/$/, '');
 
 export const DAEMON_WS_URL = `${DAEMON_URL.replace(/^http/, 'ws')}/ws`;
@@ -116,7 +119,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new ApiClientError(
       0,
       'DAEMON_UNREACHABLE',
-      `Cannot reach the AgentForge daemon at ${DAEMON_URL}`,
+      `Cannot reach the AI Harness daemon at ${DAEMON_URL}`,
     );
   }
   if (res.status === 204) return undefined as T;
@@ -145,7 +148,7 @@ async function uploadFiles<T>(path: string, files: File[]): Promise<T> {
     throw new ApiClientError(
       0,
       'DAEMON_UNREACHABLE',
-      `Cannot reach the AgentForge daemon at ${DAEMON_URL}`,
+      `Cannot reach the AI Harness daemon at ${DAEMON_URL}`,
     );
   }
   const data = (await res.json()) as unknown;

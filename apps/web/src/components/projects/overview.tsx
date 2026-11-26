@@ -9,7 +9,7 @@ import {
   type RoleEngines,
   type RoleModels,
   type UpdateProjectInput,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -346,7 +346,7 @@ function AnalysisCards({ project }: { project: ProjectDetail }) {
         <Section
           title="Environment files"
           icon={<FileLock2 className="size-4" />}
-          description="Names only — AgentForge never reads their values."
+          description="Names only — AI Harness never reads their values."
         >
           {r.envFiles.length ? (
             <div className="flex flex-wrap gap-1.5">

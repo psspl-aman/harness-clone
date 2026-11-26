@@ -1,4 +1,4 @@
-import type { AnyAppEvent, ErrorDto } from '@agentforge/shared';
+import type { AnyAppEvent, ErrorDto } from '@ai-harness/shared';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -235,7 +235,7 @@ describe('several servers', () => {
         method: 'POST',
         url: `/api/projects/${projectId}/run/start`,
       });
-      expect(own.json().error.message).toMatch(/used by AgentForge itself/);
+      expect(own.json().error.message).toMatch(/used by AI Harness itself/);
     } finally {
       blocker.close();
     }
@@ -399,7 +399,7 @@ describe('error detection', () => {
     expect(task).toMatchObject({ origin: 'error', type: 'bug', priority: 'high' });
     expect(task.description).toContain('Cannot read properties of undefined');
 
-    // The fake fix doesn't touch the build script; drop it so AgentForge's own checks pass.
+    // The fake fix doesn't touch the build script; drop it so AI Harness's own checks pass.
     await setCommands({ build: null });
     agent.setResponses([
       ...BASE,

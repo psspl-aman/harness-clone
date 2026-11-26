@@ -8,5 +8,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   // Shared contracts ship as TS source; bundle them into the daemon build.
-  noExternal: ['@agentforge/shared'],
+  noExternal: ['@ai-harness/shared'],
 });

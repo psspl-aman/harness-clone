@@ -1,9 +1,10 @@
-import type { AgentEvent, UsageWindow } from '@agentforge/shared';
+import type { AgentEvent, UsageWindow } from '@ai-harness/shared';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { newestExtensionBinary } from '../binary';
 import { classifyEngineError } from '../errors';
 import { gitBashPath } from '../../lib/platform';
+import { AGENT_TOOLS_SERVER } from '../../lib/product';
 import { CliAdapter, num, truncate, type BuiltCommand, type RunState } from '../cli-adapter';
 import type { AgentRunInput, AuthStatusResult, LoginFlow } from '../types';
 
@@ -71,16 +72,16 @@ export class ClaudeCodeAdapter extends CliAdapter {
     if (input.effort) args.push('--effort', input.effort);
     if (input.resumeSessionId) args.push('--resume', input.resumeSessionId);
     if (input.systemPrompt) args.push('--append-system-prompt', input.systemPrompt);
-    // AgentForge's own MCP tools (project memory, task, errors) for this run.
+    // AI Harness's own MCP tools (project memory, task, errors) for this run.
     const mcp = input.guard?.mcp;
     if (mcp)
       args.push(
         '--mcp-config',
         JSON.stringify({
-          mcpServers: { agentforge: { type: 'http', url: mcp.url, headers: mcp.headers } },
+          mcpServers: { [AGENT_TOOLS_SERVER]: { type: 'http', url: mcp.url, headers: mcp.headers } },
         }),
       );
-    const own = mcp ? ['mcp__agentforge'] : [];
+    const own = mcp ? [`mcp__${AGENT_TOOLS_SERVER}`] : [];
     if (input.permission === 'readonly')
       args.push('--permission-mode', 'dontAsk', '--allowedTools', ...READONLY_TOOLS, ...own);
     else if (input.permission === 'edit')
@@ -102,7 +103,7 @@ export class ClaudeCodeAdapter extends CliAdapter {
         'Glob',
         ...own,
       );
-    // Every tool call first asks AgentForge's guard (PreToolUse hook, exit 2 = blocked).
+    // Every tool call first asks AI Harness's guard (PreToolUse hook, exit 2 = blocked).
     if (input.guard)
       args.push(
         '--settings',
@@ -117,7 +118,7 @@ export class ClaudeCodeAdapter extends CliAdapter {
           },
         }),
       );
-    // On Windows, Claude Code runs its PreToolUse hooks (AgentForge's safety
+    // On Windows, Claude Code runs its PreToolUse hooks (AI Harness's safety
     // guard included) and its Bash tool through Git Bash; point it at a detected
     // install so hooks don't fail with "Git Bash wasn't found" and block every
     // tool call. No-op on POSIX and when an install can't be located.
@@ -255,7 +256,7 @@ export class ClaudeCodeAdapter extends CliAdapter {
       return {
         status: 'ACTIVE',
         accountLabel: 'API key',
-        detail: 'Using the Anthropic API key stored in AgentForge',
+        detail: 'Using the Anthropic API key stored in AI Harness',
       };
     const bin = await this.requireBinary();
     const r = await this.exec(bin, ['auth', 'status', '--json']);

@@ -38,7 +38,7 @@ importers:
 
   apps/daemon:
     dependencies:
-      '@agentforge/shared':
+      '@ai-harness/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@fastify/cors':
@@ -117,7 +117,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@agentforge/shared':
+      '@ai-harness/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@dnd-kit/core':

@@ -1,4 +1,4 @@
-import type { PmsProviderPreset, TaskStatus } from '@agentforge/shared';
+import type { PmsProviderPreset, TaskStatus } from '@ai-harness/shared';
 
 const TODO_FLOW: Record<string, TaskStatus> = {
   'To Do': 'APPROVED',

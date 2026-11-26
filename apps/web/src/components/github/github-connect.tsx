@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiClientError, qk } from '@/lib/api';
 
 const TOKEN_URL =
-  'https://github.com/settings/tokens/new?scopes=repo,read:org&description=AgentForge';
+  'https://github.com/settings/tokens/new?scopes=repo,read:org&description=AI Harness';
 
 export function useGithubStatus() {
   return useQuery({ queryKey: qk.github, queryFn: api.github.status });

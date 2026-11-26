@@ -1,6 +1,6 @@
 'use client';
 
-import type { DocSummaryDto } from '@agentforge/shared';
+import type { DocSummaryDto } from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Download, FileText, Loader2, Printer, ScrollText, Search } from 'lucide-react';
 import { useState } from 'react';

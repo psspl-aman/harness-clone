@@ -7,7 +7,7 @@ import {
   type AgentEvent,
   type AuthStatus,
   type EngineInfo,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { eq } from 'drizzle-orm';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';

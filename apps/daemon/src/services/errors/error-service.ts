@@ -1,4 +1,4 @@
-import { Topics, type ErrorDto, type ErrorSource } from '@agentforge/shared';
+import { Topics, type ErrorDto, type ErrorSource } from '@ai-harness/shared';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../db/client';
 import { errors, plans, tasks } from '../../db/schema';

@@ -1,4 +1,4 @@
-import { PATH_CHECK_MODES } from '@agentforge/shared';
+import { PATH_CHECK_MODES } from '@ai-harness/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context';

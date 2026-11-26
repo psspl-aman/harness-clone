@@ -19,10 +19,11 @@ async function main() {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   await app.listen({ host: config.host, port: config.port });
-  app.log.info(`AgentForge daemon ${config.version} · data dir ${config.home}`);
+  app.log.info(`AI Harness daemon ${config.version} · data dir ${config.home}`);
+  for (const notice of config.deprecations) app.log.warn(notice);
 }
 
 main().catch((err) => {
-  console.error('[agentforge] failed to start:', err);
+  console.error('[ai-harness] failed to start:', err);
   process.exit(1);
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import type { GitBranchDto, GitOverviewDto } from '@agentforge/shared';
+import type { GitBranchDto, GitOverviewDto } from '@ai-harness/shared';
 import { GitPullRequest, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';

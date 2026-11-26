@@ -1,4 +1,4 @@
-import { builtinPrice, type UsageDelta, type UsageSummaryDto } from '@agentforge/shared';
+import { builtinPrice, type UsageDelta, type UsageSummaryDto } from '@ai-harness/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { usageRecords } from '../src/db/schema';
 import { costOf } from '../src/lib/cost';

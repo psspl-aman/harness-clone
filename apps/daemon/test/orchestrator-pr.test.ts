@@ -1,4 +1,4 @@
-import type { PlannerTask } from '@agentforge/shared';
+import type { PlannerTask } from '@ai-harness/shared';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

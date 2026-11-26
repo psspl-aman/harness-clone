@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskDto } from '@agentforge/shared';
+import type { TaskDto } from '@ai-harness/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Play, RotateCcw } from 'lucide-react';
 import { useState } from 'react';

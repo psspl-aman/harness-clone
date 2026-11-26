@@ -34,7 +34,7 @@ export function DaemonBanner() {
           >
             <ServerCrash className="size-4 shrink-0" />
             <span>
-              Can’t reach the AgentForge daemon at <code className="font-mono">{DAEMON_URL}</code>.
+              Can’t reach the AI Harness daemon at <code className="font-mono">{DAEMON_URL}</code>.
               Start it with{' '}
               <code className="bg-destructive/10 rounded px-1 font-mono">pnpm dev:daemon</code> —
               reconnecting automatically.

@@ -7,7 +7,7 @@ import {
   type TaskDto,
   type TaskStatus,
   type UpdateTaskInput,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Check,

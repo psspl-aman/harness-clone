@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentEvent, EngineInfo } from '@agentforge/shared';
+import type { AgentEvent, EngineInfo } from '@ai-harness/shared';
 import { CheckCircle2, CircleStop, Loader2, Play, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';

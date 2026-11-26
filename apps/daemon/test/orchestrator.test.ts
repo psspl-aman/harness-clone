@@ -1,4 +1,4 @@
-import type { AnyAppEvent, PlannerTask } from '@agentforge/shared';
+import type { AnyAppEvent, PlannerTask } from '@ai-harness/shared';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -95,7 +95,7 @@ const pt = (ref: string, title: string, dependsOn: string[] = []): PlannerTask =
 });
 
 async function setupApp(home?: string) {
-  t = await createTestApp(home ? { AGENTFORGE_HOME: home } : {}, {
+  t = await createTestApp(home ? { AI_HARNESS_HOME: home } : {}, {
     orchestrator: { autoStart: false },
   });
   events.length = 0;
@@ -269,7 +269,7 @@ describe('pipeline: happy path', () => {
     script(
       developer('SA-1', {
         'src/a.txt': 'a',
-        // A .gitignore without secret rules: only AgentForge's commit filter stops them.
+        // A .gitignore without secret rules: only AI Harness's commit filter stops them.
         '.gitignore': 'node_modules/\n',
         '.env': FAKE_ENV,
         '.env.example': 'TOKEN=\n',
@@ -290,7 +290,7 @@ describe('pipeline: happy path', () => {
     expect(existsSync(join(repo, '.env'))).toBe(false);
 
     const review = agent.calls().find((c) => c.stdin.includes('# Role: Reviewer\n'))!.stdin;
-    expect(review).toContain('## Files withheld from git by AgentForge\n');
+    expect(review).toContain('## Files withheld from git by AI Harness\n');
     expect(review).toMatch(/^- \.env$/m);
     expect(review).toMatch(/^- id\.pem$/m);
     expect(review).not.toMatch(/^- \.env\.example$/m);
@@ -359,11 +359,11 @@ describe('pipeline: fix loops', () => {
     ]);
     const results = t.ctx.db.select().from(testResults).where(eq(testResults.taskId, id)).all();
     expect(results.map((r) => r.passed)).toEqual([false, true]);
-    expect(results[0]!.summary).toMatch(/AgentForge's own checks failed/);
+    expect(results[0]!.summary).toMatch(/AI Harness's own checks failed/);
     expect(results[0]!.log).toContain('$ test -f src/fixed.txt && echo verified');
     expect(results[1]!.log).toContain('verified');
     expect(agent.calls().find((c) => c.stdin.includes('# Role: Fixer'))!.stdin).toContain(
-      "Output of AgentForge's own checks",
+      "Output of AI Harness's own checks",
     );
   });
 
@@ -439,7 +439,7 @@ describe('handoff notes', () => {
         'SA-1',
         { 'src/a.txt': 'a\n' },
         // The agent can read its task's notes inside the worktree.
-        { shell: 'cp .agentforge/tasks/SA-1.md seen-by-agent.md' },
+        { shell: 'cp .ai-harness/tasks/SA-1.md seen-by-agent.md' },
       ),
       reviewer(),
       tester(),
@@ -455,23 +455,23 @@ describe('handoff notes', () => {
     expect(readFileSync(join(repo, 'seen-by-agent.md'), 'utf8')).toContain('# SA-1: Feature A');
     const dev = agent.calls().find((c) => c.stdin.includes('# Role: Developer'))!;
     expect(dev.stdin).toContain('## Handoff notes');
-    expect(dev.stdin).toContain('`.agentforge/tasks/SA-1.md`');
+    expect(dev.stdin).toContain('`.ai-harness/tasks/SA-1.md`');
     expect(dev.stdin).not.toContain('You are taking over');
 
     // Never committed: neither in the merged history nor as a tracked file.
-    expect(git(repo, 'ls-files')).not.toMatch(/\.agentforge/);
+    expect(git(repo, 'ls-files')).not.toMatch(/\.ai-harness/);
 
     // Files in the project folder reflect the finished pipeline.
     await waitFor(() =>
-      readFileSync(join(repo, '.agentforge/PROJECT.md'), 'utf8').includes('| SA-1 | DONE'),
+      readFileSync(join(repo, '.ai-harness/PROJECT.md'), 'utf8').includes('| SA-1 | DONE'),
     );
-    const project = readFileSync(join(repo, '.agentforge/PROJECT.md'), 'utf8');
+    const project = readFileSync(join(repo, '.ai-harness/PROJECT.md'), 'utf8');
     expect(project).toContain('# Shop App — project handoff');
     expect(project).toContain('[notes](tasks/SA-1.md)');
     await waitFor(() =>
-      readFileSync(join(repo, '.agentforge/tasks/SA-1.md'), 'utf8').includes('## Report'),
+      readFileSync(join(repo, '.ai-harness/tasks/SA-1.md'), 'utf8').includes('## Report'),
     );
-    const notes = readFileSync(join(repo, '.agentforge/tasks/SA-1.md'), 'utf8');
+    const notes = readFileSync(join(repo, '.ai-harness/tasks/SA-1.md'), 'utf8');
     expect(notes).toContain('- **Status:** DONE');
     expect(notes).toContain('## Agent runs (oldest first)');
     expect(notes).toMatch(/· Developer · .* · succeeded/);
@@ -502,8 +502,8 @@ describe('handoff notes', () => {
       url: '/api/settings',
       payload: { memory: { handoffFiles: false } },
     });
-    await waitFor(() => !existsSync(join(repo, '.agentforge/PROJECT.md')));
-    expect(existsSync(join(repo, '.agentforge/tasks'))).toBe(false);
+    await waitFor(() => !existsSync(join(repo, '.ai-harness/PROJECT.md')));
+    expect(existsSync(join(repo, '.ai-harness/tasks'))).toBe(false);
     expect(handoff.prepareRun(a, 'developer', 'claude-code', repo)).toBe('');
   }, 30_000);
 });
@@ -1152,7 +1152,7 @@ describe('pipeline: restart recovery', () => {
     await t.app.close(); // daemon stops mid-review
     // The interrupted review continues its CLI session with a "continue" prompt.
     script(
-      reply(APPROVE, { stdinIncludes: 'an AgentForge restart' }),
+      reply(APPROVE, { stdinIncludes: 'an AI Harness restart' }),
       tester(),
       role('Reviewer (tests)', APPROVE),
       documenter(),
@@ -1163,7 +1163,7 @@ describe('pipeline: restart recovery', () => {
     await t.ctx.orchestrator.idle();
     expect(task(id).status).toBe('DONE');
     expect(t.ctx.db.select().from(documents).all()).toHaveLength(1);
-    const resumed = agent.calls().find((c) => c.stdin.includes('an AgentForge restart'))!;
+    const resumed = agent.calls().find((c) => c.stdin.includes('an AI Harness restart'))!;
     expect(resumed.args).toContain('--resume');
     expect(t.ctx.orchestrator.checkpointsOf(id)).toEqual([
       expect.objectContaining({ role: 'reviewer', sessionId: expect.any(String) }),

@@ -1,6 +1,6 @@
 'use client';
 
-import { remainingMs, spentNow, type TaskDto } from '@agentforge/shared';
+import { remainingMs, spentNow, type TaskDto } from '@ai-harness/shared';
 import { Clock } from 'lucide-react';
 import { useNow } from '@/hooks/use-now';
 import { formatDuration } from '@/lib/format';

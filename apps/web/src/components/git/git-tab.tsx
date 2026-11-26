@@ -1,6 +1,6 @@
 'use client';
 
-import type { GitBranchDto, GitChangeDto, GitOverviewDto, GitTaskRefDto } from '@agentforge/shared';
+import type { GitBranchDto, GitChangeDto, GitOverviewDto, GitTaskRefDto } from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -171,7 +171,7 @@ function NotARepo({ overview }: { overview: GitOverviewDto }) {
       <GitBranch className="text-muted-foreground size-8" />
       <h2 className="text-lg font-semibold">This folder isn’t a git repository</h2>
       <p className="text-muted-foreground text-sm">
-        Agents work on their own branches, so AgentForge needs git. Initialising commits the current
+        Agents work on their own branches, so AI Harness needs git. Initialising commits the current
         files on <span className="font-mono">main</span> — secret files like .env are left out.
       </p>
       <Button

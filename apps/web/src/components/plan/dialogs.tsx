@@ -1,6 +1,6 @@
 'use client';
 
-import type { PlanDto, TaskDto, UpdatePlanInput } from '@agentforge/shared';
+import type { PlanDto, TaskDto, UpdatePlanInput } from '@ai-harness/shared';
 import { Plus, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
