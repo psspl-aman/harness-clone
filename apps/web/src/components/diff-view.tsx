@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskDiffDto } from '@agentforge/shared';
+import type { TaskDiffDto } from '@ai-harness/shared';
 import { ChevronRight, FileMinus, FilePen, FilePlus } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';

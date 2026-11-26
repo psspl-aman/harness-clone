@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectCostDto, UsageBucket } from '@agentforge/shared';
+import type { ProjectCostDto, UsageBucket } from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Coins, Info, TrendingUp } from 'lucide-react';
 import Link from 'next/link';

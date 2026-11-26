@@ -1,4 +1,4 @@
-import type { Priority, TaskStatus, TaskType } from '@agentforge/shared';
+import type { Priority, TaskStatus, TaskType } from '@ai-harness/shared';
 import {
   Bug,
   FileText,

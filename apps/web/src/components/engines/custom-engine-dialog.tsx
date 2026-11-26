@@ -4,7 +4,7 @@ import {
   CustomEngineConfigSchema,
   type CustomEngineConfig,
   type EngineInfo,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';

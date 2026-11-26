@@ -8,7 +8,7 @@ const LABELS = {
   open: {
     text: 'Live',
     dot: 'bg-success',
-    hint: 'Connected to the AgentForge daemon — updates stream in real time.',
+    hint: 'Connected to the AI Harness daemon — updates stream in real time.',
   },
   connecting: {
     text: 'Connecting',

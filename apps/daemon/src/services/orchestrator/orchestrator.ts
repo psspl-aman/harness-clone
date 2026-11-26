@@ -28,7 +28,7 @@ import {
   type TaskStatusChangeDto,
   type TaskType,
   type TestResultDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -619,8 +619,8 @@ export class Orchestrator {
     const missed = failBefore?.kind === 'missed';
     const log = [
       ranChecks
-        ? `## AgentForge checks\n${formatChecks(checks.steps)}`
-        : '## AgentForge checks\nNo build/test commands are configured for this project — relying on the Tester’s report.',
+        ? `## AI Harness checks\n${formatChecks(checks.steps)}`
+        : '## AI Harness checks\nNo build/test commands are configured for this project — relying on the Tester’s report.',
       failBefore ? formatTestsCatchChange(failBefore) : '',
       agent.failures.length
         ? `## Failures reported by the Tester\n${agent.failures.map((f) => `- ${f}`).join('\n')}`
@@ -630,7 +630,7 @@ export class Orchestrator {
       .join('\n\n');
     const summary =
       ranChecks && !checks.ok && agent.passed
-        ? `${agent.summary}\n\nAgentForge's own checks failed: \`${checks.steps.at(-1)!.command}\` exited ${checks.steps.at(-1)!.exitCode}.`
+        ? `${agent.summary}\n\nAI Harness's own checks failed: \`${checks.steps.at(-1)!.command}\` exited ${checks.steps.at(-1)!.exitCode}.`
         : missed
           ? `${agent.summary}\n\nThe tests also pass without this task's change, so they don't test it.`
           : agent.summary;
@@ -859,7 +859,7 @@ export class Orchestrator {
       project.localPath,
       task.branchName!,
       working,
-      `Merge ${task.key}: ${task.title}\n\nBuilt by AgentForge.`,
+      `Merge ${task.key}: ${task.title}\n\nBuilt by AI Harness.`,
     );
     if (outcome.status === 'merged') {
       await gitops.removeWorktree(project.localPath, task.worktreePath!);
@@ -1328,9 +1328,9 @@ export class Orchestrator {
       this.patchState(task.id, { resumeHint: null }, false);
       if (hint.sessionId && this.d.engines.adapter(engineId).capabilities.resume) {
         resume = hint.sessionId;
-        nextPrompt = `You were interrupted (usage limit, login or an AgentForge restart) before finishing. Continue exactly where you left off and complete the task as originally instructed.${schema ? ' Finish with the JSON object described earlier.' : ''}`;
+        nextPrompt = `You were interrupted (usage limit, login or an AI Harness restart) before finishing. Continue exactly where you left off and complete the task as originally instructed.${schema ? ' Finish with the JSON object described earlier.' : ''}`;
       } else if (hint.summary) {
-        nextPrompt = `${prompt}\n\n## Progress before an interruption\nA previous attempt was interrupted (usage limit, login or an AgentForge restart). Its partial output:\n${hint.summary.slice(0, 6000)}\n\nCheck the working directory for work already done and continue from there.`;
+        nextPrompt = `${prompt}\n\n## Progress before an interruption\nA previous attempt was interrupted (usage limit, login or an AI Harness restart). Its partial output:\n${hint.summary.slice(0, 6000)}\n\nCheck the working directory for work already done and continue from there.`;
       }
     }
     let jsonAttempts = 0;

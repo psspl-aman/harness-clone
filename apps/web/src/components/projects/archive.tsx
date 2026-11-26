@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectSummary } from '@agentforge/shared';
+import type { ProjectSummary } from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Archive, ArchiveRestore, ChevronDown, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -84,7 +84,7 @@ export function ArchiveDialog({
   );
 }
 
-/** Deletes a project and all its AgentForge data for good. Files on disk are untouched. */
+/** Deletes a project and all its AI Harness data for good. Files on disk are untouched. */
 export function DeleteForeverDialog({
   project,
   open,
@@ -118,7 +118,7 @@ export function DeleteForeverDialog({
         <DialogHeader>
           <DialogTitle>Delete {project.name} permanently?</DialogTitle>
           <DialogDescription>
-            Its plans, tasks, run history and memory are deleted from AgentForge and can’t be
+            Its plans, tasks, run history and memory are deleted from AI Harness and can’t be
             restored. The folder <code className="font-mono">{project.localPath}</code> and its git
             history stay exactly as they are.
           </DialogDescription>

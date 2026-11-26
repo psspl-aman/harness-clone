@@ -1,8 +1,8 @@
-# AgentForge
+# AI Harness
 
 A local-first harness in which specialised AI coding agents (Planner, Developer, Reviewer, Tester, Fixer, Documenter) work together. They can build a new project from scratch or work on an existing one. Work comes from a requirement chat or from tickets pulled in from a PMS tool over MCP.
 
-AgentForge is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
+AI Harness is single-user and has no login of its own. Everything runs on your machine: a Node daemon holds the state in SQLite, and a Next.js web app talks to it over REST and a WebSocket.
 
 > **Status:** all 10 build phases are complete. See [docs/PHASES.md](docs/PHASES.md) for what each phase delivered and how it was verified.
 
@@ -39,10 +39,10 @@ The daemon creates its data directory on first start. It applies database migrat
      - [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (`claude`; the VS Code extension's bundled binary is found automatically)
      - OpenAI Codex CLI (`codex`)
      - Google Antigravity (`agy`) or Gemini CLI (`gemini`)
-2. **Start AgentForge.**
+2. **Start AI Harness.**
    - Run `pnpm install`, then `pnpm dev`, and open <http://localhost:4318>.
    - For an always-on setup, build once with `pnpm build` and run `pnpm start`. It serves the same ports with the production web build.
-   - `NEXT_PUBLIC_AGENTFORGE_DAEMON_URL` is baked in at build time, so set it before `pnpm build` if the daemon runs elsewhere.
+   - `NEXT_PUBLIC_AI_HARNESS_DAEMON_URL` is baked in at build time, so set it before `pnpm build` if the daemon runs elsewhere.
 3. **Sign in to your agents.**
    - Open **Agents & Accounts**. Each engine shows whether it is installed and whether its session is _Active_ or _Expired_.
    - **Log in** runs the CLI's own login in an embedded terminal. You can also save an API key, which is stored encrypted.
@@ -61,18 +61,18 @@ The daemon creates its data directory on first start. It applies database migrat
 
 **Your data.**
 
-- Everything lives in `~/.agentforge` (or `AGENTFORGE_HOME`):
-  - `agentforge.db` (SQLite)
+- Everything lives in `~/.ai-harness` (or `AI_HARNESS_HOME`):
+  - `ai-harness.db` (SQLite)
   - `secret.key`, which encrypts tokens and API keys. Keep it private, and back it up together with the database.
   - `worktrees/` for tasks in progress
   - `workspaces/` for cloned repositories
-- Projects stay in the folders you chose. Removing a project from AgentForge never deletes its files.
+- Projects stay in the folders you chose. Removing a project from AI Harness never deletes its files.
 
 **Troubleshooting.**
 
 | Symptom                                         | What to do                                                                                                                              |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| "Daemon unreachable" banner                     | Start the daemon (`pnpm dev:daemon`) and check that port 4317 is free (`AGENTFORGE_PORT`).                                              |
+| "Daemon unreachable" banner                     | Start the daemon (`pnpm dev:daemon`) and check that port 4317 is free (`AI_HARNESS_PORT`).                                              |
 | An engine shows _Not installed_                 | Install the CLI, or set its path under Agents & Accounts → Configure, then **Refresh**.                                                 |
 | An engine shows _Expired_                       | Log in again from Agents & Accounts. Tasks paused for login resume by themselves afterwards.                                            |
 | A task is _Paused · quota_                      | The engine's usage window ran out. The task resumes at the shown time, or set a fallback engine (Project → Overview → Pipeline).        |
@@ -82,24 +82,24 @@ The daemon creates its data directory on first start. It applies database migrat
 
 ## Safety
 
-- **Agents work inside the project.** Each task runs in its own git worktree, and AgentForge commits and merges; agents are told not to.
-- **Guarded tool calls (Claude Code).** Before every tool call, a pre-tool-use hook asks AgentForge whether it may run:
+- **Agents work inside the project.** Each task runs in its own git worktree, and AI Harness commits and merges; agents are told not to.
+- **Guarded tool calls (Claude Code).** Before every tool call, a pre-tool-use hook asks AI Harness whether it may run:
   - **Blocked:** catastrophic commands, such as recursive deletes of `/`, `~` or other projects, disk formatting or fork bombs, and file edits outside the project.
   - **Asks you:** risky commands. These include `git push` (and force-push), `sudo`, piping a download into a shell, printing the environment, touching `.env` or key files, and writing outside the project. A card appears in the app. _Allow once_ or _Deny_; with no answer the command is denied after 10 minutes. You can turn the questions off in **Settings → Safety** (blocks still apply).
   - Other engines run with their own permission modes and sandboxes. Codex, for example, uses its workspace-write sandbox.
-- **AgentForge tools for agents.** Claude Code agents also get an `agentforge` MCP server for their run. With it they can search and add to project memory, read their task, related tasks and finished tasks' reports, and see the project's open errors.
+- **AI Harness tools for agents.** Claude Code agents also get an `ai-harness` MCP server for their run. With it they can search and add to project memory, read their task, related tasks and finished tasks' reports, and see the project's open errors.
 - **Secrets.**
   - Tokens and API keys are stored encrypted (AES-256-GCM).
-  - Secret files (`.env`, keys) are never committed by AgentForge and never shown in the Code tab.
+  - Secret files (`.env`, keys) are never committed by AI Harness and never shown in the Code tab.
   - With **Redact secrets from logs** on (the default), stored secrets and common token formats are masked in agent logs and terminals.
-- **Local only.** The daemon only answers on loopback and only to the AgentForge web app's origin.
+- **Local only.** The daemon only answers on loopback and only to the AI Harness web app's origin.
 
 ## Projects and GitHub
 
-- **New project from scratch.** Choose a local folder (AgentForge creates it and runs `git init`) or a GitHub repository (create a new one or pick an existing one). Then add stack preferences, per-role agent engines and an initial requirement.
+- **New project from scratch.** Choose a local folder (AI Harness creates it and runs `git init`) or a GitHub repository (create a new one or pick an existing one). Then add stack preferences, per-role agent engines and an initial requirement.
 - **Attach an existing project.** Choose a local folder or a GitHub repository to clone.
-  - If a local folder isn't a git repository yet, AgentForge can initialise one. Its initial commit never includes `.env*`, `*.pem` or `*.key` files.
-  - Attaching never deletes or rewrites your files. Removing a project from AgentForge leaves the folder untouched.
+  - If a local folder isn't a git repository yet, AI Harness can initialise one. Its initial commit never includes `.env*`, `*.pem` or `*.key` files.
+  - Attaching never deletes or rewrites your files. Removing a project from AI Harness leaves the folder untouched.
 - **Onboarding analysis** runs automatically on every new project. It detects:
   - languages, frameworks, package manager and monorepo layout
   - install, run, build, test and lint commands
@@ -114,9 +114,9 @@ The daemon creates its data directory on first start. It applies database migrat
   - Paste a personal access token with the `repo` scope (add `read:org` for organisations).
   - Reuse the login of an installed and logged-in `gh` CLI with one click.
 
-  The token is stored encrypted (AES-256-GCM) under `AGENTFORGE_HOME`. When cloning, it is passed to git through environment variables, so it never appears in `.git/config` or in process arguments.
+  The token is stored encrypted (AES-256-GCM) under `AI_HARNESS_HOME`. When cloning, it is passed to git through environment variables, so it never appears in `.git/config` or in process arguments.
 
-Clones go to `<workspace folder>/<owner>/<repo>`. The workspace folder defaults to `~/.agentforge/workspaces` and can be changed in Settings.
+Clones go to `<workspace folder>/<owner>/<repo>`. The workspace folder defaults to `~/.ai-harness/workspaces` and can be changed in Settings.
 
 ## Agent engines
 
@@ -130,7 +130,7 @@ Open **Agents & Accounts** to see each supported agent CLI: whether it's install
 | Antigravity  | `agy` (not the `antigravity` IDE launcher)                                                  | `agy -p … --output-format stream-json --mode …`                     | `agy models` (also lists available models) |
 | Custom CLI   | any executable                                                                              | argument template + text or JSON-lines parser, configured in the UI | optional auth-check command                |
 
-- **Login** runs the CLI's own login command in an embedded terminal (xterm.js + node-pty). AgentForge never sees your credentials; they stay with the CLI. The button only appears when the CLI isn't signed in (or its session expired). To switch accounts, use **Configure → Log out** first.
+- **Login** runs the CLI's own login command in an embedded terminal (xterm.js + node-pty). AI Harness never sees your credentials; they stay with the CLI. The button only appears when the CLI isn't signed in (or its session expired). To switch accounts, use **Configure → Log out** first.
 - **API keys** are an alternative for Claude Code, Codex, Gemini and custom CLIs. They're stored encrypted and passed to the CLI only through its environment (`ANTHROPIC_API_KEY`, `CODEX_API_KEY`, `GEMINI_API_KEY`, or the variable you configure).
 - **Health checks** run every _Settings → Engine health check interval_. Status changes stream to the UI live. When an engine your default roles depend on has expired or hit its usage limit, a banner appears with a Re-login link or a reset countdown.
 - **Usage windows** come from Claude Code's rate-limit events: how much of the 5-hour and 7-day windows you've used, and when each resets.
@@ -144,7 +144,7 @@ Each project opens as a workspace: the **requirement chat** is on the left, and 
 - **Writing a message.** Choose **Plan** (draft a new plan), **Add tasks** (extend the current plan) or **Discuss** (talk, without creating tasks).
   - Type `@` to reference files and `#` to reference tasks.
   - Attach files by picking, pasting or dragging them in.
-  - Attachments are stored in `<project>/.agentforge/attachments/`. That folder is kept out of git through `.git/info/exclude`, so none of your tracked files change.
+  - Attachments are stored in `<project>/.ai-harness/attachments/`. That folder is kept out of git through `.git/info/exclude`, so none of your tracked files change.
 - **The Planner** runs read-only on the planner engine (Settings → Default engines → Planner).
   - It sees the project, the analysed codebase, project memory, the current plan, the recent conversation and your references.
   - It may ask clarifying questions first. Click a suggested answer, or tick **No questions** to make it plan with stated assumptions.
@@ -165,17 +165,17 @@ Approved tasks are built automatically. Each one goes through these steps:
 **Develop → Review → Test → (Fix ↺) → Document → Merge**
 
 - **Isolation.**
-  - Every task gets its own git worktree on a branch (`af/<key>-<title>`), created from your working branch under `~/.agentforge/worktrees/`. Your checkout isn't touched until the merge.
-  - Agents don't commit. AgentForge commits after each step and never commits secret-looking files (`.env*`, `*.pem`, `*.key`, `*.p12`, `.npmrc`).
+  - Every task gets its own git worktree on a branch (`af/<key>-<title>`), created from your working branch under `~/.ai-harness/worktrees/`. Your checkout isn't touched until the merge.
+  - Agents don't commit. AI Harness commits after each step and never commits secret-looking files (`.env*`, `*.pem`, `*.key`, `*.p12`, `.npmrc`).
 - **Roles.**
   - The Developer and Fixer can edit files and run commands. The Tester can too, but it is told to change tests only.
   - The Reviewer is read-only and must return a structured verdict with line comments.
   - The Documenter edits docs and writes the task report.
   - Each role uses its engine from the task, the project, or the global defaults.
-- **Verification.** After the Tester reports, AgentForge runs the project's own **install**, **build** and **test** commands in the worktree (Overview → Commands). A failure there sends the task to the Fixer even if the Tester said everything passed.
+- **Verification.** After the Tester reports, AI Harness runs the project's own **install**, **build** and **test** commands in the worktree (Overview → Commands). A failure there sends the task to the Fixer even if the Tester said everything passed.
 - **Fix loop.** Requested changes go back to review after the fix, and failing tests go back to testing. After _Max fix loops_ attempts (Settings → Pipeline) the task stops in **Needs you** with a summary; **Retry this step** gives it another round.
 - **Merge.**
-  - **Into your branch:** if the working branch is checked out it must be clean, and the merge is a normal `--no-ff` merge there. If it isn't checked out, the merge is done without touching any checkout. If your checkout has uncommitted changes, AgentForge waits for you.
+  - **Into your branch:** if the working branch is checked out it must be clean, and the merge is a normal `--no-ff` merge there. If it isn't checked out, the merge is done without touching any checkout. If your checkout has uncommitted changes, AI Harness waits for you.
   - **Conflicts:** a follow-up **conflict-resolution task** is created automatically. It merges the working branch into the task branch and resolves the conflicts.
   - **Pull requests:** with **Open a GitHub PR** (Settings → Pipeline) on a GitHub project, the branch is pushed and a PR is opened instead. Dependent tasks build on top of unmerged dependency branches.
 - **Scheduling.**
@@ -203,11 +203,11 @@ Approved tasks are built automatically. Each one goes through these steps:
 
   Filter by time range, project and engine, and switch between tokens and cost. Every chart has a table view.
 
-- **Cost.** A cost reported by the CLI (Claude Code) is used as is. Otherwise AgentForge estimates it from **Settings → Pricing** (USD per 1M tokens, by model id or engine id). Runs with no matching price are counted as _unpriced_.
+- **Cost.** A cost reported by the CLI (Claude Code) is used as is. Otherwise AI Harness estimates it from **Settings → Pricing** (USD per 1M tokens, by model id or engine id). Runs with no matching price are counted as _unpriced_.
 - **Auto-pause and auto-resume.**
   - When an engine hits its usage limit, the task pauses (_Paused · quota_), a **checkpoint** is saved (step, branch, CLI session, partial output), and you see when it resumes.
   - At that time the scheduler re-checks the engine and continues the **same CLI session** where the engine supports resuming; otherwise it reruns the step with a summary of the earlier progress.
-  - If the error didn't say when the window resets, AgentForge retries with exponential backoff (Settings → Usage & sessions).
+  - If the error didn't say when the window resets, AI Harness retries with exponential backoff (Settings → Usage & sessions).
   - A task paused for login (_Paused · login_) resumes as soon as the engine is active again.
   - New tasks don't start on an engine whose window is exhausted.
 - **Engine fallback.** Project → Overview → Pipeline. With fallback enabled and an engine chosen for each primary, a step that hits a usage limit continues immediately on the fallback engine, which is then used for that role on that task.
@@ -216,32 +216,32 @@ Approved tasks are built automatically. Each one goes through these steps:
 
 - **Run.** The project header has **Run**, which starts the project's run command (Overview → Commands) in a terminal. While it runs you get **Stop** and **Restart**. The menu next to it runs **Build**, **Run tests** and **Install dependencies** once each.
 - **Suggested commands.** **Overview → Commands → Suggest with AI** has an agent read the project (read-only) and propose install, run, build, test and lint commands, with notes such as env vars to set first. Nothing changes until you click **Use these**. Projects built from scratch also get their commands re-detected automatically once code lands.
-- **Several servers.** Apps that need more than one process (say a frontend, an API and a worker) list each under **Overview → Commands → Several servers?** with a name, command, folder and port. **Run** starts them all, each in its own terminal, with `PORT` set. The header shows **2/3 servers** with each one's status and URL. Ports are checked before starting, so a port that's already taken (by another app, an earlier run, or AgentForge itself on 4317/4318) is reported on that server instead of crashing it. The Preview tab switches between the servers' URLs.
+- **Several servers.** Apps that need more than one process (say a frontend, an API and a worker) list each under **Overview → Commands → Several servers?** with a name, command, folder and port. **Run** starts them all, each in its own terminal, with `PORT` set. The header shows **2/3 servers** with each one's status and URL. Ports are checked before starting, so a port that's already taken (by another app, an earlier run, or AI Harness itself on 4317/4318) is reported on that server instead of crashing it. The Preview tab switches between the servers' URLs.
 - **Cost.** **Overview → Cost & token usage** shows what agents have spent on the project: total cost, input and output tokens, runs, agent time, cost per day, and breakdowns by role, engine and model and the most expensive tasks. Once a task is finished it also forecasts what the open tasks will likely cost.
 - **Preview.** The local URL your dev server prints is picked up and shown in the **Preview** tab. You can type another URL or open it in a new browser tab.
 - **Code.** A read-only browser of the project's files (respecting `.gitignore`) with syntax highlighting. Files that may contain secrets, such as `.env`, are never shown.
 - **Agents.** The bottom panel's **Agents** tab streams the live output of every agent working on the project.
 - **Changes.** **Code → Changes** shows the diff of each task agents have worked on.
 - **Terminals.** The bottom panel holds the run and build terminals and any shells you open (**New terminal**) in the project folder.
-- **Errors.** AgentForge watches terminal and run output and the pipeline for errors: TypeScript, JavaScript stack traces, Python tracebacks, Go, Rust, Java, failing tests, bundler errors and crashed processes. Repeats are grouped with a count. **Fix with agent** creates a bug task that goes Fix → Review → Test → Document and merges like any other; the error is marked resolved when it's done. You can also ignore, resolve or reopen errors, or jump to the file and line.
+- **Errors.** AI Harness watches terminal and run output and the pipeline for errors: TypeScript, JavaScript stack traces, Python tracebacks, Go, Rust, Java, failing tests, bundler errors and crashed processes. Repeats are grouped with a count. **Fix with agent** creates a bug task that goes Fix → Review → Test → Document and merges like any other; the error is marked resolved when it's done. You can also ignore, resolve or reopen errors, or jump to the file and line.
 - **Activity.** Every task status change in the project, newest first.
 
 ## Issue trackers (via MCP)
 
-AgentForge reads and updates Jira, Linear, GitHub Issues, Asana, ClickUp, Azure DevOps, Trello or any tracker that has an MCP server.
+AI Harness reads and updates Jira, Linear, GitHub Issues, Asana, ClickUp, Azure DevOps, Trello or any tracker that has an MCP server.
 
 1. **Integrations → Issue trackers → Connect tracker.** Pick the tracker and an MCP server. **New server** is pre-filled with a suggested setup for that tracker; check it against the server's docs. Local servers run as a command (stdio); remote ones use HTTP or SSE. Tokens marked secret are encrypted and never shown again.
 2. **Tools.** Click **Auto-detect** to choose which of the server's tools list issues, change status and add comments, then adjust the argument templates if needed. **Preview** shows what would be imported.
-3. **Project → Overview → Issue tracker → Link.** Choose the tracker project, map its statuses to AgentForge's (for example To Do → Approved, In Progress → Developing, Done → Done), and add filters (assignee, sprint, labels, status) and polling if you like.
+3. **Project → Overview → Issue tracker → Link.** Choose the tracker project, map its statuses to AI Harness's (for example To Do → Approved, In Progress → Developing, Done → Done), and add filters (assignee, sprint, labels, status) and polling if you like.
 4. **Sync now** (or wait for polling). Open tickets become **draft tasks** with a link back to the ticket. With _Planner adds criteria and subtasks_ on, the Planner fills in acceptance criteria, affected areas and subtasks for you to review. Nothing is built until you approve.
-5. **Write-back.** As a task moves through the pipeline, its ticket moves to the mapped status. When the task is done, AgentForge comments with a summary, the PR or branch, and the tokens, cost and time used.
+5. **Write-back.** As a task moves through the pipeline, its ticket moves to the mapped status. When the task is done, AI Harness comments with a summary, the PR or branch, and the tokens, cost and time used.
 6. **Changes during work.** If a ticket is edited or closed after you approved its task, the task shows the change. **Apply** updates the task and tells the agent (or cancels the task if the ticket was closed), or keep the task as it is.
 
 ## Spreadsheets (Google Sheets, Excel, CSV)
 
-Keep your task list in a spreadsheet and AgentForge works through it.
+Keep your task list in a spreadsheet and AI Harness works through it.
 
-1. **Integrations → Spreadsheets → Connect sheet** (or **Project → Overview → Spreadsheets**). Choose the project, then paste a Google Sheets link or the path to an `.xlsx`, `.csv` or `.tsv` file. A Google Sheet must be shared as _Anyone with the link — Viewer_ (or published to the web); AgentForge only reads it.
+1. **Integrations → Spreadsheets → Connect sheet** (or **Project → Overview → Spreadsheets**). Choose the project, then paste a Google Sheets link or the path to an `.xlsx`, `.csv` or `.tsv` file. A Google Sheet must be shared as _Anyone with the link — Viewer_ (or published to the web); AI Harness only reads it.
 2. **Columns.** Put each task in a **Title** column and its **Priority** next to it: High / Medium / Low, Urgent, P0–P3, or 1, 2, 3 (1 = most important). Optional columns: Description, ID (keeps a task linked when you rename it), Size (XS–XL or story points), Type (feature, bug, docs…), Status (rows marked Done, Closed, Cancelled or Skip are left out), Acceptance criteria. **Preview** shows which column feeds what and the order agents will pick tasks up; you can override any column. **Download a template** gives you a starter file.
 3. **Start working automatically** (on by default) approves new rows straight away, so agents build them highest priority first with no waiting for you. Turn it off to review each task first. **Let the Planner detail each task** adds acceptance criteria and subtasks before building, keeping your title and priority.
 4. **New rows are picked up** every few minutes (or press **Sync**). Editing a row updates its task while it's still a draft. If a task is already being built, the change is shown on the task to apply or dismiss.
@@ -261,8 +261,8 @@ If the folder isn't a git repository (or has no commits yet), the tab offers to 
 
 - **Project memory (Memory tab).** Facts agents should know about the project: stack, architecture, conventions, commands, decisions, pitfalls, glossary and features. Project analysis and the Documenter add entries automatically, and you can add, edit, pin or delete your own. **Completed tasks** holds a summary of each finished task.
 - **What agents see.** Every agent prompt includes pinned entries, your global preferences, conventions, commands and pitfalls, plus the entries most relevant to the task, up to the budget in **Settings → Memory & workspace**.
-- **Readable copy.** Memory is mirrored to `.agentforge/memory.md` in the project folder. It is kept out of git and can be turned off in Settings.
-- **Handoff notes for switching agents.** AgentForge also keeps `.agentforge/PROJECT.md` (overview, plan, every task's status) and `.agentforge/tasks/<KEY>.md` (one task's spec, status history, what each agent run did, the latest review and tests). They are copied into a task's worktree before every agent run, and every prompt points to them. When a different engine takes over a task (you switched it, or a usage limit triggered a fallback), its prompt also summarises what the earlier agents did. Out of git; turn off in Settings → Memory.
+- **Readable copy.** Memory is mirrored to `.ai-harness/memory.md` in the project folder. It is kept out of git and can be turned off in Settings.
+- **Handoff notes for switching agents.** AI Harness also keeps `.ai-harness/PROJECT.md` (overview, plan, every task's status) and `.ai-harness/tasks/<KEY>.md` (one task's spec, status history, what each agent run did, the latest review and tests). They are copied into a task's worktree before every agent run, and every prompt points to them. When a different engine takes over a task (you switched it, or a usage limit triggered a fallback), its prompt also summarises what the earlier agents did. Out of git; turn off in Settings → Memory.
 - **Global preferences (Settings).** Coding style and preferred libraries, applied to every project.
 - **Docs tab.**
   - Lists the project's Markdown (README, CHANGELOG, architecture and other docs, which the Documenter keeps up to date) and a **report for every finished task**: what changed and why, files, review, tests, token usage and limitations.
@@ -274,11 +274,17 @@ Copy `.env.example` to `.env` if you need to change any of these defaults.
 
 | Variable                              | Default                                       | Purpose                                                    |
 | ------------------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
-| `AGENTFORGE_HOME`                     | `~/.agentforge`                               | SQLite DB, attachments, logs, managed workspaces           |
-| `AGENTFORGE_HOST` / `AGENTFORGE_PORT` | `127.0.0.1` / `4317`                          | Daemon bind address                                        |
-| `AGENTFORGE_WEB_PORT`                 | `4318`                                        | Used to build the default CORS/WebSocket origin allow-list |
-| `AGENTFORGE_ALLOWED_ORIGINS`          | `http://localhost:4318,http://127.0.0.1:4318` | Comma-separated origins that may call the daemon           |
-| `NEXT_PUBLIC_AGENTFORGE_DAEMON_URL`   | `http://127.0.0.1:4317`                       | Where the browser finds the daemon                         |
+| `AI_HARNESS_HOME`                     | `~/.ai-harness`                               | SQLite DB, attachments, logs, managed workspaces           |
+| `AI_HARNESS_HOST` / `AI_HARNESS_PORT` | `127.0.0.1` / `4317`                          | Daemon bind address                                        |
+| `AI_HARNESS_WEB_PORT`                 | `4318`                                        | Used to build the default CORS/WebSocket origin allow-list |
+| `AI_HARNESS_ALLOWED_ORIGINS`          | `http://localhost:4318,http://127.0.0.1:4318` | Comma-separated origins that may call the daemon           |
+| `NEXT_PUBLIC_AI_HARNESS_DAEMON_URL`   | `http://127.0.0.1:4317`                       | Where the browser finds the daemon                         |
+
+**Upgrading from AgentForge.** AI Harness was previously called AgentForge. Existing setups keep working without changes:
+
+- `AGENTFORGE_*` variables (including `NEXT_PUBLIC_AGENTFORGE_DAEMON_URL`) are still read when the `AI_HARNESS_*` one is unset. The daemon logs a deprecation notice for each one.
+- If `~/.ai-harness` doesn't exist but `~/.agentforge` does, the daemon keeps using `~/.agentforge` (and its `agentforge.db`), so projects and encrypted secrets are kept. To switch, stop the daemon and rename the folder to `~/.ai-harness`.
+- Projects that already have a `.agentforge/` folder keep using it. New projects get `.ai-harness/`.
 
 The daemon refuses requests whose `Host` is not a loopback name. This protects against DNS rebinding. It also refuses browser requests from origins outside the allow-list, which protects against CSRF. Non-browser clients such as `curl` work normally.
 

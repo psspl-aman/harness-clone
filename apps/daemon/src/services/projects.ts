@@ -8,7 +8,7 @@ import {
   type ProjectDetail,
   type ProjectSummary,
   type RequirementDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, rm } from 'node:fs/promises';
@@ -208,7 +208,7 @@ export class ProjectService {
       if (!(await isRepoRoot(localPath))) {
         if (!input.location.initGit) {
           throw badRequest(
-            'AgentForge needs a git repository to isolate agent work — enable “Initialise git”',
+            'AI Harness needs a git repository to isolate agent work — enable “Initialise git”',
           );
         }
         await initRepo(localPath, { commitExisting: true });
@@ -368,7 +368,7 @@ export class ProjectService {
     return this.get(id);
   }
 
-  /** Deletes the project and all its data from AgentForge for good. Files on disk are never touched. */
+  /** Deletes the project and all its data from AI Harness for good. Files on disk are never touched. */
   delete(id: string): void {
     this.assertExists(id);
     this.db.delete(projects).where(eq(projects.id, id)).run();

@@ -3,7 +3,7 @@ import {
   deepMerge,
   DEFAULT_SETTINGS,
   type AppSettings,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { settings } from '../db/schema';

@@ -1,10 +1,11 @@
-import { MEMORY_KINDS, type MemoryKind } from '@agentforge/shared';
+import { MEMORY_KINDS, type MemoryKind } from '@ai-harness/shared';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client';
 import { documents, errors, tasks } from '../db/schema';
 import type { MemoryService } from './memory';
+import { AGENT_TOOLS_SERVER } from '../lib/product';
 import type { Session } from './safety';
 import type { TaskService } from './tasks';
 
@@ -14,7 +15,7 @@ const json = (o: unknown) => text(JSON.stringify(o, null, 2));
 const WRITERS = new Set(['developer', 'fixer', 'tester', 'documenter', 'planner']);
 
 /**
- * The `agentforge` MCP server agents get during a run (scoped to that run's
+ * The `ai-harness` MCP server agents get during a run (scoped to that run's
  * project and task): search and add project memory, read the task, related
  * tasks and their reports, and the project's open errors.
  */
@@ -22,9 +23,9 @@ export function buildAgentTools(
   d: { db: Db; memory: MemoryService; tasks: TaskService },
   s: Readonly<Session>,
 ): McpServer {
-  const server = new McpServer({ name: 'agentforge', version: '0.1.0' });
+  const server = new McpServer({ name: AGENT_TOOLS_SERVER, version: '0.1.0' });
   const projectId = s.projectId;
-  const noProject = text('This run is not attached to an AgentForge project.');
+  const noProject = text('This run is not attached to an AI Harness project.');
 
   server.registerTool(
     'project_memory_search',
@@ -150,7 +151,7 @@ export function buildAgentTools(
     'project_errors',
     {
       description:
-        'Open errors AgentForge detected while running the project (compiler errors, stack traces, failed tests), with log excerpts.',
+        'Open errors AI Harness detected while running the project (compiler errors, stack traces, failed tests), with log excerpts.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },

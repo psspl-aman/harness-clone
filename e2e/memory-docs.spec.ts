@@ -58,7 +58,7 @@ test('project memory, global preferences and the Docs tab', async ({ page, reque
   await expect(entries.filter({ hasText: 'Use fake timers' })).toBeVisible();
 
   // The readable mirror in the project folder.
-  const mirror = join(project.localPath, '.agentforge', 'memory.md');
+  const mirror = join(project.localPath, '.ai-harness', 'memory.md');
   await expect
     .poll(() => existsSync(mirror) && readFileSync(mirror, 'utf8'))
     .toContain('### 📌 Storage is SQLite');

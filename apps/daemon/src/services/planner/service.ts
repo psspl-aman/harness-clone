@@ -10,7 +10,7 @@ import {
   type PlannerState,
   type ReferenceSuggestions,
   type TaskDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { execa } from 'execa';
 import type { Db } from '../../db/client';
@@ -25,6 +25,7 @@ import type { EngineRegistry } from '../../engines/registry';
 import type { EventBus } from '../../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../../http/errors';
 import { newId } from '../../lib/id';
+import { isProjectDataPath } from '../../lib/project-data-dir';
 import type { AttachmentStore } from '../attachments';
 import type { MemoryService } from '../memory';
 import type { RunRecorder } from '../runs';
@@ -723,7 +724,7 @@ export class PlannerService {
       r.exitCode === 0
         ? String(r.stdout)
             .split('\n')
-            .filter((f) => f && !f.startsWith('.agentforge/'))
+            .filter((f) => f && !isProjectDataPath(f))
             .slice(0, 50_000)
         : [];
     this.fileCache.set(projectId, { at: Date.now(), files });

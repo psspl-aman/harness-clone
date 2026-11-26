@@ -1,6 +1,6 @@
 'use client';
 
-import type { EngineInfo } from '@agentforge/shared';
+import type { EngineInfo } from '@ai-harness/shared';
 import { useMutation } from '@tanstack/react-query';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
@@ -64,7 +64,7 @@ export function LoginDialog({
         <DialogFooter className="items-center sm:justify-between">
           <p className="text-muted-foreground text-xs">
             {exited === undefined ? (
-              'Credentials stay with the CLI on this machine — AgentForge never sees them.'
+              'Credentials stay with the CLI on this machine — AI Harness never sees them.'
             ) : exited === 0 ? (
               <span className="text-success inline-flex items-center gap-1">
                 <CheckCircle2 className="size-3.5" /> Login finished — status refreshed.

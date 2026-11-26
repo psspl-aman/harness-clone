@@ -1,4 +1,4 @@
-import type { ServerMessage } from '@agentforge/shared';
+import type { ServerMessage } from '@ai-harness/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { createTestApp, type TestApp } from './helpers';

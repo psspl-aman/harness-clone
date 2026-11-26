@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // A tiny issue tracker exposed as an MCP server, for tests and E2E.
 // State lives in the JSON file named by FAKE_PMS_STATE so tests can seed
-// issues and inspect what AgentForge wrote back.
+// issues and inspect what AI Harness wrote back.
 //   stdio:  node fake-pms-mcp.mjs
 //   http:   node fake-pms-mcp.mjs --http <port>   (Streamable HTTP at /mcp)
 import { readFileSync, writeFileSync } from 'node:fs';

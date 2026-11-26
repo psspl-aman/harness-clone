@@ -1,4 +1,4 @@
-import { DecideApprovalSchema, Topics, type SafetyApprovalDto } from '@agentforge/shared';
+import { DecideApprovalSchema, Topics, type SafetyApprovalDto } from '@ai-harness/shared';
 import { randomBytes } from 'node:crypto';
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { projects, tasks } from '../db/schema';
 import type { GuardProvider } from '../engines/types';
 import type { EventBus } from '../events/bus';
 import { AppError, conflict, notFound } from '../http/errors';
+import { GUARD_HEADER } from '../lib/guard-header';
 import { newId } from '../lib/id';
 import { classifyTool } from '../safety/classify';
 import type { SettingsService } from './settings';
@@ -19,7 +20,7 @@ const MAX_LOG = 100;
 
 /** The hook Claude Code runs before each tool call (see `--settings` hooks.PreToolUse). */
 const HOOK_SCRIPT = `#!/usr/bin/env node
-// AgentForge safety guard — asks the local AgentForge daemon whether a tool call may run.
+// AI Harness safety guard — asks the local AI Harness daemon whether a tool call may run.
 // Exit 0 lets the call proceed; exit 2 blocks it and tells the agent why.
 const url = process.env.AF_GUARD_URL;
 const token = process.env.AF_GUARD_TOKEN;
@@ -28,9 +29,9 @@ let raw = '';
 for await (const chunk of process.stdin) raw += chunk;
 let input;
 try { input = JSON.parse(raw); } catch { process.exit(0); }
-const block = (m) => { process.stderr.write('Blocked by AgentForge: ' + m + '\\n'); process.exit(2); };
+const block = (m) => { process.stderr.write('Blocked by AI Harness: ' + m + '\\n'); process.exit(2); };
 const post = async (path, body) => {
-  const r = await fetch(url + path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agentforge-guard': token }, body: JSON.stringify(body) });
+  const r = await fetch(url + path, { method: 'POST', headers: { 'content-type': 'application/json', '${GUARD_HEADER}': token }, body: JSON.stringify(body) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 };
@@ -89,7 +90,7 @@ export class SafetyService {
   ) {
     const dir = join(d.home, 'bin');
     mkdirSync(dir, { recursive: true });
-    this.hookPath = join(dir, 'agentforge-guard.mjs');
+    this.hookPath = join(dir, 'ai-harness-guard.mjs');
     writeFileSync(this.hookPath, HOOK_SCRIPT);
     chmodSync(this.hookPath, 0o755);
   }
@@ -115,7 +116,7 @@ export class SafetyService {
       config: {
         hookCommand: `"${process.execPath}" "${this.hookPath}"`,
         env: { AF_GUARD_URL: url, AF_GUARD_TOKEN: token },
-        mcp: { url: `${url}/mcp`, headers: { 'x-agentforge-guard': token } },
+        mcp: { url: `${url}/mcp`, headers: { [GUARD_HEADER]: token } },
       },
       revoke: () => this.revoke(token),
     };
@@ -132,7 +133,7 @@ export class SafetyService {
     // Agents must not answer their own approvals through the API.
     const text = JSON.stringify(input);
     if (/AF_GUARD_TOKEN|\/api\/safety\b/.test(text))
-      return this.block(s, tool, text.slice(0, 300), "Agents can't use AgentForge's safety API");
+      return this.block(s, tool, text.slice(0, 300), "Agents can't use AI Harness's safety API");
     const v = classifyTool(tool, input, s.root);
     if (v.level === 'allow') return { decision: 'allow' };
     if (v.level === 'deny') return this.block(s, tool, v.summary, v.reason);
@@ -228,7 +229,7 @@ export class SafetyService {
     const dto = this.describe(s, tool, summary, reason, 'blocked');
     this.remember(dto);
     this.emit(dto);
-    return { decision: 'deny' as const, reason: `${reason}. This is not allowed in AgentForge.` };
+    return { decision: 'deny' as const, reason: `${reason}. This is not allowed in AI Harness.` };
   }
 
   private describe(

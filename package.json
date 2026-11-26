@@ -1,24 +1,24 @@
 {
-  "name": "agentforge",
+  "name": "ai-harness",
   "private": true,
   "version": "0.1.0",
-  "description": "AgentForge \u2014 local-first agentic coding harness & agent factory",
+  "description": "AI Harness \u2014 local-first agentic coding harness & agent factory",
   "packageManager": "pnpm@10.20.0",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter @agentforge/daemon --filter @agentforge/web dev",
-    "dev:daemon": "pnpm --filter @agentforge/daemon dev",
-    "dev:web": "pnpm --filter @agentforge/web dev",
+    "dev": "pnpm -r --parallel --filter @ai-harness/daemon --filter @ai-harness/web dev",
+    "dev:daemon": "pnpm --filter @ai-harness/daemon dev",
+    "dev:web": "pnpm --filter @ai-harness/web dev",
     "build": "pnpm -r build",
-    "start": "pnpm -r --parallel --filter @agentforge/daemon --filter @agentforge/web start",
+    "start": "pnpm -r --parallel --filter @ai-harness/daemon --filter @ai-harness/web start",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm -r test",
-    "db:generate": "pnpm --filter @agentforge/daemon db:generate",
+    "db:generate": "pnpm --filter @ai-harness/daemon db:generate",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

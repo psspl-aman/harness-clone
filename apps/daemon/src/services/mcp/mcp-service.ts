@@ -5,7 +5,7 @@ import {
   type KeyValueInput,
   type McpServerDto,
   type McpToolDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import {
@@ -20,6 +20,7 @@ import { mcpServers } from '../../db/schema';
 import type { EventBus } from '../../events/bus';
 import { AppError, badRequest, notFound } from '../../http/errors';
 import { newId } from '../../lib/id';
+import { PRODUCT_SLUG } from '../../lib/product';
 import type { SecretStore } from '../secrets';
 
 type ServerRow = typeof mcpServers.$inferSelect;
@@ -280,7 +281,7 @@ export class McpService {
               },
             });
     }
-    const client = new Client({ name: 'agentforge', version: '0.1.0' });
+    const client = new Client({ name: PRODUCT_SLUG, version: '0.1.0' });
     const pooled: Pooled = { client, stderr, lastUsed: Date.now() };
     client.onclose = () => {
       if (!pooled.closing) this.pool.delete(row.id);

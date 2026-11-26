@@ -14,7 +14,7 @@ import {
   type PmsSyncResultDto,
   type PmsToolMap,
   type TaskStatus,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { createHash } from 'node:crypto';
 import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -387,8 +387,8 @@ export class PmsService {
         level: 'warning',
         title: `${existing.key} changed in ${label}`,
         message: closed
-          ? `${issue.id} was closed while AgentForge is working on it.`
-          : `${issue.id} was edited while AgentForge is working on it. Review the change on the task.`,
+          ? `${issue.id} was closed while AI Harness is working on it.`
+          : `${issue.id} was edited while AI Harness is working on it. Review the change on the task.`,
         projectId: m.projectId,
         taskId: existing.id,
       },
@@ -492,7 +492,7 @@ export class PmsService {
       to === 'DONE'
         ? this.doneComment(t)
         : to === 'FAILED'
-          ? `AgentForge couldn't finish ${t.key}: ${t.statusReason ?? 'unknown error'}. It needs a look in AgentForge.`
+          ? `AI Harness couldn't finish ${t.key}: ${t.statusReason ?? 'unknown error'}. It needs a look in AI Harness.`
           : null;
     if (body && c.toolMap.comment)
       await this.call(
@@ -519,14 +519,14 @@ export class PmsService {
     const started = history.find((h) => h.to === 'IN_DEVELOPMENT')?.createdAt;
     const mins = started ? Math.max(1, Math.round((Date.now() - started) / 60_000)) : null;
     const lines = [
-      `✅ Completed by AgentForge (${t.key}).`,
+      `✅ Completed by AI Harness (${t.key}).`,
       doc?.s ? `\n${doc.s}` : '',
       t.pipeline.pullRequestUrl
         ? `\nPull request: ${t.pipeline.pullRequestUrl}`
         : t.pipeline.branch
           ? `\nMerged branch \`${t.pipeline.branch}\`.`
           : '',
-      `\nReviewed and tested by AgentForge agents${t.pipeline.fixLoops ? ` (${t.pipeline.fixLoops} fix loop${t.pipeline.fixLoops === 1 ? '' : 's'})` : ''}.`,
+      `\nReviewed and tested by AI Harness agents${t.pipeline.fixLoops ? ` (${t.pipeline.fixLoops} fix loop${t.pipeline.fixLoops === 1 ? '' : 's'})` : ''}.`,
       `Usage: ${t.pipeline.tokens.toLocaleString('en-US')} tokens${t.pipeline.costUsd ? `, $${t.pipeline.costUsd.toFixed(2)}` : ''}${mins ? `, ${mins} min` : ''}.`,
     ];
     return lines.filter(Boolean).join('\n').trim();

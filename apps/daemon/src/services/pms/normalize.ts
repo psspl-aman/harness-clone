@@ -1,4 +1,4 @@
-import type { McpToolDto, PmsField, PmsIssue, PmsOperation, PmsToolMap } from '@agentforge/shared';
+import type { McpToolDto, PmsField, PmsIssue, PmsOperation, PmsToolMap } from '@ai-harness/shared';
 
 // ─── Argument templates ──────────────────────────────────────────────────────
 

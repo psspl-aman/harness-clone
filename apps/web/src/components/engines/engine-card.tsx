@@ -1,6 +1,6 @@
 'use client';
 
-import type { EngineInfo } from '@agentforge/shared';
+import type { EngineInfo } from '@ai-harness/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import {

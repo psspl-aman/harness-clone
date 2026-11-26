@@ -1,6 +1,6 @@
 'use client';
 
-import type { GithubRepo } from '@agentforge/shared';
+import type { GithubRepo } from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Lock, Search } from 'lucide-react';
 import { useState } from 'react';

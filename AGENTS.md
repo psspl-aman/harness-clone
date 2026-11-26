@@ -1,6 +1,6 @@
 # Contributor & agent guide
 
-AgentForge is a pnpm monorepo:
+AI Harness is a pnpm monorepo:
 
 - `apps/daemon` — Fastify + SQLite (Drizzle) backend
 - `apps/web` — Next.js UI
@@ -38,9 +38,9 @@ Never commit directly to `dev`.
 
 - Adapt your machine to the repo, not the other way around: use the pinned pnpm/Node versions
   and don't rewrite `pnpm-lock.yaml` to suit your setup.
-- Run `pnpm -r typecheck` and the relevant package tests (`pnpm --filter @agentforge/daemon test`,
+- Run `pnpm -r typecheck` and the relevant package tests (`pnpm --filter @ai-harness/daemon test`,
   etc.); keep them green on your OS.
-- Never commit secrets or local runtime data (the `~/.agentforge` home, `.env`, `*.db`).
+- Never commit secrets or local runtime data (the `~/.ai-harness` home, `.env`, `*.db`).
 - Schema change? Edit `apps/daemon/src/db/schema.ts`, then run `pnpm db:generate`; keep migrations
   additive so a running daemon keeps working.
 

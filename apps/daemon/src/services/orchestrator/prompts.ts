@@ -1,4 +1,4 @@
-import type { FixSource, TaskDiffDto, TaskDto } from '@agentforge/shared';
+import type { FixSource, TaskDiffDto, TaskDto } from '@ai-harness/shared';
 
 export interface RoleContext {
   project: {
@@ -65,12 +65,12 @@ function contextBlock(ctx: RoleContext): string {
 
 const WORKTREE_RULES = (ctx: RoleContext) => `## Rules
 - You are in a git worktree on branch \`${ctx.branch}\` (created from \`${ctx.workingBranch}\`). Work only inside this directory.
-- Do NOT commit, push, merge, rebase or switch branches — AgentForge commits your changes after you finish.
+- Do NOT commit, push, merge, rebase or switch branches — AI Harness commits your changes after you finish.
 - Never create, modify or print .env files, keys or other secrets.
 - Keep changes focused on this task; follow the project's conventions.
-- If you have the \`agentforge\` tools: search project memory before design decisions (\`project_memory_search\`) and record lasting decisions or pitfalls with \`project_memory_add\`.`;
+- If you have the \`ai-harness\` tools: search project memory before design decisions (\`project_memory_search\`) and record lasting decisions or pitfalls with \`project_memory_add\`.`;
 
-/** Asks implementers to report finished subtasks so AgentForge can tick them off. */
+/** Asks implementers to report finished subtasks so AI Harness can tick them off. */
 const subtaskReport = (ctx: RoleContext) =>
   ctx.task.subtasks.length
     ? '\n\nEnd your reply with one line `Subtasks done: <numbers>` listing the subtasks above that are now complete (e.g. `Subtasks done: 1, 3`; `all` and `none` also work).'
@@ -93,7 +93,7 @@ const JSON_ONLY =
 
 export function developerPrompt(ctx: RoleContext): string {
   return `# Role: Developer
-You implement one task in an AgentForge pipeline. A Reviewer, a Tester and a Documenter follow you.
+You implement one task in an AI Harness pipeline. A Reviewer, a Tester and a Documenter follow you.
 
 ${contextBlock(ctx)}
 
@@ -136,14 +136,14 @@ ${JSON_ONLY}
 }
 
 /**
- * Files AgentForge deliberately left out of the commits. Without this the Reviewer sees
+ * Files AI Harness deliberately left out of the commits. Without this the Reviewer sees
  * them in the worktree but not in the diff, and requests a commit nobody is allowed to make.
  */
 function withheldBlock(files: string[]): string {
   if (!files.length) return '';
   return `
-## Files withheld from git by AgentForge
-These files exist in the worktree but AgentForge never commits them, because they may hold real secrets:
+## Files withheld from git by AI Harness
+These files exist in the worktree but AI Harness never commits them, because they may hold real secrets:
 ${files.map((f) => `- ${f}`).join('\n')}
 This is intended. Do not request that they be committed, and do not count their absence from the diff against the change. If the project needs to document the variables in them, a template such as \`.env.example\` (with placeholder values) is committed normally.
 `;
@@ -205,7 +205,7 @@ ${d.files.map((f) => `- ${f.path}`).join('\n') || '(none)'}
 
 ${WORKTREE_RULES(ctx)}
 - Fix tests you write; do NOT change application code to make tests pass — report failures instead.
-- AgentForge also runs the configured install/build/test commands itself after you.
+- AI Harness also runs the configured install/build/test commands itself after you.
 
 ${JSON_ONLY}
 {
@@ -246,7 +246,7 @@ export function fixerPrompt(ctx: RoleContext, fix: FixInput): string {
               ? `The tests pass, but they also pass when this task's source changes are put back to how they were before the task. So they don't test the change.\n\nAdd or strengthen tests for the acceptance criteria so they fail without the change and pass with it. Change only test files — do NOT change application code.${fix.checkLog ? `\n\nDetails:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`
               : fix.source === 'test_review'
                 ? `The Reviewer checked the tests and asked for better ones:\n${fix.review?.summary ?? ''}\n\n${(fix.review?.comments ?? []).map((c) => `- [${c.severity}] ${c.file ?? ''}${c.line ? `:${c.line}` : ''} ${c.body}`).join('\n')}\n\nImprove the tests as asked. Change application code only if a better test reveals a real bug in it.`
-                : `Tests or the build failed:\n${fix.testSummary ?? ''}\n${(fix.failures ?? []).map((f) => `- ${f}`).join('\n')}${fix.checkLog ? `\n\nOutput of AgentForge's own checks:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`;
+                : `Tests or the build failed:\n${fix.testSummary ?? ''}\n${(fix.failures ?? []).map((f) => `- ${f}`).join('\n')}${fix.checkLog ? `\n\nOutput of AI Harness's own checks:\n\`\`\`\n${clip(fix.checkLog, 12_000)}\n\`\`\`` : ''}`;
   return `# Role: Fixer
 You fix problems found in task ${ctx.task.key}'s change.
 

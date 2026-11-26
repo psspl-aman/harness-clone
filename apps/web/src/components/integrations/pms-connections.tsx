@@ -7,7 +7,7 @@ import {
   type PmsProvider,
   type PmsProviderPreset,
   type PmsToolMap,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronDown, Eye, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -197,7 +197,7 @@ export function PmsConnectionDialog({
             {connection ? `Edit ${connection.name}` : 'Connect an issue tracker'}
           </DialogTitle>
           <DialogDescription>
-            Pick the MCP server that talks to your tracker, then tell AgentForge which of its tools
+            Pick the MCP server that talks to your tracker, then tell AI Harness which of its tools
             list issues, change status and comment.
           </DialogDescription>
         </DialogHeader>

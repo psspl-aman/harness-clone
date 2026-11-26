@@ -1,8 +1,9 @@
-import type { COMMAND_KEYS, DetectedCommand, OnboardingReport } from '@agentforge/shared';
+import type { COMMAND_KEYS, DetectedCommand, OnboardingReport } from '@ai-harness/shared';
 import { existsSync } from 'node:fs';
 import { opendir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { redactRemote } from '../../lib/paths';
+import { PROJECT_DATA_DIR_NAMES } from '../../lib/project-data-dir';
 import { git, isRepoRoot } from '../git';
 
 type CommandKey = (typeof COMMAND_KEYS)[number];
@@ -36,7 +37,7 @@ const SKIP_DIRS = new Set([
   '.dart_tool',
   'Pods',
   '.terraform',
-  '.agentforge',
+  ...PROJECT_DATA_DIR_NAMES,
 ]);
 
 const LANGUAGE_BY_EXT: Record<string, string> = {
@@ -625,12 +626,12 @@ export async function analyzeProject(root: string): Promise<OnboardingReport> {
     }
   }
 
-  // Git housekeeping files (e.g. the .gitignore AgentForge writes) don't count as content.
+  // Git housekeeping files (e.g. the .gitignore AI Harness writes) don't count as content.
   const isEmpty = tree.files.every((f) => HOUSEKEEPING_FILES.has(f));
   if (isEmpty) notes.push('The folder is empty — agents will scaffold it from your requirements.');
   if (tree.truncated) notes.push('Large repository: analysis sampled the first 20,000 files.');
   if (!commands.run && !isEmpty)
-    notes.push('No run command detected — set one below so AgentForge can start the project.');
+    notes.push('No run command detected — set one below so AI Harness can start the project.');
 
   return {
     analyzedAt: Date.now(),

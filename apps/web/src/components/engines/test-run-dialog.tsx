@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentEvent, AgentRunResultDto, EngineInfo } from '@agentforge/shared';
+import type { AgentEvent, AgentRunResultDto, EngineInfo } from '@ai-harness/shared';
 import { useMutation } from '@tanstack/react-query';
 import { CheckCircle2, CircleStop, Loader2, Play, XCircle } from 'lucide-react';
 import { useState } from 'react';

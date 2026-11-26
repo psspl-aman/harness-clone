@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectDetail, ProjectRunDto, ServiceRunDto } from '@agentforge/shared';
+import type { ProjectDetail, ProjectRunDto, ServiceRunDto } from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,

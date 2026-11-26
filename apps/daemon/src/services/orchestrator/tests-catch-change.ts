@@ -1,4 +1,4 @@
-import type { TaskType } from '@agentforge/shared';
+import type { TaskType } from '@ai-harness/shared';
 import * as gitops from './git-ops';
 import { runCheck, type CheckOptions, type VerifyStep } from './verify';
 

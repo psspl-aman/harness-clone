@@ -1,4 +1,4 @@
-import type { FileContentDto } from '@agentforge/shared';
+import type { FileContentDto } from '@ai-harness/shared';
 import { eq } from 'drizzle-orm';
 import { execa } from 'execa';
 import { open, stat } from 'node:fs/promises';
@@ -7,6 +7,7 @@ import type { Db } from '../db/client';
 import { projects } from '../db/schema';
 import { AppError, badRequest, notFound } from '../http/errors';
 import { isWithin } from '../lib/paths';
+import { isProjectDataPath } from '../lib/project-data-dir';
 import { isSecretFile } from './git';
 
 const MAX_BYTES = 1024 * 1024;
@@ -62,7 +63,7 @@ export class FileService {
     });
     const files = String(r.stdout ?? '')
       .split('\n')
-      .filter((f) => f && !f.startsWith('.agentforge/'))
+      .filter((f) => f && !isProjectDataPath(f))
       .sort();
     return { files: files.slice(0, 20_000), truncated: files.length > 20_000 };
   }
@@ -83,7 +84,7 @@ export class FileService {
       throw new AppError(
         403,
         'SECRET_FILE',
-        'This file may contain secrets, so AgentForge does not display it',
+        'This file may contain secrets, so AI Harness does not display it',
       );
     const st = await stat(path).catch(() => null);
     if (!st?.isFile()) throw notFound('File');

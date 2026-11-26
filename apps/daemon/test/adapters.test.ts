@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@agentforge/shared';
+import type { AgentEvent } from '@ai-harness/shared';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

@@ -6,7 +6,7 @@ import type {
   EngineCapabilities,
   EngineError,
   UsageDelta,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 
 export interface AgentRunInput extends AgentRunInputDto {
   signal?: AbortSignal;
@@ -16,7 +16,7 @@ export interface AgentRunInput extends AgentRunInputDto {
   guard?: {
     hookCommand: string;
     env: Record<string, string>;
-    /** AgentForge's own MCP server for this run (project memory, task, errors). */
+    /** AI Harness's own MCP server for this run (project memory, task, errors). */
     mcp?: { url: string; headers: Record<string, string> };
   };
 }
@@ -46,7 +46,7 @@ export interface AuthStatusResult {
   models?: { id: string; label: string }[];
 }
 
-/** A login flow is a CLI command AgentForge runs in an embedded terminal. */
+/** A login flow is a CLI command AI Harness runs in an embedded terminal. */
 export interface LoginFlow {
   command: string;
   args: string[];
@@ -59,7 +59,7 @@ export interface LoginFlow {
 export interface AdapterEnv {
   /** User-configured binary path, if any. */
   binaryOverride(): string | null;
-  /** API key stored in AgentForge's secret store, if any. */
+  /** API key stored in AI Harness's secret store, if any. */
   apiKey(): string | null;
   /** Extra directories searched for binaries (tests). */
   extraPath?: string[];
@@ -72,7 +72,7 @@ export interface AgentEngineAdapter {
   readonly installGuideUrl: string | null;
   readonly installCommand: string | null;
   readonly capabilities: EngineCapabilities;
-  /** Runs AgentForge's pre-tool-use safety hook (`input.guard`). */
+  /** Runs AI Harness's pre-tool-use safety hook (`input.guard`). */
   readonly supportsGuard?: boolean;
   /** Static model suggestions; `getAuthStatus` may return a live list. */
   readonly staticModels: { id: string; label: string }[];

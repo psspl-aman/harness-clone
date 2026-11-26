@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskDto, TaskStatus } from '@agentforge/shared';
+import type { TaskDto, TaskStatus } from '@ai-harness/shared';
 import {
   DndContext,
   KeyboardSensor,

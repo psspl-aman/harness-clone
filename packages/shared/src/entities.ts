@@ -29,7 +29,7 @@ export const ProjectSummarySchema = z.object({
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 
 export const SystemInfoSchema = z.object({
-  name: z.literal('agentforge'),
+  name: z.literal('ai-harness'),
   version: z.string(),
   nodeVersion: z.string(),
   platform: z.string(),

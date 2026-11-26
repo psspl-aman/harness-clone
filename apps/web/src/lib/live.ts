@@ -1,4 +1,4 @@
-import type { AnyAppEvent, ClientMessage, ServerMessage } from '@agentforge/shared';
+import type { AnyAppEvent, ClientMessage, ServerMessage } from '@ai-harness/shared';
 
 export type LiveStatus = 'connecting' | 'open' | 'reconnecting';
 

@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@agentforge/shared';
+import type { AgentEvent } from '@ai-harness/shared';
 import { classifyEngineError } from '../errors';
 import {
   CliAdapter,
@@ -157,7 +157,7 @@ export class CodexAdapter extends CliAdapter {
       return {
         status: 'ACTIVE',
         accountLabel: 'API key',
-        detail: 'Using the OpenAI API key stored in AgentForge',
+        detail: 'Using the OpenAI API key stored in AI Harness',
       };
     const r = await this.exec(await this.requireBinary(), ['login', 'status']);
     const text = `${r.stdout}\n${r.stderr}`.trim();

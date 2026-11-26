@@ -1,4 +1,4 @@
-import type { DiffFileDto, TaskDiffDto } from '@agentforge/shared';
+import type { DiffFileDto, TaskDiffDto } from '@ai-harness/shared';
 import { execa } from 'execa';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';

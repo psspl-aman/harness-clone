@@ -1,4 +1,4 @@
-import { GithubConnectInputSchema } from '@agentforge/shared';
+import { GithubConnectInputSchema } from '@ai-harness/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context';

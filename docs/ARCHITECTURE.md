@@ -1,4 +1,4 @@
-# AgentForge architecture
+# AI Harness architecture
 
 ## Overview
 
@@ -6,7 +6,7 @@
 Browser (Next.js app, :4318)
   │  REST (TanStack Query)          WebSocket /ws (LiveClient)
   ▼                                   ▲
-AgentForge daemon (Fastify, :4317) ───┘
+AI Harness daemon (Fastify, :4317) ───┘
   ├─ http/security   loopback-Host + Origin guard, CORS
   ├─ routes/*        thin handlers that validate input and call services
   ├─ services/*      domain logic (settings, projects, … one per module)
@@ -80,7 +80,7 @@ Migrations live in `apps/daemon/drizzle/` and run at startup.
   - list repositories and owners
   - create repositories
   - clone, passing the token as an `http.extraheader` through `GIT_CONFIG_*` environment variables
-- **`services/secrets.ts`.** Encrypts values with AES-256-GCM, using the secret's name as associated data. The key lives in `AGENTFORGE_HOME/secret.key` with mode 0600.
+- **`services/secrets.ts`.** Encrypts values with AES-256-GCM, using the secret's name as associated data. The key lives in `AI_HARNESS_HOME/secret.key` with mode 0600.
 - **`services/onboarding/analyzer.ts`.** A deterministic analysis with no LLM involved, which produces the `OnboardingReport`.
   - `ProjectService.runOnboarding` runs it in the background and emits `project.onboarding` and `project.updated` events.
   - It fills in only commands the user hasn't set.
@@ -138,7 +138,7 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - `regenerate_task`: task
 - **`services/planner/parse.ts`:**
   - Pulls the JSON out of the reply (prefers the last fenced block, otherwise the first balanced object, aware of strings).
-  - Validates it with `PlannerOutputSchema` (in `@agentforge/shared`; enums tolerate case).
+  - Validates it with `PlannerOutputSchema` (in `@ai-harness/shared`; enums tolerate case).
   - Checks the dependency graph (`validatePlannerGraph`): duplicate refs, unknown refs or keys, self-dependencies and cycles.
   - Returns readable errors, which become the retry prompt.
 - **`services/tasks.ts`, `TaskService`:** owns plans and tasks.
@@ -202,7 +202,7 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
 
 ## Run, terminals and errors (Phase 7)
 
-- **`services/run-service.ts`:** the project's dev server(s): the single run command, or each entry of `commands.services` (frontend, API, worker…), each started as `bash -lc <command>` in its own `run` PTY (via `TerminalService`) in its folder, with `PORT` set to its declared port. Declared ports are probed on IPv4 and IPv6 loopback before anything starts, and AgentForge's own ports are refused, so a clash is reported on that service instead of becoming a crash loop; `EADDRINUSE`-style output is flagged too. Each service's first local URL becomes its URL (ignoring URLs on another service's port); with none it counts as running after 4 s and falls back to its port. The overall status and preview URL (a web/frontend service, else the first) are mirrored to `projects.running_status` and broadcast as `project.run`, plus one-shot build, test and install terminals and interactive shells. Deleting a project kills its terminals.
+- **`services/run-service.ts`:** the project's dev server(s): the single run command, or each entry of `commands.services` (frontend, API, worker…), each started as `bash -lc <command>` in its own `run` PTY (via `TerminalService`) in its folder, with `PORT` set to its declared port. Declared ports are probed on IPv4 and IPv6 loopback before anything starts, and AI Harness's own ports are refused, so a clash is reported on that service instead of becoming a crash loop; `EADDRINUSE`-style output is flagged too. Each service's first local URL becomes its URL (ignoring URLs on another service's port); with none it counts as running after 4 s and falls back to its port. The overall status and preview URL (a web/frontend service, else the first) are mirrored to `projects.running_status` and broadcast as `project.run`, plus one-shot build, test and install terminals and interactive shells. Deleting a project kills its terminals.
 - **`services/onboarding/command-advisor.ts`:** "Suggest with AI". A read-only Planner-engine run (falling back to any signed-in engine) reads the project and answers with JSON: install/build/test/lint, either one run command or several services with non-clashing ports, and notes. The answer is validated with the shared schemas and kept in memory until the user applies (a normal `PATCH` of `commands`) or dismisses it. When a task finishes and the project still has no run command, the deterministic onboarding analysis runs again to fill the gaps.
 - **`services/errors/matchers.ts`:** pluggable matchers, each a function of the current line and the recent lines. `OutputScanner` buffers PTY chunks into lines, strips ANSI codes, keeps the last 80 lines for excerpts and reports each detection once per terminal.
 - **`services/errors/error-service.ts`:** listens to `terminal.output` and `terminal.exit` for project terminals, and to `task.status_changed`. Errors are upserted by `(project, fingerprint)`, where the fingerprint is a hash of matcher, file and the message with numbers and quoted values normalised. A non-zero exit of a run terminal is recorded only when nothing more specific was found and the stop wasn't deliberate. Failed tasks are recorded with the fingerprint `task:<id>`.
@@ -236,15 +236,15 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
 
 - **`services/memory.ts`:** `memory_entries` with scopes `global` (preferences), `project` (onboarding facts, Documenter knowledge, your entries) and `task` (the Documenter's summary of each finished task).
   - **Prompt selection:** `forPrompt(project, query, budget)` scores each entry. Pinned +100, global +50, always-relevant kinds +20, word overlap with the task (stop words removed, light stemming) ×10, plus up to +1 for recency. It keeps entries that are always relevant or share a word with the task, and fills the `memory.maxPromptChars` budget in score order. The orchestrator queries with the task's title, description, criteria and affected areas; the Planner with the requirement, instructions and referenced files.
-  - **Mirror file:** changes (including onboarding finishing and tasks reaching DONE, which is when the Documenter writes) schedule a debounced rewrite of `.agentforge/memory.md` in the project folder. The file is excluded via `.git/info/exclude` (`lib/agentforge-dir.ts`, shared with the Planner's attachments) so it never makes the checkout dirty for merges.
-  - **Handoff notes** (`services/handoff.ts`): `.agentforge/PROJECT.md` and `.agentforge/tasks/<KEY>.md`, rebuilt (debounced) on task, plan, memory and error events and once at startup. Before each role run, `Orchestrator.runRole` calls `prepareRun`, which refreshes the task's file, copies the notes into the worktree (`.agentforge/` is excluded through the shared `info/exclude`, so `commitAll` never picks it up) and appends a prompt section pointing at them. When the previous run on the task used a different engine, it also inlines the last runs' summaries, the latest review and the latest tests. Setting: `memory.handoffFiles`.
+  - **Mirror file:** changes (including onboarding finishing and tasks reaching DONE, which is when the Documenter writes) schedule a debounced rewrite of `.ai-harness/memory.md` in the project folder. The file is excluded via `.git/info/exclude` (`lib/project-data-dir.ts`, shared with the Planner's attachments) so it never makes the checkout dirty for merges.
+  - **Handoff notes** (`services/handoff.ts`): `.ai-harness/PROJECT.md` and `.ai-harness/tasks/<KEY>.md`, rebuilt (debounced) on task, plan, memory and error events and once at startup. Before each role run, `Orchestrator.runRole` calls `prepareRun`, which refreshes the task's file, copies the notes into the worktree (`.ai-harness/` is excluded through the shared `info/exclude`, so `commitAll` never picks it up) and appends a prompt section pointing at them. When the previous run on the task used a different engine, it also inlines the last runs' summaries, the latest review and the latest tests. Setting: `memory.handoffFiles`.
 - **`services/docs.ts`:** task reports from `documents`, plus Markdown files found with `git ls-files` (up to 4 levels deep, no vendored or build folders) read live through `FileService`, so the same path and secret guards apply. `exportAll` concatenates them with a table of contents and headings shifted down one level.
 - **PDF:** the web app's `/projects/[id]/docs/print` renders the document(s) and opens the browser's print dialog. Print CSS hides everything except `.print-root`.
 
 ## Safety and hardening (Phase 10)
 
 - **Guard (`services/safety.ts`, `safety/classify.ts`).**
-  - At startup the daemon writes `~/.agentforge/bin/agentforge-guard.mjs`. Engines whose adapter sets `supportsGuard` (Claude Code) get a per-run guard from `EngineRegistry`: `--settings '{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"<node> <guard>","timeout":900}]}]}}'` plus `AF_GUARD_URL` and `AF_GUARD_TOKEN` in the CLI's environment. The token is revoked when the run ends, which also expires its pending approvals.
+  - At startup the daemon writes `~/.ai-harness/bin/ai-harness-guard.mjs`. Engines whose adapter sets `supportsGuard` (Claude Code) get a per-run guard from `EngineRegistry`: `--settings '{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"<node> <guard>","timeout":900}]}]}}'` plus `AF_GUARD_URL` and `AF_GUARD_TOKEN` in the CLI's environment. The token is revoked when the run ends, which also expires its pending approvals.
   - The hook posts each tool call to `/api/safety/check`. `classifyTool` returns allow, confirm or deny:
     - Bash command rules: destructive deletes, disk and power commands, push/sudo/pipe-to-shell, secret files, environment dumps, and writes outside the root.
     - File tools must stay inside the run's cwd (the task worktree).
@@ -252,7 +252,7 @@ EngineRegistry ── AgentEngineAdapter (interface from the spec)
   - Confirmations create an approval, broadcast as `safety.approval`. The hook polls `/api/safety/wait` (about 20 s long-polls) until you answer or 10 minutes pass. Exit code 2 blocks the call and tells the agent why. If the daemon can't be reached, the hook fails closed.
 - **Redaction (`safety/redact.ts`).** `RunRecorder` (every run event before it is stored or broadcast) and `TerminalService` (PTY output before scrollback and broadcast) apply a redactor. It masks the decrypted values in `SecretStore` (cached until a secret changes) and common token shapes. It follows `settings.safety.redactSecrets`.
 - **Restart recovery.** At boot, `Orchestrator.start()` looks at the latest run of each active task. If it was cut off by a shutdown or crash, it writes a checkpoint and sets `resumeHint`, so the step continues the same CLI session (or reruns with the partial output).
-- **Agent tools (`services/agent-tools.ts`, `routes/agent-mcp.ts`).** The per-run guard also carries `mcp: { url: <daemon>/mcp, headers: { x-agentforge-guard } }`. The Claude adapter adds `--mcp-config` (an `http` server named `agentforge`) and allows `mcp__agentforge` in every permission mode. Each POST builds an `McpServer` scoped to the token's session (project, task, role) and serves it through a stateless `StreamableHTTPServerTransport`. Memory the agents add is stored with `source = 'agent'` and tagged with the task key.
+- **Agent tools (`services/agent-tools.ts`, `routes/agent-mcp.ts`).** The per-run guard also carries `mcp: { url: <daemon>/mcp, headers: { x-ai-harness-guard } }`. The Claude adapter adds `--mcp-config` (an `http` server named `ai-harness`) and allows `mcp__ai-harness` in every permission mode. Each POST builds an `McpServer` scoped to the token's session (project, task, role) and serves it through a stateless `StreamableHTTPServerTransport`. Memory the agents add is stored with `source = 'agent'` and tagged with the task key.
 - **Fixing failed tasks.** `Orchestrator.fixFailed` sets `fixSource = 'failure'` with the failure as `failureNote`, resets the fix-loop count and moves the task to FIXING. The Fixer prompt gets the failure, and the fix then goes to review. `ErrorService.fix` routes pipeline-failure errors there (via `setTaskFixer`) instead of creating a separate fix task. Cancelling a fix reopens its errors.
 - **Virtualized logs.** Run logs in the task drawer render through `components/virtual-log.tsx` (TanStack Virtual, measured rows, follow-tail) and stream live while a run is active. Terminals use xterm's own virtualized buffer.
 

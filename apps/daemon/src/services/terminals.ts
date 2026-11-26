@@ -1,5 +1,5 @@
 import type { Redactor } from '../safety/redact';
-import { Topics, type TerminalInfo } from '@agentforge/shared';
+import { Topics, type TerminalInfo } from '@ai-harness/shared';
 import { eq } from 'drizzle-orm';
 import { spawnSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';

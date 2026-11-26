@@ -5,7 +5,7 @@ import {
   type SheetKind,
   type SheetPreviewDto,
   type SheetSourceDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -89,7 +89,7 @@ function downloadTemplate() {
   const url = URL.createObjectURL(new Blob([TEMPLATE], { type: 'text/csv' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'agentforge-tasks-template.csv';
+  a.download = 'ai-harness-tasks-template.csv';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -42,7 +42,7 @@
     - the npm placeholder test script is ignored
     - Django via Poetry, Go with Gin, an empty folder, and a git repo whose remote credentials get redacted
     - `.env` values never appear in the report
-  - Directory browser and path safety: refuses `/`, your home folder, system folders, AgentForge's own data folder, non-empty folders for scratch projects, and duplicate projects.
+  - Directory browser and path safety: refuses `/`, your home folder, system folders, AI Harness's own data folder, non-empty folders for scratch projects, and duplicate projects.
   - Project lifecycle:
     - scratch projects get `git init`, a secret-safe `.gitignore` and an initial commit
     - attaching a non-git folder initialises git without committing `.env`, `.env.production` or `*.pem`
@@ -151,7 +151,7 @@
 - **Real pipeline run.** Claude Code with haiku built "greet.js with node:test tests" from an approved one-task plan in about 1 minute, for $0.033 across 4 role runs (each ran once with no retries).
   - The Developer wrote the module, the tests and `package.json`.
   - The Reviewer approved, with 2 comments.
-  - The Tester added coverage for untested criteria (11 tests). AgentForge's own `node --test` passed.
+  - The Tester added coverage for untested criteria (11 tests). AI Harness's own `node --test` passed.
   - The Documenter wrote a README.
   - The work merged with `--no-ff` into `main`. The checkout is clean and the tests pass in the repo.
 
@@ -200,7 +200,7 @@
   - Memory CRUD, search across title, content and tags, kind filter, pinning (pinned first), and validation.
   - Global preferences are kept separate from project memory.
   - Prompt selection: pinned entries, global preferences and always-relevant kinds (conventions, commands, pitfalls, stack) are included, plus entries that share words with the task. Unrelated decisions are left out, and a tight budget keeps only the top-ranked entries.
-  - `.agentforge/memory.md` is written (grouped by kind, pinned marked), `.agentforge/` is added to `.git/info/exclude`, and turning the mirror off removes the file.
+  - `.ai-harness/memory.md` is written (grouped by kind, pinned marked), `.ai-harness/` is added to `.git/info/exclude`, and turning the mirror off removes the file.
   - Docs list README, CHANGELOG and architecture files first, then other Markdown, then task reports. Non-Markdown paths are refused. Single-document download and the combined export (headings shifted under each document's title) work.
 - **E2E (Playwright, 26 tests in total):** add, search, pin, edit and delete memory in the Memory tab, check the mirror file, read README and a guide in the Docs tab, download a document, open the print view, and add a global preference in Settings.
 
@@ -236,7 +236,7 @@ Verified with Vitest (216 tests: fail → errors badge → Fix with agent from t
 The master spec was re-checked section by section. Closed in this pass:
 
 - **MCP tools for agents (§2, §3).**
-  - During a Claude Code run, AgentForge serves its own MCP server (`/mcp`, Streamable HTTP, authenticated by the run's token) and passes it with `--mcp-config`.
+  - During a Claude Code run, AI Harness serves its own MCP server (`/mcp`, Streamable HTTP, authenticated by the run's token) and passes it with `--mcp-config`.
   - Tools: `project_memory_search`, `project_memory_add` (not for reviewers), `task_details`, `project_tasks`, `task_report` and `project_errors`, all scoped to the run's project and task.
   - Verified with the real CLI (haiku, about $0.0065): the agent found the server, called `project_memory_search` (through the safety guard) and answered from project memory.
 - **Global paused banner (§10.2).** Tasks paused for quota or login across all projects show "… paused — usage window expired, resumes at HH:MM (in …)" in a global banner.

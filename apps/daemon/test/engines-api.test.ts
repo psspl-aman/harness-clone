@@ -1,4 +1,4 @@
-import type { AnyAppEvent } from '@agentforge/shared';
+import type { AnyAppEvent } from '@ai-harness/shared';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';

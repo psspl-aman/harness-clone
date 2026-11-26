@@ -3,7 +3,7 @@ import type {
   UsageBucket,
   UsageSummaryDto,
   UsageWindowStatusDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { and, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { projects, tasks, usageRecords } from '../db/schema';

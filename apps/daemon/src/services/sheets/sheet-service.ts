@@ -8,7 +8,7 @@ import {
   type SheetSourceDto,
   type SheetSyncResultDto,
   type TaskStatus,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import type { Db } from '../../db/client';
 import { projects, sheetSources } from '../../db/schema';

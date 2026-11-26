@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectSummary } from '@agentforge/shared';
+import type { ProjectSummary } from '@ai-harness/shared';
 import { AlertTriangle, ChevronRight, FolderGit2, HardDrive } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';

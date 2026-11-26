@@ -89,7 +89,7 @@ export function resolveRoleModel(
 
 /** Global application settings. Stored as one JSON document in `settings`. */
 export const AppSettingsSchema = z.object({
-  /** Where GitHub clones / managed workspaces live. null → `<AGENTFORGE_HOME>/workspaces`. */
+  /** Where GitHub clones / managed workspaces live. null → `<AI_HARNESS_HOME>/workspaces`. */
   workspaceRoot: z.string().min(1).nullable(),
   concurrency: z.object({
     maxTasksPerProject: z.number().int().min(1).max(16),
@@ -124,9 +124,9 @@ export const AppSettingsSchema = z.object({
   }),
   memory: z.object({
     maxPromptChars: z.number().int().min(500).max(100_000),
-    /** Mirror project memory to `.agentforge/memory.md` (kept out of git). */
+    /** Mirror project memory to `.ai-harness/memory.md` (kept out of git). */
     mirrorFile: z.boolean(),
-    /** Keep `.agentforge/PROJECT.md` and `tasks/<KEY>.md` handoff notes for agents (kept out of git). */
+    /** Keep `.ai-harness/PROJECT.md` and `tasks/<KEY>.md` handoff notes for agents (kept out of git). */
     handoffFiles: z.boolean(),
   }),
   safety: z.object({

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ErrorDto, TerminalInfo } from '@agentforge/shared';
+import type { ErrorDto, TerminalInfo } from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -275,7 +275,7 @@ function ErrorsPane({
       {visible.length === 0 ? (
         <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-1 p-6 text-sm">
           <CheckCircle2 className="text-success size-5" />
-          No open errors. AgentForge watches run output, terminals and the pipeline.
+          No open errors. AI Harness watches run output, terminals and the pipeline.
           {hidden > 0 && (
             <button className="text-primary text-xs underline" onClick={() => setShowClosed(true)}>
               Show {hidden} resolved or ignored
