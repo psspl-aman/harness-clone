@@ -17,9 +17,10 @@ import {
   RefreshCw,
   Sheet,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { PriorityLabel } from '@/components/plan/badges';
 import { Badge } from '@/components/ui/badge';
@@ -339,16 +340,28 @@ export function SheetSourceDialog({
   projectId,
   open,
   onOpenChange,
+  initialKind,
+  initialLocation,
+  offerOneAtATime = false,
+  onConnected,
 }: {
   projectId?: string;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** Prefill the source (e.g. a link pasted or a file attached in the chat); it is previewed on open. */
+  initialKind?: SheetKind;
+  initialLocation?: string;
+  /** Offer to run this project's tasks one at a time (chat flow: "complete them one by one"). */
+  offerOneAtATime?: boolean;
+  onConnected?: (s: SheetSourceDto) => void;
 }) {
   const qc = useQueryClient();
   const projects = useQuery({ queryKey: qk.projects, queryFn: api.projects.list });
   const [project, setProject] = useState(projectId ?? '');
-  const [kind, setKind] = useState<SheetKind>('google');
-  const [location, setLocation] = useState('');
+  const [kind, setKind] = useState<SheetKind>(initialKind ?? 'google');
+  const [location, setLocation] = useState(initialLocation ?? '');
+  const [oneAtATime, setOneAtATime] = useState(offerOneAtATime);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [sheet, setSheet] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [columns, setColumns] = useState<Partial<Record<SheetField, string>>>({});
@@ -369,15 +382,44 @@ export function SheetSourceDialog({
       toast.error('Couldn’t read the sheet', { description: errMsg(e) });
     },
   });
+  // Preview a prefilled source straight away.
+  const previewOnOpen = useRef(!!initialLocation?.trim());
+  useEffect(() => {
+    if (!previewOnOpen.current) return;
+    previewOnOpen.current = false;
+    doPreview.mutate(input);
+  });
+  /** Excel/CSV picked in the browser: saved into the project, then read from there. */
+  const upload = useMutation({
+    mutationFn: (file: File) => api.chat.upload(project, [file]),
+    onSuccess: ([saved]) => {
+      if (!saved) return;
+      setLocation(saved.path);
+      setSheet(null);
+      setName(defaultName('file', saved.name));
+      doPreview.mutate({ ...input, kind: 'file', location: saved.path, sheet: null });
+    },
+    onError: (e) => toast.error('Upload failed', { description: errMsg(e) }),
+  });
   const create = useMutation({
-    mutationFn: () =>
-      api.sheets.create(project, {
+    mutationFn: async () => {
+      const s = await api.sheets.create(project, {
         ...input,
         name: name.trim() || defaultName(kind, location),
         pollingIntervalSec: polling === 'off' ? null : Number(polling),
         autoStart,
         autoEnrich,
-      }),
+      });
+      if (offerOneAtATime && oneAtATime) {
+        await api.projects
+          .update(project, { pipeline: { maxConcurrentTasks: 1 } })
+          .then(() => qc.invalidateQueries({ queryKey: qk.project(project) }))
+          .catch((e) =>
+            toast.error('Couldn’t switch to one task at a time', { description: errMsg(e) }),
+          );
+      }
+      return s;
+    },
     onSuccess: (s) => {
       // The first import starts right away and its live updates can arrive before this
       // response, so keep what's already there and refetch rather than overwrite it.
@@ -390,6 +432,7 @@ export function SheetSourceDialog({
           ? 'Importing rows now — agents start on them, highest priority first.'
           : 'Importing rows now — they’ll wait for your approval.',
       });
+      onConnected?.(s);
       onOpenChange(false);
     },
     onError: (e) => toast.error('Could not connect the sheet', { description: errMsg(e) }),
@@ -489,7 +532,32 @@ export function SheetSourceDialog({
                 }
                 className="font-mono text-xs"
               />
+              {kind === 'file' && project && (
+                <>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept=".xlsx,.csv,.tsv"
+                    hidden
+                    aria-label="Upload a spreadsheet"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) upload.mutate(f);
+                      e.target.value = '';
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={upload.isPending}
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    {upload.isPending ? <Loader2 className="animate-spin" /> : <Upload />} Upload
+                  </Button>
+                </>
+              )}
               <Button
+                type="button"
                 variant="outline"
                 disabled={!canPreview || doPreview.isPending}
                 onClick={() => doPreview.mutate(input)}
@@ -500,7 +568,9 @@ export function SheetSourceDialog({
             <p className="text-muted-foreground text-xs">
               {kind === 'google'
                 ? 'Share the sheet as “Anyone with the link — Viewer” (or Publish to web). The tab in the link is the one that’s read. AgentForge only reads it.'
-                : 'The file is re-read on every sync, so you can keep editing it in Excel.'}
+                : project
+                  ? 'Upload a file, or give the full path of one on this machine. A path is re-read on every sync, so you can keep editing it in Excel; an upload is a copy — upload again to pick up changes.'
+                  : 'The file is re-read on every sync, so you can keep editing it in Excel.'}
             </p>
           </div>
 
@@ -621,6 +691,18 @@ export function SheetSourceDialog({
                 </span>
               </span>
             </label>
+            {offerOneAtATime && (
+              <label className="flex items-start gap-3 text-sm">
+                <Switch checked={oneAtATime} onCheckedChange={setOneAtATime} className="mt-0.5" />
+                <span>
+                  <span className="font-medium">Complete tasks one at a time</span>
+                  <span className="text-muted-foreground block text-xs">
+                    Agents finish each task before starting the next, in priority order. Changes
+                    this project’s “max concurrent tasks” to 1 (Overview → Pipeline).
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
         </div>
 
