@@ -1,4 +1,7 @@
-import type { AgentEvent } from '@ai-harness/shared';
+import type { AgentEvent, UsageWindow } from '@ai-harness/shared';
+import { readdirSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { classifyEngineError } from '../errors';
 import {
   CliAdapter,
@@ -8,9 +11,165 @@ import {
   type BuiltCommand,
   type RunState,
 } from '../cli-adapter';
-import type { AgentRunInput, AuthStatusResult, LoginFlow } from '../types';
+import type { AgentRunInput, AgentRunResult, AuthStatusResult, LoginFlow } from '../types';
 
 type Json = Record<string, unknown>;
+
+/** Label used when neither the run nor the Codex config names a model. */
+export const CODEX_DEFAULT_MODEL = 'codex (default)';
+
+const codexHome = () => process.env.CODEX_HOME || join(homedir(), '.codex');
+
+/**
+ * Map a Codex `rate_limits` object ({primary, secondary: {used_percent,
+ * window_minutes, resets_at | resets_in_seconds}}) onto a rate_limit event,
+ * naming windows like Claude's (five_hour / seven_day) so the UI treats them
+ * the same. Returns null when there is nothing usable.
+ */
+export function codexRateLimitEvent(rl: unknown, now = Date.now()): AgentEvent | null {
+  if (!rl || typeof rl !== 'object') return null;
+  const windows: UsageWindow[] = [];
+  for (const key of ['primary', 'secondary'] as const) {
+    const w = (rl as Json)[key] as Json | null | undefined;
+    if (!w || typeof w !== 'object') continue;
+    const pct = typeof w.used_percent === 'number' ? w.used_percent : null;
+    const mins = num(w.window_minutes);
+    const resetsAt =
+      typeof w.resets_at === 'number'
+        ? w.resets_at * 1000
+        : typeof w.resets_in_seconds === 'number'
+          ? now + w.resets_in_seconds * 1000
+          : null;
+    const name =
+      mins === 300
+        ? 'five_hour'
+        : mins === 10080
+          ? 'seven_day'
+          : !mins
+            ? key
+            : mins % 1440 === 0
+              ? `${mins / 1440}_day`
+              : `${Math.round(mins / 60)}_hour`;
+    windows.push({
+      name,
+      utilization: pct === null ? null : Math.min(1, Math.max(0, pct / 100)),
+      resetsAt,
+      status:
+        pct === null ? 'unknown' : pct >= 100 ? 'rejected' : pct >= 80 ? 'warning' : 'allowed',
+    });
+  }
+  if (!windows.length) return null;
+  const rejected = windows.filter((w) => w.status === 'rejected');
+  const status = rejected.length
+    ? 'rejected'
+    : windows.some((w) => w.status === 'warning')
+      ? 'warning'
+      : windows.every((w) => w.status === 'unknown')
+        ? 'unknown'
+        : 'allowed';
+  const resetsAt = rejected.length
+    ? Math.max(...rejected.map((w) => w.resetsAt ?? 0)) || null
+    : (windows[0]!.resetsAt ?? null);
+  return { kind: 'rate_limit', status, resetsAt, windows };
+}
+
+/** Top-level `model = "…"` from Codex's config.toml (read-only), if set. */
+export function codexConfigModel(home = codexHome()): string | null {
+  try {
+    const toml = readFileSync(join(home, 'config.toml'), 'utf8');
+    const top = toml.split(/^\s*\[/m)[0] ?? ''; // stop at the first [table]
+    return /^\s*model\s*=\s*["']([^"']+)["']/m.exec(top)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `codex exec --json` doesn't stream rate limits or the model, but Codex
+ * writes both to its session rollout file
+ * (`sessions/YYYY/MM/DD/rollout-…-<thread id>.jsonl`): `event_msg` token_count
+ * payloads carry `rate_limits`, `turn_context` carries `model`. Only the
+ * newest 14 day folders are searched.
+ */
+export function readCodexRollout(
+  threadId: string,
+  home = codexHome(),
+): { model: string | null; rateLimits: unknown } | null {
+  const root = join(home, 'sessions');
+  const desc = (dir: string) => {
+    try {
+      return readdirSync(dir).sort().reverse();
+    } catch {
+      return [];
+    }
+  };
+  const days: string[] = [];
+  outer: for (const y of desc(root))
+    for (const m of desc(join(root, y)))
+      for (const d of desc(join(root, y, m))) {
+        days.push(join(root, y, m, d));
+        if (days.length >= 14) break outer;
+      }
+  for (const day of days) {
+    const file = desc(day).find((f) => f.endsWith(`${threadId}.jsonl`));
+    if (!file) continue;
+    let model: string | null = null;
+    let rateLimits: unknown = null;
+    try {
+      for (const line of readFileSync(join(day, file), 'utf8').split('\n')) {
+        if (!line.includes('"turn_context"') && !line.includes('"rate_limits"')) continue;
+        try {
+          const d = JSON.parse(line) as Json;
+          const p = (d.payload ?? {}) as Json;
+          if (d.type === 'turn_context' && typeof p.model === 'string') model = p.model;
+          if (p.rate_limits) rateLimits = p.rate_limits;
+        } catch {
+          /* partial line */
+        }
+      }
+    } catch {
+      return null;
+    }
+    return { model, rateLimits };
+  }
+  return null;
+}
+
+/**
+ * The most recent `rate_limits` from any rollout file (newest day, newest file). Rate-limit
+ * windows are account-wide, so this is a fallback when the run's own rollout is missing or wrote
+ * no limits (e.g. a run that failed instantly at the usage cap and left no thread file).
+ */
+export function latestCodexRateLimits(home = codexHome()): unknown {
+  const root = join(home, 'sessions');
+  const desc = (dir: string) => {
+    try {
+      return readdirSync(dir).sort().reverse();
+    } catch {
+      return [];
+    }
+  };
+  let scanned = 0;
+  for (const y of desc(root))
+    for (const m of desc(join(root, y)))
+      for (const d of desc(join(root, y, m))) {
+        for (const file of desc(join(root, y, m, d))) {
+          if (!file.endsWith('.jsonl')) continue;
+          if (++scanned > 40) return null;
+          try {
+            const lines = readFileSync(join(root, y, m, d, file), 'utf8').split('\n');
+            for (let i = lines.length - 1; i >= 0; i--) {
+              if (!lines[i]!.includes('"rate_limits"')) continue;
+              const p = (JSON.parse(lines[i]!).payload ?? {}) as Json;
+              if (p.rate_limits) return p.rate_limits;
+            }
+          } catch {
+            /* skip unreadable/partial file */
+          }
+        }
+      }
+  return null;
+}
 
 /**
  * OpenAI Codex CLI (`codex exec --json`). Event contract from the Codex
@@ -31,6 +190,7 @@ export class CodexAdapter extends CliAdapter {
     apiKey: true,
     resume: true,
     modelList: false,
+    effort: true,
   };
   override readonly staticModels = [
     { id: 'gpt-5-codex', label: 'GPT-5 Codex' },
@@ -46,6 +206,8 @@ export class CodexAdapter extends CliAdapter {
   protected buildCommand(input: AgentRunInput): BuiltCommand {
     const args = ['exec', '--json', '--skip-git-repo-check', '-C', input.cwd];
     if (input.model) args.push('-m', input.model);
+    // Config override (TOML value): same key as `model_reasoning_effort` in ~/.codex/config.toml.
+    if (input.effort) args.push('-c', `model_reasoning_effort="${input.effort}"`);
     if (input.permission === 'readonly') args.push('--sandbox', 'read-only');
     else args.push('--sandbox', 'workspace-write');
     if (input.permission === 'full') args.push('-c', 'sandbox_workspace_write.network_access=true');
@@ -58,9 +220,17 @@ export class CodexAdapter extends CliAdapter {
     const d = JSON.parse(line) as Json;
     const started = (state.scratch.started ??= new Set<string>()) as Set<string>;
     const out: AgentEvent[] = [];
+    // Some Codex builds put rate limits / the model on stream events; use them if so.
+    const limits = codexRateLimitEvent(d.rate_limits ?? ((d.payload ?? {}) as Json).rate_limits);
+    if (limits) out.push(limits);
+    if (typeof d.model === 'string') state.scratch.model = d.model;
     switch (d.type) {
       case 'thread.started':
-        out.push({ kind: 'session', sessionId: String(d.thread_id) });
+        out.push({
+          kind: 'session',
+          sessionId: String(d.thread_id),
+          model: typeof d.model === 'string' ? d.model : undefined,
+        });
         break;
       case 'turn.completed': {
         const u = (d.usage ?? {}) as Json;
@@ -73,6 +243,7 @@ export class CodexAdapter extends CliAdapter {
             outputTokens: num(u.output_tokens) + num(u.reasoning_output_tokens),
             cacheReadTokens: cached,
             cacheWriteTokens: num(u.cache_write_input_tokens),
+            ...(typeof state.scratch.model === 'string' ? { model: state.scratch.model } : {}),
           },
         });
         state.succeeded ??= true;
@@ -150,6 +321,44 @@ export class CodexAdapter extends CliAdapter {
         break;
     }
     return out;
+  }
+
+  /**
+   * After the CLI exits, fill in what `exec --json` leaves out: the model on
+   * usage (rollout → requested model → config.toml → "codex (default)") and
+   * the 5-hour / 7-day usage windows from the session rollout file.
+   */
+  override async run(
+    input: AgentRunInput,
+    onEvent: (e: AgentEvent) => void,
+  ): Promise<AgentRunResult> {
+    let streamedLimits = false;
+    const pending: AgentEvent[] = [];
+    const result = await super.run(input, (e) => {
+      if (e.kind === 'rate_limit') streamedLimits = true;
+      // Usage arrives at turn end; hold it until the model is known.
+      if (e.kind === 'usage' && !e.usage.model) pending.push(e);
+      else onEvent(e);
+    });
+    const rollout = result.sessionId ? readCodexRollout(result.sessionId) : null;
+    const model =
+      result.usage.model ||
+      rollout?.model ||
+      input.model ||
+      codexConfigModel() ||
+      CODEX_DEFAULT_MODEL;
+    const u = result.usage;
+    if (u.inputTokens || u.outputTokens || u.cacheReadTokens) u.model = model;
+    for (const e of pending) {
+      if (e.kind === 'usage') e.usage.model = model;
+      onEvent(e);
+    }
+    if (!streamedLimits) {
+      const limits = rollout?.rateLimits ?? latestCodexRateLimits();
+      const ev = limits ? codexRateLimitEvent(limits) : null;
+      if (ev) onEvent(ev);
+    }
+    return result;
   }
 
   async getAuthStatus(): Promise<AuthStatusResult> {

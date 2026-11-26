@@ -1,9 +1,15 @@
-import type { FsBrowseResult, FsEntry, PathCheckMode, PathCheckResult } from '@ai-harness/shared';
+import type {
+  FsBrowseResult,
+  FsEntry,
+  FsRoots,
+  PathCheckMode,
+  PathCheckResult,
+} from '@ai-harness/shared';
 import { constants } from 'node:fs';
-import { access, mkdir, readdir, stat } from 'node:fs/promises';
+import { access, mkdir, opendir, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, parse } from 'node:path';
 import { AppError, badRequest } from '../http/errors';
 import { isWithin, normalizePath } from '../lib/paths';
 
@@ -23,6 +29,41 @@ const FORBIDDEN_PREFIXES = [
   '/var/lib',
   '/root',
 ];
+/**
+ * Windows legacy compatibility junctions (`Application Data`, `Cookies`, …). They are detected
+ * as unreadable junctions; this list is a fallback for when detection doesn't catch one.
+ */
+const WIN_LEGACY_JUNCTIONS = new Set(
+  [
+    'Application Data',
+    'Cookies',
+    'Local Settings',
+    'My Documents',
+    'NetHood',
+    'PrintHood',
+    'Recent',
+    'SendTo',
+    'Start Menu',
+    'Templates',
+    'My Music',
+    'My Pictures',
+    'My Videos',
+    'Default User',
+    'All Users',
+    'Documents and Settings',
+    'History',
+    'Temporary Internet Files',
+  ].map((n) => n.toLowerCase()),
+);
+const isWin = process.platform === 'win32';
+
+/** True when a symlink/junction can't be opened (e.g. Windows' deny-listed legacy junctions). */
+const unreadable = (p: string) =>
+  opendir(p).then(
+    (d) => d.close().then(() => false),
+    (err: NodeJS.ErrnoException) => err.code === 'EPERM' || err.code === 'EACCES',
+  );
+
 /** Files that don't make a folder "non-empty" for a scratch project. */
 const IGNORABLE = new Set(['.DS_Store', 'Thumbs.db', '.git']);
 
@@ -67,19 +108,24 @@ export class FsService {
     const entries: FsEntry[] = [];
     let fileCount = 0;
     for (const d of dirents) {
+      const full = join(path, d.name);
       let isDir = d.isDirectory();
-      if (d.isSymbolicLink())
-        isDir = await stat(join(path, d.name)).then(
+      let hidden = d.name.startsWith('.');
+      if (d.isSymbolicLink()) {
+        isDir = await stat(full).then(
           (s) => s.isDirectory(),
           () => false,
         );
+        // Unreadable links (Windows legacy junctions like `Cookies`) are system clutter.
+        if (isDir && (await unreadable(full))) hidden = true;
+      }
       if (!isDir) {
         fileCount++;
         continue;
       }
-      const hidden = d.name.startsWith('.');
+      if (isWin && WIN_LEGACY_JUNCTIONS.has(d.name.toLowerCase()) && d.isSymbolicLink())
+        hidden = true;
       if (hidden && !showHidden) continue;
-      const full = join(path, d.name);
       entries.push({ name: d.name, path: full, hidden, isGitRepo: existsSync(join(full, '.git')) });
     }
     entries.sort((a, b) => Number(a.hidden) - Number(b.hidden) || a.name.localeCompare(b.name));
@@ -93,6 +139,21 @@ export class FsService {
       entries: entries.slice(0, MAX_ENTRIES),
       fileCount,
       truncated: entries.length > MAX_ENTRIES,
+    };
+  }
+
+  /** Platform info + drive roots for the folder picker's drive switcher. */
+  roots(): FsRoots {
+    const drives = isWin
+      ? Array.from({ length: 26 }, (_, i) => `${String.fromCharCode(65 + i)}:\\`).filter((d) =>
+          existsSync(d),
+        )
+      : ['/'];
+    return {
+      platform: isWin ? 'win32' : 'posix',
+      sep: isWin ? '\\' : '/',
+      home: homedir(),
+      drives,
     };
   }
 
@@ -131,7 +192,7 @@ export class FsService {
     if (!path) return fail('Path must be absolute');
 
     const home = homedir();
-    if (path === '/' || path === home)
+    if (parse(path).root === path || path === home)
       return fail('Choose a dedicated folder, not the filesystem root or your home folder');
     if (FORBIDDEN_PREFIXES.some((p) => isWithin(p, path)))
       return fail('System folders cannot be used for projects');

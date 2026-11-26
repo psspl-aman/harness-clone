@@ -51,6 +51,7 @@ export class CustomCliAdapter extends CliAdapter {
       apiKey: !!config.apiKeyEnv,
       resume: config.args.some((a) => a.includes('{{sessionId}}')),
       modelList: false,
+      effort: false,
     };
   }
 

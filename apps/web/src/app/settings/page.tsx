@@ -22,6 +22,7 @@ import {
 } from '@/components/settings/fields';
 import { PricingEditor } from '@/components/settings/pricing';
 import { RoutingEditor } from '@/components/settings/routing-editor';
+import { EffortSelect } from '@/components/projects/engine-roles';
 import { PageHeader } from '@/components/shell/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,6 +70,10 @@ export default function SettingsPage() {
       d = { ...d, roleModels: edits.roleModels };
     if (JSON.stringify(edits.routing) !== JSON.stringify(settings.data.routing))
       d = { ...d, routing: edits.routing };
+    // Scalars that can be set back to null (diff helpers often drop null).
+    if (edits.effort !== settings.data.effort) d = { ...d, effort: edits.effort };
+    if (edits.monthlyBudgetUsd !== settings.data.monthlyBudgetUsd)
+      d = { ...d, monthlyBudgetUsd: edits.monthlyBudgetUsd };
     return d;
   }, [edits, settings.data]);
   const dirty = patch !== undefined;
@@ -156,10 +161,35 @@ export default function SettingsPage() {
           </Section>
 
           <Section
+            title="Reasoning effort"
+            description="Default thinking effort for every project, on engines that support it (Claude Code, Codex). Tasks, projects and complexity routing can override it."
+          >
+            <div className="rounded-xl border">
+              <EffortSelect value={draft.effort} onChange={(v) => set('effort', v)} />
+            </div>
+          </Section>
+
+          <Section
             title="Complexity routing"
             description="Send simple tasks through a lighter pipeline and a faster model, and hard tasks through the full pipeline with a stronger one. Projects can override this."
           >
             <RoutingEditor value={draft.routing} onChange={(r) => set('routing', r)} />
+          </Section>
+
+          <Section
+            title="Monthly budget"
+            description="A soft spend cap across all projects. When a project’s month-to-date cost reaches it, new tasks stop starting (running tasks finish). A project can set its own cap. 0 = no cap."
+          >
+            <NumberField
+              id="monthlyBudgetUsd"
+              label="Monthly budget"
+              suffix="USD / project / month"
+              value={draft.monthlyBudgetUsd ?? 0}
+              min={0}
+              max={1_000_000}
+              hint="Estimated and reported costs both count. 0 turns the cap off."
+              onChange={(v) => set('monthlyBudgetUsd', v > 0 ? v : null)}
+            />
           </Section>
 
           <Section

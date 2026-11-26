@@ -71,6 +71,20 @@
       "when": 1795526643839,
       "tag": "0009_review_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795682853316,
+      "tag": "0010_effort",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795689828705,
+      "tag": "0011_budget_and_auth",
+      "breakpoints": true
     }
   ]
 }

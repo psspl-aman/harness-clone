@@ -1,13 +1,17 @@
 import { homedir } from 'node:os';
-import { isAbsolute, normalize, relative, resolve, sep } from 'node:path';
+import { isAbsolute, normalize, parse, relative, resolve, sep } from 'node:path';
 
-/** Expand `~` and normalise; returns null for non-absolute input. */
+/**
+ * Expand `~` and normalise; returns null for non-absolute input. Trailing separators are
+ * stripped except on a filesystem root (`/`, `C:\`) — `C:` alone means "cwd on drive C".
+ */
 export function normalizePath(input: string): string | null {
   let p = input.trim();
   if (p === '~' || p.startsWith('~/')) p = homedir() + p.slice(1);
   if (!isAbsolute(p)) return null;
   const n = normalize(resolve(p));
-  return n.length > 1 && n.endsWith(sep) ? n.slice(0, -1) : n;
+  if (parse(n).root === n) return n;
+  return n.endsWith(sep) ? n.slice(0, -1) : n;
 }
 
 /** True when `child` is `parent` or inside it. */

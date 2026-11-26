@@ -1,4 +1,5 @@
 import type {
+  AgentRunResultDto,
   ApiError,
   CommandSuggestionDto,
   GitActionResultDto,
@@ -18,6 +19,7 @@ import type {
   CreateProjectInput,
   DeepPartial,
   FsBrowseResult,
+  FsRoots,
   GithubOwner,
   GithubRepo,
   GithubStatus,
@@ -196,6 +198,7 @@ export const api = {
     cost: (id: string) => request<ProjectCostDto>('GET', `/api/projects/${id}/cost`),
   },
   fs: {
+    roots: () => request<FsRoots>('GET', '/api/fs/roots'),
     browse: (path?: string, hidden = false) =>
       request<FsBrowseResult>(
         'GET',
@@ -221,6 +224,11 @@ export const api = {
     test: (id: string, body: { prompt?: string; model?: string }) =>
       request<{ runId: string }>('POST', `/api/engines/${id}/test`, body),
     cancelRun: (runId: string) => request<{ ok: true }>('POST', `/api/runs/${runId}/cancel`),
+    runResult: (runId: string) =>
+      request<{ running: boolean; result: AgentRunResultDto | null }>(
+        'GET',
+        `/api/engines/test-runs/${runId}`,
+      ),
     createCustom: (input: { slug: string; displayName: string; config: CustomEngineConfig }) =>
       request<EngineInfo>('POST', '/api/engines/custom', input),
     updateCustom: (id: string, input: { displayName: string; config: CustomEngineConfig }) =>
@@ -492,6 +500,7 @@ export const qk = {
   project: (id: string) => ['projects', id] as const,
   archivedProjects: ['archived-projects'] as const,
   requirements: (id: string) => ['projects', id, 'requirements'] as const,
+  fsRoots: ['fs', 'roots'] as const,
   fsBrowse: (path: string | undefined, hidden: boolean) =>
     ['fs', 'browse', path ?? '~', hidden] as const,
   fsCheck: (path: string, mode: PathCheckMode) => ['fs', 'check', mode, path] as const,

@@ -23,6 +23,12 @@ export type RoleEngines = z.infer<typeof RoleEnginesSchema>;
 export const RoleModelsSchema = z.partialRecord(z.enum(AGENT_ROLES), ModelIdSchema);
 export type RoleModels = z.infer<typeof RoleModelsSchema>;
 
+/** Reasoning effort passed to engines that support it. null/absent → the CLI's own default. */
+export const EFFORTS = ['low', 'medium', 'high'] as const;
+export const EffortSchema = z.enum(EFFORTS);
+export type Effort = z.infer<typeof EffortSchema>;
+export const EFFORT_LABELS: Record<Effort, string> = { low: 'Low', medium: 'Medium', high: 'High' };
+
 // ─── Complexity-aware routing ────────────────────────────────────────────────
 
 /**
@@ -38,6 +44,8 @@ export const RoutingRuleSchema = z.object({
   pipeline: z.enum(PIPELINE_PROFILES),
   /** Model to prefer for this complexity, applied only when the engine offers it. Null → engine default. */
   model: ModelIdSchema.nullable(),
+  /** Reasoning effort for this complexity on engines that support it. Null → fall through. */
+  effort: EffortSchema.nullable().default(null),
 });
 export type RoutingRule = z.infer<typeof RoutingRuleSchema>;
 
@@ -57,13 +65,45 @@ export type Routing = z.infer<typeof RoutingSchema>;
 export const DEFAULT_ROUTING: Routing = {
   enabled: false,
   profiles: {
-    xs: { pipeline: 'lite', model: 'haiku' },
-    s: { pipeline: 'lite', model: 'haiku' },
-    m: { pipeline: 'full', model: null },
-    l: { pipeline: 'full', model: 'opus' },
-    xl: { pipeline: 'full', model: 'opus' },
+    xs: { pipeline: 'lite', model: 'haiku', effort: null },
+    s: { pipeline: 'lite', model: 'haiku', effort: null },
+    m: { pipeline: 'full', model: null, effort: null },
+    l: { pipeline: 'full', model: 'opus', effort: null },
+    xl: { pipeline: 'full', model: 'opus', effort: null },
   },
 };
+
+// ─── Cheap mode ──────────────────────────────────────────────────────────────
+
+/**
+ * The cheapest model per engine, used by "Cheap mode". Only engines with a clear small
+ * model are listed; others keep their engine default (Codex has no obvious "mini" model).
+ */
+export const CHEAP_MODELS: Record<string, string> = {
+  'claude-code': 'haiku',
+  'gemini-cli': 'flash-lite',
+};
+
+/** The cheap model for an engine, if it has one and the engine actually offers it. */
+export function cheapModelFor(
+  engineId: string | undefined,
+  offered: { id: string }[] | undefined,
+): string | undefined {
+  const m = engineId ? CHEAP_MODELS[engineId] : undefined;
+  return m && (!offered || offered.some((x) => x.id === m)) ? m : undefined;
+}
+
+/** Routing for "Cheap mode": the base routing turned on, with xs/s tasks on the LITE pipeline. */
+export function cheapRouting(base: Routing): Routing {
+  return {
+    enabled: true,
+    profiles: {
+      ...base.profiles,
+      xs: { pipeline: 'lite', model: null, effort: 'low' },
+      s: { pipeline: 'lite', model: null, effort: 'low' },
+    },
+  };
+}
 
 /** The effective routing for a project: its override, else the global routing. */
 export function resolveRouting(global: Routing, override: Routing | null | undefined): Routing {
@@ -136,8 +176,12 @@ export const AppSettingsSchema = z.object({
   defaultEngines: RoleEnginesSchema,
   /** Per-role model overrides; a missing role uses the engine's own default model. */
   roleModels: RoleModelsSchema,
+  /** Default reasoning effort for every project (engines that support it). Null → each CLI's default. */
+  effort: EffortSchema.nullable().default(null),
   /** Map task complexity to a pipeline profile and model (off by default). */
   routing: RoutingSchema,
+  /** Soft monthly spend cap (USD); when a project's month-to-date cost reaches it, new tasks don't start. 0/null = off. */
+  monthlyBudgetUsd: z.number().min(0).max(1_000_000).nullable().default(null),
   /**
    * USD per 1M tokens, keyed by model id (e.g. "gpt-5-codex") or engine id.
    * Used only when the CLI doesn't report a cost itself.
@@ -179,7 +223,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     documenter: 'claude-code',
   },
   roleModels: {},
+  effort: null,
   routing: DEFAULT_ROUTING,
+  monthlyBudgetUsd: null,
 };
 
 export type DeepPartial<T> = T extends readonly unknown[]

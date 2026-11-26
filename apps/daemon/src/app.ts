@@ -292,7 +292,7 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     planner,
     runs,
     orchestrator,
-    usage: new UsageService(dbHandle.db, engineRegistry),
+    usage: new UsageService(dbHandle.db, engineRegistry, () => settings.get().pricing),
     errors: errorService,
     runner,
     files,

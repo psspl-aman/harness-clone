@@ -35,6 +35,7 @@ export class AntigravityAdapter extends CliAdapter {
     apiKey: false,
     resume: true,
     modelList: true,
+    effort: false,
   };
 
   protected binaryCandidates(): string[] {

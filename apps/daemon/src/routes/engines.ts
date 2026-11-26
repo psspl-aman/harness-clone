@@ -35,6 +35,9 @@ export function registerEngineRoutes(app: FastifyInstance, ctx: AppContext): voi
     const body = TestRunInputSchema.parse(req.body ?? {});
     return reply.status(202).send(ctx.engines.startTestRun(id(req), body));
   });
+  app.get('/api/engines/test-runs/:runId', async (req) =>
+    ctx.engines.testRunResult(z.object({ runId: z.string().max(64) }).parse(req.params).runId),
+  );
   app.post('/api/runs/:runId/cancel', async (req, reply) => {
     ctx.engines.cancelTestRun(z.object({ runId: z.string().max(64) }).parse(req.params).runId);
     return reply.status(202).send({ ok: true });

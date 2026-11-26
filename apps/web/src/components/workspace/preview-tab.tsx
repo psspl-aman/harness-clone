@@ -1,15 +1,25 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, Globe, Play, RotateCw } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { api, DAEMON_URL, qk } from '@/lib/api';
 import { useProjectRun } from './run-controls';
 
 /** Embedded preview of the running app (URL detected from the dev server's output, editable). */
 export function PreviewTab({ projectId, onStart }: { projectId: string; onStart: () => void }) {
   const run = useProjectRun(projectId).data;
-  const detected = run?.previewUrl ?? null;
+  const project = useQuery({
+    queryKey: qk.project(projectId),
+    queryFn: () => api.projects.get(projectId),
+  });
+  // A static site (root index.html, no run command) is served by the daemon with no dev server.
+  const staticUrl = project.data?.hasStaticSite
+    ? `${DAEMON_URL}/api/projects/${projectId}/site/`
+    : null;
+  const detected = run?.previewUrl ?? staticUrl;
   // The typed URL/override resets whenever the dev server reports a new URL.
   const [override, setOverride] = useState<{
     for: string | null;
@@ -125,9 +135,14 @@ export function PreviewTab({ projectId, onStart }: { projectId: string; onStart:
           </a>
         </Button>
       </form>
-      {!live && (
+      {!live && shown !== staticUrl && (
         <div className="bg-muted text-muted-foreground border-b px-3 py-1.5 text-xs">
           The project isn’t running — the preview may be stale or unreachable.
+        </div>
+      )}
+      {shown === staticUrl && (
+        <div className="bg-muted text-muted-foreground border-b px-3 py-1.5 text-xs">
+          Static site served from the project folder (index.html).
         </div>
       )}
       <iframe
