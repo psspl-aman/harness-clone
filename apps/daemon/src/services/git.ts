@@ -42,7 +42,17 @@ const HEAVY_DIRS = [
   'dist',
   'build',
 ];
-export const SECRET_FILE_RE = /(^|\/)(\.env(\..+)?|.+\.(pem|key|p12)|\.npmrc)$/;
+const SECRET_FILE_RE = /(^|\/)(\.env(\..+)?|.+\.(pem|key|p12)|\.npmrc)$/;
+/**
+ * Config templates that document variables with placeholder values. Projects are expected
+ * to commit these (reviewers check for them), so they are not treated as secrets.
+ */
+const ENV_TEMPLATE_RE = /(^|\/)\.env\.(example|sample|template|dist)$/;
+
+/** True for paths that may hold real secrets and must never be committed or displayed. */
+export function isSecretFile(path: string): boolean {
+  return SECRET_FILE_RE.test(path) && !ENV_TEMPLATE_RE.test(path);
+}
 
 const FALLBACK_IDENTITY = ['user.name=AgentForge', 'user.email=agentforge@localhost'];
 
@@ -103,7 +113,7 @@ export async function initRepo(
   if (opts.commitExisting) {
     await g.add(['-A']);
     const staged = (await g.diff(['--cached', '--name-only'])).split('\n').filter(Boolean);
-    const leaked = staged.filter((f) => SECRET_FILE_RE.test(f));
+    const leaked = staged.filter((f) => isSecretFile(f));
     if (leaked.length) await g.raw(['rm', '--cached', '--quiet', '--', ...leaked]);
   } else {
     await g.add(['.gitignore']);

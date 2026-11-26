@@ -33,6 +33,7 @@ import type {
   TerminalInfo,
   UpdateEngineInput,
   AttachmentDto,
+  StagedAttachmentDto,
   ChatMessageDto,
   CreateTaskInput,
   PlanBoardDto,
@@ -131,6 +132,27 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+/** POST files as multipart/form-data (one `file` field each). */
+async function uploadFiles<T>(path: string, files: File[]): Promise<T> {
+  const form = new FormData();
+  for (const f of files) form.append('file', f, f.name);
+  let res: Response;
+  try {
+    res = await fetch(`${DAEMON_URL}${path}`, { method: 'POST', body: form });
+  } catch {
+    throw new ApiClientError(
+      0,
+      'DAEMON_UNREACHABLE',
+      `Cannot reach the AgentForge daemon at ${DAEMON_URL}`,
+    );
+  }
+  const data = (await res.json()) as unknown;
+  if (!res.ok) {
+    const err = (data as ApiError).error;
+    throw new ApiClientError(res.status, err?.code ?? 'HTTP_ERROR', err?.message ?? res.statusText);
+  }
+  return data as T;
+}
 const gitAction = (id: string, path: string, body: unknown = {}) =>
   request<GitActionResultDto>('POST', `/api/projects/${id}/git/${path}`, body);
 
@@ -140,6 +162,10 @@ export const api = {
     get: () => request<AppSettings>('GET', '/api/settings'),
     update: (patch: DeepPartial<AppSettings>) =>
       request<AppSettings>('PATCH', '/api/settings', patch),
+  },
+  attachments: {
+    /** Keep files for a project that's still being created (new-project wizard). */
+    stage: (files: File[]) => uploadFiles<StagedAttachmentDto[]>('/api/attachments/staged', files),
   },
   projects: {
     list: () => request<ProjectSummary[]>('GET', '/api/projects'),
@@ -212,33 +238,8 @@ export const api = {
         'GET',
         `/api/projects/${projectId}/references?${new URLSearchParams({ q })}`,
       ),
-    upload: async (projectId: string, files: File[]): Promise<AttachmentDto[]> => {
-      const form = new FormData();
-      for (const f of files) form.append('file', f, f.name);
-      let res: Response;
-      try {
-        res = await fetch(`${DAEMON_URL}/api/projects/${projectId}/attachments`, {
-          method: 'POST',
-          body: form,
-        });
-      } catch {
-        throw new ApiClientError(
-          0,
-          'DAEMON_UNREACHABLE',
-          `Cannot reach the AgentForge daemon at ${DAEMON_URL}`,
-        );
-      }
-      const data = (await res.json()) as unknown;
-      if (!res.ok) {
-        const err = (data as ApiError).error;
-        throw new ApiClientError(
-          res.status,
-          err?.code ?? 'HTTP_ERROR',
-          err?.message ?? res.statusText,
-        );
-      }
-      return data as AttachmentDto[];
-    },
+    upload: (projectId: string, files: File[]) =>
+      uploadFiles<AttachmentDto[]>(`/api/projects/${projectId}/attachments`, files),
   },
   board: {
     get: (projectId: string) => request<PlanBoardDto>('GET', `/api/projects/${projectId}/board`),

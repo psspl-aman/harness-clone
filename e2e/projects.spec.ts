@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { E2E } from '../playwright.config';
 
@@ -35,8 +35,26 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click(); // engines: keep defaults
   await page.getByLabel('What should we build?').fill('A meal planner with a shopping list.');
+  // Requirement documents: upload two, remove one.
+  await page.getByLabel('Attach requirement documents').setInputFiles([
+    { name: 'brief.md', mimeType: 'text/markdown', buffer: Buffer.from('# Brief\nWeekly menus') },
+    { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Vegetarian first') },
+  ]);
+  const docs = page.getByRole('list', { name: 'Attached documents' });
+  await expect(docs.getByRole('listitem')).toHaveCount(2);
+  await docs.getByRole('button', { name: 'Remove notes.txt' }).click();
+  await expect(docs.getByRole('listitem')).toHaveCount(1);
+  // The same file again is skipped, not uploaded twice.
+  await page
+    .getByLabel('Attach requirement documents')
+    .setInputFiles([
+      { name: 'brief.md', mimeType: 'text/markdown', buffer: Buffer.from('# Brief\nWeekly menus') },
+    ]);
+  await expect(page.getByText('brief.md is already attached')).toBeVisible();
+  await expect(docs.getByRole('listitem')).toHaveCount(1);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
+  await expect(page.getByText('brief.md')).toBeVisible();
   await expect(page.getByText('Planner decides')).toBeHidden();
   await expect(page.getByText('Next.js, SQLite')).toBeVisible();
   await page.getByRole('button', { name: 'Create project' }).click();
@@ -50,8 +68,15 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   ).toBeVisible();
   const folder = join(parent, name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'));
   expect(existsSync(join(folder, '.git'))).toBe(true);
+  // The document went into the project (git-excluded), attached to the first requirement.
+  const attached = readdirSync(join(folder, '.agentforge/attachments'));
+  expect(attached).toHaveLength(1);
+  expect(existsSync(join(folder, '.agentforge/attachments', attached[0]!, 'brief.md'))).toBe(true);
 
-  await page.getByRole('link', { name: 'Projects' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Projects' })
+    .click();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 });
 
@@ -152,4 +177,47 @@ test('integrations page offers GitHub token connection', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
   await expect(page.getByLabel('Personal access token')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeDisabled();
+});
+
+test('connecting GitHub inside the new-project wizard keeps the wizard open', async ({ page }) => {
+  // Stub the daemon calls so the test never reaches github.com and starts disconnected.
+  await page.route('**/api/github/status', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        connected: false,
+        login: null,
+        name: null,
+        avatarUrl: null,
+        scopes: [],
+        source: null,
+        ghCliAvailable: false,
+      }),
+    }),
+  );
+  let connectCalls = 0;
+  await page.route('**/api/github/connect', async (route) => {
+    connectCalls++;
+    await route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'BAD_REQUEST', message: 'GitHub rejected this token' },
+      }),
+    });
+  });
+
+  await page.goto('/projects/new?mode=existing');
+  await page
+    .getByRole('button', { name: /GitHub/ })
+    .first()
+    .click();
+  // A nested <form> would submit natively and reset the wizard.
+  await expect(page.locator('form form')).toHaveCount(0);
+  await page.getByLabel('Personal access token').fill('ghp_not_a_real_token_0123456789'); // gforge:allow — fake test token
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+
+  await expect(page.getByText('GitHub rejected this token')).toBeVisible();
+  await expect(page).toHaveURL(/mode=existing/);
+  expect(connectCalls).toBe(1);
 });

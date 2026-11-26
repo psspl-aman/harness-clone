@@ -27,7 +27,7 @@ import type { Db } from '../db/client';
 import { tasks } from '../db/schema';
 import type { EventBus } from '../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../http/errors';
-import { ensureSafeGitignore, identityConfig, initRepo, SECRET_FILE_RE } from './git';
+import { ensureSafeGitignore, identityConfig, initRepo, isSecretFile } from './git';
 import type { GithubService } from './github';
 import * as gitops from './orchestrator/git-ops';
 import type { ProjectService } from './projects';
@@ -485,7 +485,7 @@ export class GitManager {
     const staged = (await this.git(dir, ['diff', '--cached', '--name-only'])).out
       .split('\n')
       .filter(Boolean);
-    const secrets = staged.filter((f) => SECRET_FILE_RE.test(f));
+    const secrets = staged.filter((f) => isSecretFile(f));
     if (secrets.length) await this.git(dir, ['rm', '--cached', '--quiet', '--', ...secrets]);
     const files = staged.length - secrets.length;
     if (!files && !(await this.operation(dir)))

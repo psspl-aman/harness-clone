@@ -264,9 +264,16 @@ describe('pipeline: happy path', () => {
     );
   });
 
-  it('never commits secret files the agent creates', async () => {
+  it('never commits secret files the agent creates, and tells the Reviewer why', async () => {
     script(
-      developer('SA-1', { 'src/a.txt': 'a', '.env': FAKE_ENV, 'id.pem': 'KEY' }),
+      developer('SA-1', {
+        'src/a.txt': 'a',
+        // A .gitignore without secret rules: only AgentForge's commit filter stops them.
+        '.gitignore': 'node_modules/\n',
+        '.env': FAKE_ENV,
+        '.env.example': 'TOKEN=\n',
+        'id.pem': 'KEY',
+      }),
       reviewer(),
       tester(),
       documenter(),
@@ -275,8 +282,17 @@ describe('pipeline: happy path', () => {
     await approveAll(planId);
     await t.ctx.orchestrator.idle();
     expect(task(tasks[0]!.id).status).toBe('DONE');
-    expect(git(repo, 'ls-files')).not.toMatch(/\.env|id\.pem/);
+    const tracked = git(repo, 'ls-files').split('\n');
+    expect(tracked).toContain('.env.example');
+    expect(tracked).not.toContain('.env');
+    expect(tracked).not.toContain('id.pem');
     expect(existsSync(join(repo, '.env'))).toBe(false);
+
+    const review = agent.calls().find((c) => c.stdin.includes('# Role: Reviewer\n'))!.stdin;
+    expect(review).toContain('## Files withheld from git by AgentForge\n');
+    expect(review).toMatch(/^- \.env$/m);
+    expect(review).toMatch(/^- id\.pem$/m);
+    expect(review).not.toMatch(/^- \.env\.example$/m);
   });
 });
 

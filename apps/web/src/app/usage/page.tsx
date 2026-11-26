@@ -172,7 +172,7 @@ export default function UsagePage() {
   const engineName = (id: string) => engines.data?.find((x) => x.id === id)?.displayName ?? id;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
+    <div className="portal-content py-8">
       <PageHeader
         title="Usage"
         description="Tokens and cost across projects, tasks, roles and engines."

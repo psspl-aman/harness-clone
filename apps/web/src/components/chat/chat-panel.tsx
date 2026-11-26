@@ -24,6 +24,7 @@ import { useNow } from '@/hooks/use-now';
 import { api, qk } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { SheetTasksStrip } from './sheet-tasks';
 import { Composer, type ComposerDraft } from './composer';
 
 const INTENT_LABEL = {
@@ -324,6 +325,10 @@ export function ChatPanel({
               Describe the feature or product. The Planner drafts a plan and tasks — you review and
               approve before anything is built.
             </p>
+            <p className="text-xs">
+              Have a task list already? Use the spreadsheet button below to import a Google Sheet or
+              Excel file — agents work through the rows one by one, highest priority first.
+            </p>
           </div>
         ) : (
           list.map((m, i) =>
@@ -355,6 +360,7 @@ export function ChatPanel({
           )
         )}
       </div>
+      <SheetTasksStrip projectId={projectId} tasks={board.data?.tasks ?? []} />
       <Composer
         key={draft.n}
         projectId={projectId}

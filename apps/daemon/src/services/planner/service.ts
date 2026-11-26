@@ -13,8 +13,6 @@ import {
 } from '@agentforge/shared';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { execa } from 'execa';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
 import type { Db } from '../../db/client';
 import {
   projects,
@@ -27,11 +25,11 @@ import type { EngineRegistry } from '../../engines/registry';
 import type { EventBus } from '../../events/bus';
 import { AppError, badRequest, conflict, notFound } from '../../http/errors';
 import { newId } from '../../lib/id';
+import type { AttachmentStore } from '../attachments';
 import type { MemoryService } from '../memory';
 import type { RunRecorder } from '../runs';
 import type { SettingsService } from '../settings';
 import type { TaskService } from '../tasks';
-import { excludeAgentforgeDir } from '../../lib/agentforge-dir';
 import { parsePlannerOutput } from './parse';
 import {
   ALLOWED_OUTPUTS,
@@ -45,7 +43,6 @@ type MessageRow = typeof requirements.$inferSelect;
 
 const MAX_ATTEMPTS = 3;
 const PLANNER_TIMEOUT_MS = 15 * 60_000;
-const ATTACH_DIR = '.agentforge/attachments';
 
 interface Job {
   projectId: string;
@@ -76,6 +73,7 @@ export interface PlannerDeps {
   runs: RunRecorder;
   settings: SettingsService;
   memory: MemoryService;
+  attachments: AttachmentStore;
   log: { warn: (o: unknown, m?: string) => void; error: (o: unknown, m?: string) => void };
 }
 
@@ -131,7 +129,9 @@ export class PlannerService {
         throw badRequest('Can only edit your own messages in this project');
       version = prev.version + 1;
     }
-    const attachments = input.attachmentIds.map((id) => this.loadAttachment(project.localPath, id));
+    const attachments = input.attachmentIds.map((id) =>
+      this.d.attachments.load(project.localPath, id),
+    );
     const references = await this.extractReferences(projectId, project.localPath, input.content);
     const id = newId('req');
     this.d.db
@@ -196,6 +196,7 @@ export class PlannerService {
     const first = rows[0];
     if (rows.length !== 1 || !first || first.author !== 'user' || first.intent !== 'generate_plan')
       return;
+    const { localPath } = this.project(projectId);
     this.start({
       projectId,
       mode: 'generate_plan',
@@ -203,7 +204,14 @@ export class PlannerService {
       requirementId: first.id,
       allowQuestions: true,
       references: first.references,
-      attachments: [],
+      // Files attached in the wizard; one deleted from disk since is left out, not fatal.
+      attachments: (first.attachments ?? []).flatMap((a) => {
+        try {
+          return [this.d.attachments.load(localPath, a.id)];
+        } catch {
+          return [];
+        }
+      }),
     });
   }
 
@@ -329,33 +337,6 @@ export class PlannerService {
       )
       .slice(0, 20);
     return { files, tasks: taskRows };
-  }
-
-  /** Save an uploaded file under `<project>/.agentforge/attachments/<id>/` (git-excluded). */
-  saveAttachment(
-    projectId: string,
-    file: { filename: string; mimetype: string; data: Buffer },
-  ): AttachmentDto {
-    const project = this.project(projectId);
-    const id = newId('att');
-    const safe =
-      basename(file.filename)
-        .replace(/[^\w.\- ]+/g, '_')
-        .slice(0, 120) || 'file';
-    const dir = join(project.localPath, ATTACH_DIR, id);
-    mkdirSync(dir, { recursive: true });
-    const path = join(dir, safe);
-    writeFileSync(path, file.data);
-    const meta: AttachmentDto = {
-      id,
-      name: safe,
-      mime: file.mimetype || 'application/octet-stream',
-      size: file.data.length,
-      path,
-    };
-    writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta));
-    excludeAgentforgeDir(project.localPath);
-    return meta;
   }
 
   // ─── Planner run ───────────────────────────────────────────────────────────
@@ -747,13 +728,6 @@ export class PlannerService {
         : [];
     this.fileCache.set(projectId, { at: Date.now(), files });
     return files;
-  }
-
-  private loadAttachment(root: string, id: string): AttachmentDto {
-    if (!/^att_[a-z0-9]+$/.test(id)) throw badRequest('Invalid attachment id');
-    const metaPath = join(root, ATTACH_DIR, id, 'meta.json');
-    if (!existsSync(metaPath)) throw badRequest(`Attachment ${id} not found`);
-    return JSON.parse(readFileSync(metaPath, 'utf8')) as AttachmentDto;
   }
 
   // ─── Messages ──────────────────────────────────────────────────────────────

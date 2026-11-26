@@ -186,8 +186,8 @@ export function PlanTab({
   }
 
   return (
-    <div className="space-y-5 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="portal-content space-y-4 py-4">
+      <div className="bg-card flex flex-wrap items-start justify-between gap-4 rounded-xl border p-3.5 shadow-xs">
         <div className="min-w-0 flex-1">
           {plan ? (
             <PlanSummary plan={plan} tasks={tasks.filter((t) => t.planId === plan.id)} />
@@ -234,7 +234,11 @@ export function PlanTab({
       <PipelineBar projectId={projectId} tasks={tasks} />
 
       <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Task view" className="bg-muted flex rounded-lg p-0.5">
+        <div
+          role="tablist"
+          aria-label="Task view"
+          className="bg-muted flex rounded-md border p-0.5"
+        >
           {(
             [
               ['list', 'List', ListTree],
@@ -249,9 +253,7 @@ export function PlanTab({
               onClick={() => setView(v)}
               className={cn(
                 'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium',
-                view === v
-                  ? 'bg-background shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground',
+                view === v ? 'bg-card shadow-xs' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <Icon className="size-3.5" /> {label}
