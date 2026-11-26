@@ -77,6 +77,48 @@ test('connect a spreadsheet and its rows become tasks in priority order', async 
   await expect(page.getByText('Old idea')).toHaveCount(0);
 });
 
+test('requirements chat: attach a spreadsheet and import its rows as tasks, one at a time', async ({
+  page,
+  request,
+}) => {
+  const project = await newProject(request, 'Chat Sheet');
+  const csv = join(WORK, `chat-backlog-${Date.now() % 100000}.csv`);
+  writeFileSync(
+    csv,
+    [
+      'Title,Priority,Status',
+      'Write docs,Low,',
+      'Fix login bug,P0,',
+      'Shipped thing,High,Done',
+    ].join('\n'),
+  );
+
+  await page.goto(`/projects/${project.id}`);
+  const composer = page.getByLabel('Message the Planner');
+  // A pasted Google Sheets link is offered as an import.
+  await composer.fill('tasks: https://docs.google.com/spreadsheets/d/abc123/edit#gid=0');
+  await expect(page.getByText('Google Sheet link — turn its rows into tasks?')).toBeVisible();
+  await composer.fill('');
+
+  // An attached .csv can be imported straight from the chat.
+  await page.locator('input[type=file][aria-label="Attach files"]').setInputFiles(csv);
+  await page.getByRole('button', { name: 'Import as tasks' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('2 tasks to import');
+  await dialog.getByRole('switch', { name: /Let the Planner detail/ }).click();
+  await expect(dialog.getByRole('switch', { name: /one at a time/ })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Connect & import' }).click();
+  await expect(dialog).toBeHidden();
+
+  // The chat shows the sheet and its progress; the attachment chip is gone.
+  await expect(page.getByText('Task sheets')).toBeVisible();
+  await expect(page.getByText(/0\/2 done/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Import as tasks' })).toHaveCount(0);
+
+  const detail = await (await request.get(`${E2E.daemonUrl}/api/projects/${project.id}`)).json();
+  expect(JSON.stringify(detail)).toContain('"maxConcurrentTasks":1');
+});
+
 test('overview: several servers run together, and the cost card', async ({ page, request }) => {
   const project = await newProject(request, 'Two Servers');
   const base = 4600 + (Date.now() % 300);
