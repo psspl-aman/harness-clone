@@ -23,7 +23,7 @@ export default function AgentsPage() {
   const custom = engines.data?.filter((e) => e.kind === 'custom') ?? [];
 
   return (
-    <div className="portal-content max-w-4xl py-8">
+    <div className="portal-content py-8">
       <PageHeader
         title="Agents & Accounts"
         description="The coding-agent CLIs AgentForge can drive, and whether each is installed and signed in."
@@ -44,19 +44,22 @@ export default function AgentsPage() {
         }
       />
       {engines.isPending ? (
-        <div className="space-y-4">
+        <div className="grid gap-4 2xl:grid-cols-2">
           {Array.from({ length: 4 }, (_, i) => (
             <Skeleton key={i} className="h-36 rounded-2xl" />
           ))}
         </div>
       ) : (
-        <div className="space-y-4">
+        // Two columns only once each card has room for its header and quota bars.
+        <div className="grid items-start gap-4 2xl:grid-cols-2">
           {builtin.map((e, i) => (
             <EngineCard key={e.id} engine={e} index={i} />
           ))}
           {custom.length > 0 && (
             <>
-              <h2 className="text-muted-foreground pt-4 text-sm font-medium">Custom engines</h2>
+              <h2 className="text-muted-foreground col-span-full pt-4 text-sm font-medium">
+                Custom engines
+              </h2>
               {custom.map((e, i) => (
                 <EngineCard key={e.id} engine={e} index={builtin.length + i} />
               ))}
