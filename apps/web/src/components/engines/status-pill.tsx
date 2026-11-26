@@ -1,6 +1,6 @@
 'use client';
 
-import { STATUS_LABELS, type AuthStatus } from '@agentforge/shared';
+import { STATUS_LABELS, type AuthStatus } from '@ai-harness/shared';
 import { useNow } from '@/hooks/use-now';
 import { clockTime, countdown } from '@/lib/format';
 import { cn } from '@/lib/utils';

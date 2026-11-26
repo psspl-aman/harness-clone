@@ -1,6 +1,6 @@
 'use client';
 
-import { AGENT_ROLES, ROLE_LABELS, type AgentRole, type TaskDto } from '@agentforge/shared';
+import { AGENT_ROLES, ROLE_LABELS, type AgentRole, type TaskDto } from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Bot } from 'lucide-react';
 import { api, qk } from '@/lib/api';

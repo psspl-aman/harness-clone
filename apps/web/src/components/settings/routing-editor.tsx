@@ -5,7 +5,7 @@ import {
   type Complexity,
   type PipelineProfile,
   type Routing,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {

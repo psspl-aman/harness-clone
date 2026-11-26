@@ -1,6 +1,6 @@
 'use client';
 
-import type { AttachmentDto, RequirementIntent } from '@agentforge/shared';
+import type { AttachmentDto, RequirementIntent } from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowUp, FileCode2, Hash, Loader2, Paperclip, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';

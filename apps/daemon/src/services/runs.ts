@@ -6,7 +6,7 @@ import {
   type AgentRunResultDto,
   type AppSettings,
   type TaskType,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { costOf } from '../lib/cost';
 import { asc, eq } from 'drizzle-orm';
 import type { Db } from '../db/client';

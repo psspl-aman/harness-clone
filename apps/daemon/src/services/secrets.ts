@@ -8,7 +8,7 @@ import { newId } from '../lib/id';
 
 /**
  * Secrets are encrypted at rest with AES-256-GCM. The 32-byte key lives in
- * `<AGENTFORGE_HOME>/secret.key` (mode 0600), separate from the database, so a
+ * `<AI_HARNESS_HOME>/secret.key` (mode 0600), separate from the database, so a
  * copied DB file alone reveals nothing. Plaintext never leaves the daemon.
  */
 export class SecretStore {

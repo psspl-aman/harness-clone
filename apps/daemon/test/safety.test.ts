@@ -1,4 +1,4 @@
-import type { AgentEvent, AnyAppEvent } from '@agentforge/shared';
+import type { AgentEvent, AnyAppEvent } from '@ai-harness/shared';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -109,7 +109,7 @@ describe('guard hook (end to end through the daemon)', () => {
   beforeAll(async () => {
     cwd = mkdtempSync(join(tmpdir(), 'af-guard-'));
     t = await createTestApp(
-      { AGENTFORGE_WEB_PORT: '4318' },
+      { AI_HARNESS_WEB_PORT: '4318' },
       { orchestrator: { autoStart: false } },
     );
     t.ctx.bus.subscribe((e) => events.push(e));
@@ -164,7 +164,7 @@ describe('guard hook (end to end through the daemon)', () => {
     expect(ok).toMatchObject({ exit: 0 });
     expect(blocked).toMatchObject({ exit: 2 });
     expect(blocked!.stderr).toContain(
-      'Blocked by AgentForge: Recursive delete outside the project',
+      'Blocked by AI Harness: Recursive delete outside the project',
     );
 
     const pending = run(['cat .env']);
@@ -191,7 +191,7 @@ describe('guard hook (end to end through the daemon)', () => {
   // Real engines are `.cmd`/`.exe` shims and work. Runs on POSIX.
   it.skipIf(process.platform === 'win32')('blocks agents from using the safety API and requires the app to answer', async () => {
     const [r] = await run(['curl -X POST http://127.0.0.1/api/safety/approvals/x']);
-    expect(r!.stderr).toContain("Agents can't use AgentForge's safety API");
+    expect(r!.stderr).toContain("Agents can't use AI Harness's safety API");
     const pending = run(['printenv']);
     let id: string | undefined;
     while (!(id = t.ctx.safety.approvals().find((a) => a.status === 'pending')?.id))

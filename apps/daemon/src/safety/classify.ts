@@ -83,7 +83,7 @@ export function classifyCommand(command: string, root: string): GuardVerdict {
     return confirm(
       /\s(-f|--force|--force-with-lease)\b|\s\+\S/.test(cmd)
         ? 'Force-pushes to a remote'
-        : 'Pushes to a remote (AgentForge merges for you)',
+        : 'Pushes to a remote (AI Harness merges for you)',
     );
   if (
     /\bgit\s+(-C\s+\S+\s+)?(checkout|switch)\s+(main|master)\b|\bgit\s+branch\s+-[dD]\s+(main|master)\b/.test(

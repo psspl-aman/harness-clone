@@ -1,4 +1,4 @@
-import type { AttachmentDto, StagedAttachmentDto } from '@agentforge/shared';
+import type { AttachmentDto, StagedAttachmentDto } from '@ai-harness/shared';
 import JSZip from 'jszip';
 import {
   existsSync,
@@ -11,11 +11,11 @@ import {
 } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { badRequest } from '../http/errors';
-import { excludeAgentforgeDir } from '../lib/agentforge-dir';
+import { excludeProjectDataDir, projectDataDir } from '../lib/project-data-dir';
 import { newId } from '../lib/id';
 
-/** Where a project's attachments live (inside `.agentforge/`, so never committed). */
-export const PROJECT_ATTACH_DIR = '.agentforge/attachments';
+/** Where a project's attachments live (inside its data folder, so never committed). */
+const attachDir = (projectRoot: string) => join(projectDataDir(projectRoot), 'attachments');
 /** Staged uploads not claimed by a project within this time are removed. */
 const STAGING_TTL_MS = 24 * 60 * 60_000;
 
@@ -38,14 +38,14 @@ interface StagedMeta extends StagedAttachmentDto {
 }
 
 export interface AttachmentStoreDeps {
-  /** AGENTFORGE_HOME/attachments: staging for uploads made before a project exists. */
+  /** AI_HARNESS_HOME/attachments: staging for uploads made before a project exists. */
   root: string;
   log: { warn: (obj: unknown, msg: string) => void };
 }
 
 /**
  * Files people attach to requirements. Chat uploads go straight into the project; uploads
- * from the new-project wizard are staged under AGENTFORGE_HOME until the project exists,
+ * from the new-project wizard are staged under AI_HARNESS_HOME until the project exists,
  * then claimed into it. Word files also get a plain-text copy, because the agent CLIs
  * can read text, PDFs and images but not .docx.
  */
@@ -59,7 +59,7 @@ export class AttachmentStore {
   async saveToProject(projectRoot: string, file: UploadedFile): Promise<AttachmentDto> {
     const id = newId('att');
     const name = safeName(file.filename);
-    const dir = join(projectRoot, PROJECT_ATTACH_DIR, id);
+    const dir = join(attachDir(projectRoot), id);
     mkdirSync(dir, { recursive: true });
     const path = join(dir, name);
     writeFileSync(path, file.data);
@@ -73,13 +73,13 @@ export class AttachmentStore {
       textPath,
     };
     writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta));
-    excludeAgentforgeDir(projectRoot);
+    excludeProjectDataDir(projectRoot);
     return meta;
   }
 
   load(projectRoot: string, id: string): AttachmentDto {
     if (!ATTACHMENT_ID_RE.test(id)) throw badRequest('Invalid attachment id');
-    const metaPath = join(projectRoot, PROJECT_ATTACH_DIR, id, 'meta.json');
+    const metaPath = join(attachDir(projectRoot), id, 'meta.json');
     if (!existsSync(metaPath)) throw badRequest(`Attachment ${id} not found`);
     return JSON.parse(readFileSync(metaPath, 'utf8')) as AttachmentDto;
   }

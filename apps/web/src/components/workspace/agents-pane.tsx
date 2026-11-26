@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentEvent } from '@agentforge/shared';
+import type { AgentEvent } from '@ai-harness/shared';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Bot, Loader2 } from 'lucide-react';
 import { useState } from 'react';

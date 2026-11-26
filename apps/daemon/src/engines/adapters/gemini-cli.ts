@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@agentforge/shared';
+import type { AgentEvent } from '@ai-harness/shared';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -135,7 +135,7 @@ export class GeminiCliAdapter extends CliAdapter {
       return {
         status: 'ACTIVE',
         accountLabel: 'API key',
-        detail: 'Using the Gemini API key stored in AgentForge',
+        detail: 'Using the Gemini API key stored in AI Harness',
       };
     if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)
       return {

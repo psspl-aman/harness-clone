@@ -21,7 +21,7 @@ export const isWindows = process.platform === 'win32';
 /**
  * Path to a Git Bash `bash.exe` on Windows, for `CLAUDE_CODE_GIT_BASH_PATH`.
  *
- * Claude Code runs its PreToolUse hooks (including AgentForge's own safety
+ * Claude Code runs its PreToolUse hooks (including AI Harness's own safety
  * guard) and its Bash tool through Git Bash on Windows. When it can't locate
  * Git Bash it reports "Git Bash wasn't found" and fails every tool call, so an
  * agent can read/think but never write a file. Pointing it at a detected

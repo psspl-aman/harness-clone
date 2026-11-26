@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_ROUTING, type ProjectDetail } from '@agentforge/shared';
+import { DEFAULT_ROUTING, type ProjectDetail } from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save, Workflow } from 'lucide-react';
 import { RoutingEditor } from '@/components/settings/routing-editor';

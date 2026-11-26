@@ -1,4 +1,4 @@
-import type { FsBrowseResult, FsEntry, PathCheckMode, PathCheckResult } from '@agentforge/shared';
+import type { FsBrowseResult, FsEntry, PathCheckMode, PathCheckResult } from '@ai-harness/shared';
 import { constants } from 'node:fs';
 import { access, mkdir, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -42,7 +42,7 @@ function fsError(err: unknown, path: string): AppError {
 }
 
 export interface FsServiceDeps {
-  agentforgeHome: string;
+  aiHarnessHome: string;
   workspaceRoot: () => string;
   /** Returns the id of the project already registered at `path`, if any. */
   projectAtPath: (
@@ -135,16 +135,16 @@ export class FsService {
       return fail('Choose a dedicated folder, not the filesystem root or your home folder');
     if (FORBIDDEN_PREFIXES.some((p) => isWithin(p, path)))
       return fail('System folders cannot be used for projects');
-    if (isWithin(this.deps.agentforgeHome, path) && !isWithin(this.deps.workspaceRoot(), path)) {
-      return fail('This folder belongs to AgentForge’s own data directory');
+    if (isWithin(this.deps.aiHarnessHome, path) && !isWithin(this.deps.workspaceRoot(), path)) {
+      return fail('This folder belongs to AI Harness’s own data directory');
     }
     const existing = this.deps.projectAtPath(path);
     if (existing) {
       result.existingProjectId = existing.id;
       return fail(
         existing.archivedAt
-          ? 'This folder is an archived AgentForge project — restore it from Archived projects on the dashboard'
-          : 'This folder is already an AgentForge project',
+          ? 'This folder is an archived AI Harness project — restore it from Archived projects on the dashboard'
+          : 'This folder is already an AI Harness project',
       );
     }
     for (const p of this.deps.allProjectPaths()) {
@@ -169,14 +169,14 @@ export class FsService {
       result.empty = names.every((n) => IGNORABLE.has(n));
       result.isGitRepo = names.includes('.git');
       result.writable = await canWrite(path);
-      if (!result.writable) return fail('AgentForge cannot write to this folder');
+      if (!result.writable) return fail('AI Harness cannot write to this folder');
     } else {
       if (mode === 'existing') return fail('Folder does not exist');
       const parent = dirname(path);
       const pst = await stat(parent).catch(() => null);
       if (!pst?.isDirectory()) return fail('Parent folder does not exist');
       result.writable = await canWrite(parent);
-      if (!result.writable) return fail('AgentForge cannot write to the parent folder');
+      if (!result.writable) return fail('AI Harness cannot write to the parent folder');
     }
 
     if (mode === 'scratch' && result.exists && !result.empty) {
@@ -185,7 +185,7 @@ export class FsService {
     if (mode === 'existing') {
       if (result.empty) result.warnings.push('Folder is empty');
       if (!result.isGitRepo)
-        result.warnings.push('Not a git repository — AgentForge will initialise one');
+        result.warnings.push('Not a git repository — AI Harness will initialise one');
     }
     return { ...result, ok: true };
   }

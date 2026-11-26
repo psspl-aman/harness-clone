@@ -86,7 +86,7 @@ describe('project path checks', () => {
     for (const p of [
       '/',
       homedir(),
-      '/etc/agentforge',
+      '/etc/ai-harness',
       '/usr/local/x',
       t.home,
       join(t.home, 'logs'),

@@ -3,7 +3,7 @@ import {
   type AnyAppEvent,
   type ChatMessageDto,
   type TaskDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -399,8 +399,8 @@ describe('Planner: wizard documents', () => {
       'Spec.docx',
     ]);
     const stdin = plannerCalls().at(-1)!.stdin;
-    const brief = join(dir, '.agentforge/attachments', first.attachments[0].id, 'brief.md');
-    const text = join(dir, '.agentforge/attachments', first.attachments[1].id, 'Spec.txt');
+    const brief = join(dir, '.ai-harness/attachments', first.attachments[0].id, 'brief.md');
+    const text = join(dir, '.ai-harness/attachments', first.attachments[1].id, 'Spec.txt');
     expect(stdin).toContain(brief);
     expect(stdin).toContain(`Text version (read this one): ${text}`);
     expect(readFileSync(text, 'utf8')).toContain('Admins\tcan invite');
@@ -589,11 +589,11 @@ describe('references, attachments and edits', () => {
     expect(up.statusCode).toBe(201);
     const [att] = up.json();
     expect(att).toMatchObject({ name: 'spec sheet.txt', mime: 'text/plain', size: 22 });
-    expect(att.path.startsWith(join(projectPath, '.agentforge/attachments'))).toBe(true);
-    expect(readFileSync(join(projectPath, '.git/info/exclude'), 'utf8')).toContain('.agentforge/');
+    expect(att.path.startsWith(join(projectPath, '.ai-harness/attachments'))).toBe(true);
+    expect(readFileSync(join(projectPath, '.git/info/exclude'), 'utf8')).toContain('.ai-harness/');
     expect(
       execFileSync('git', ['status', '--porcelain'], { cwd: projectPath, encoding: 'utf8' }),
-    ).not.toContain('.agentforge');
+    ).not.toContain('.ai-harness');
 
     script(answer(JSON.stringify({ type: 'tasks', message: 'ok', tasks: [task('T1')] })));
     const msg = (

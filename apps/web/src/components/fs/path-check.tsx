@@ -1,6 +1,6 @@
 'use client';
 
-import type { PathCheckResult } from '@agentforge/shared';
+import type { PathCheckResult } from '@ai-harness/shared';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 export function PathCheckStatus({

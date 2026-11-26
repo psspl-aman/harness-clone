@@ -32,7 +32,7 @@ export function AppSidebar() {
       >
         <ForgeMark />
         {!collapsed && (
-          <span className="text-foreground text-base font-semibold tracking-tight">AgentForge</span>
+          <span className="text-foreground text-base font-semibold tracking-tight">AI Harness</span>
         )}
       </div>
 

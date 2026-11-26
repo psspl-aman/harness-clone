@@ -7,7 +7,7 @@ import {
   type AgentRole,
   type RoleEngines,
   type RoleModels,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import {
   Select,

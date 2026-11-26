@@ -1,4 +1,4 @@
-import { ClientMessageSchema, type AnyAppEvent, type ServerMessage } from '@agentforge/shared';
+import { ClientMessageSchema, type AnyAppEvent, type ServerMessage } from '@ai-harness/shared';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import type { EventBus } from '../events/bus';

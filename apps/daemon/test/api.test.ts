@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from '@agentforge/shared';
+import { DEFAULT_SETTINGS } from '@ai-harness/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projects, tasks, errors as errorsTable } from '../src/db/schema';
 import { newId } from '../src/lib/id';
@@ -17,7 +17,7 @@ describe('system & settings API', () => {
     const health = await t.app.inject({ method: 'GET', url: '/api/health' });
     expect(health.json()).toMatchObject({ ok: true });
     const info = (await t.app.inject({ method: 'GET', url: '/api/system' })).json();
-    expect(info).toMatchObject({ name: 'agentforge', homeDir: t.home });
+    expect(info).toMatchObject({ name: 'ai-harness', homeDir: t.home });
     expect(info.workspaceRoot).toBe(`${t.home}/workspaces`);
   });
 

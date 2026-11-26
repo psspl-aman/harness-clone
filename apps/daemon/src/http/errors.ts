@@ -1,4 +1,4 @@
-import type { ApiError } from '@agentforge/shared';
+import type { ApiError } from '@ai-harness/shared';
 import type { FastifyError, FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 

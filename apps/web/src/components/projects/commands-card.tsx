@@ -7,7 +7,7 @@ import {
   type ProjectCommandsDto,
   type ProjectDetail,
   type ProjectServiceDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,

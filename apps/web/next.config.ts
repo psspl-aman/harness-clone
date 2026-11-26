@@ -7,7 +7,7 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const config: NextConfig = {
   reactStrictMode: true,
   // Shared contracts are consumed as TypeScript source.
-  transpilePackages: ['@agentforge/shared'],
+  transpilePackages: ['@ai-harness/shared'],
   devIndicators: false,
   turbopack: { root },
   outputFileTracingRoot: root,

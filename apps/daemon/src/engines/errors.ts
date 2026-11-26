@@ -1,4 +1,4 @@
-import type { EngineError, EngineErrorKind } from '@agentforge/shared';
+import type { EngineError, EngineErrorKind } from '@ai-harness/shared';
 
 const PATTERNS: [EngineErrorKind, RegExp][] = [
   [

@@ -6,7 +6,7 @@ import {
   type RunKind,
   type ServiceRunDto,
   type TerminalInfo,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { eq } from 'drizzle-orm';
 import { statSync } from 'node:fs';
 import { connect } from 'node:net';
@@ -32,7 +32,7 @@ const TITLES: Record<RunKind, string> = {
   test: 'Tests',
   install: 'Install',
 };
-/** Ports AgentForge itself uses. */
+/** Ports AI Harness itself uses. */
 const RESERVED = new Set([4317, 4318]);
 const SETTLE_MS = 4000;
 const MAIN_SERVICE = /^(web|frontend|front|client|ui|app|site|www)$/i;
@@ -159,7 +159,7 @@ export class RunService {
       defs.map(async (d) => {
         if (!d.port) return null;
         if (RESERVED.has(d.port))
-          return `Port ${d.port} is used by AgentForge itself — give “${d.name}” another port in Overview → Commands.`;
+          return `Port ${d.port} is used by AI Harness itself — give “${d.name}” another port in Overview → Commands.`;
         return (await portInUse(d.port))
           ? `Port ${d.port} is already in use (another app, or an earlier run that’s still going). Stop that process or give “${d.name}” another port in Overview → Commands.`
           : null;

@@ -5,7 +5,7 @@ import {
   type SheetKind,
   type SheetPreviewDto,
   type SheetSourceDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -88,7 +88,7 @@ function downloadTemplate() {
   const url = URL.createObjectURL(new Blob([TEMPLATE], { type: 'text/csv' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'agentforge-tasks-template.csv';
+  a.download = 'ai-harness-tasks-template.csv';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -499,7 +499,7 @@ export function SheetSourceDialog({
             </div>
             <p className="text-muted-foreground text-xs">
               {kind === 'google'
-                ? 'Share the sheet as “Anyone with the link — Viewer” (or Publish to web). The tab in the link is the one that’s read. AgentForge only reads it.'
+                ? 'Share the sheet as “Anyone with the link — Viewer” (or Publish to web). The tab in the link is the one that’s read. AI Harness only reads it.'
                 : 'The file is re-read on every sync, so you can keep editing it in Excel.'}
             </p>
           </div>

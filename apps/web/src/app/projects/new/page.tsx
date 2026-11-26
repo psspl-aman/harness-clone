@@ -5,7 +5,7 @@ import type {
   GithubRepo,
   RoleEngines,
   StagedAttachmentDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -175,7 +175,7 @@ function ModeChooser() {
             mode: 'existing',
             icon: FolderOpen,
             title: 'Attach existing project',
-            text: 'Point at a local folder or clone a GitHub repo. AgentForge analyses the stack, commands and conventions.',
+            text: 'Point at a local folder or clone a GitHub repo. AI Harness analyses the stack, commands and conventions.',
           },
         ].map((c, i) => (
           <motion.div

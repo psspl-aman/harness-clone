@@ -1,4 +1,4 @@
-import type { AgentEvent, EngineCapabilities, EngineError, UsageDelta } from '@agentforge/shared';
+import type { AgentEvent, EngineCapabilities, EngineError, UsageDelta } from '@ai-harness/shared';
 import { execa } from 'execa';
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';

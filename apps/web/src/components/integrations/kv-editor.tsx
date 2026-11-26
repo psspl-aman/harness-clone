@@ -1,6 +1,6 @@
 'use client';
 
-import type { KeyValueInput } from '@agentforge/shared';
+import type { KeyValueInput } from '@ai-harness/shared';
 import { KeyRound, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

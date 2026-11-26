@@ -1,4 +1,4 @@
-import type { SheetSourceDto, TaskDto } from '@agentforge/shared';
+import type { SheetSourceDto, TaskDto } from '@ai-harness/shared';
 import ExcelJS from 'exceljs';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

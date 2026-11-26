@@ -69,9 +69,9 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   const folder = join(parent, name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'));
   expect(existsSync(join(folder, '.git'))).toBe(true);
   // The document went into the project (git-excluded), attached to the first requirement.
-  const attached = readdirSync(join(folder, '.agentforge/attachments'));
+  const attached = readdirSync(join(folder, '.ai-harness/attachments'));
   expect(attached).toHaveLength(1);
-  expect(existsSync(join(folder, '.agentforge/attachments', attached[0]!, 'brief.md'))).toBe(true);
+  expect(existsSync(join(folder, '.ai-harness/attachments', attached[0]!, 'brief.md'))).toBe(true);
 
   await page
     .getByRole('navigation', { name: 'Main' })
@@ -102,7 +102,7 @@ test('attach an existing folder, confirm commands, archive, restore and delete i
   await page.getByRole('link', { name: /Attach existing project/ }).click();
   await page.getByPlaceholder('/home/you/code').fill(dir);
   await expect(
-    page.getByText('Not a git repository — AgentForge will initialise one'),
+    page.getByText('Not a git repository — AI Harness will initialise one'),
   ).toBeVisible();
   await expect(page.getByText('Initialise a git repository')).toBeVisible();
   await page.getByRole('button', { name: 'Next', exact: true }).click();

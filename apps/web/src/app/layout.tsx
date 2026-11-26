@@ -7,7 +7,7 @@ import { AppShell } from '@/components/shell/app-shell';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: 'AgentForge', template: '%s · AgentForge' },
+  title: { default: 'AI Harness', template: '%s · AI Harness' },
   description: 'Local-first agentic coding harness and agent factory',
 };
 

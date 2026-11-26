@@ -1,6 +1,6 @@
 'use client';
 
-import type { GitActionResultDto } from '@agentforge/shared';
+import type { GitActionResultDto } from '@ai-harness/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ApiClientError, qk } from '@/lib/api';

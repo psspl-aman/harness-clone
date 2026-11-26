@@ -1,4 +1,4 @@
-import type { AnyAppEvent } from '@agentforge/shared';
+import type { AnyAppEvent } from '@ai-harness/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestApp, type TestApp } from './helpers';
 

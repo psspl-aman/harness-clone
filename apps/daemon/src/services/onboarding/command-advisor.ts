@@ -3,7 +3,7 @@ import {
   Topics,
   type AgentRunResultDto,
   type CommandSuggestionDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client';
@@ -15,7 +15,7 @@ import type { RunRecorder } from '../runs';
 import type { SettingsService } from '../settings';
 
 const TIMEOUT_MS = 5 * 60_000;
-/** AgentForge's own daemon and web app. */
+/** AI Harness's own daemon and web app. */
 const RESERVED_PORTS = [4317, 4318];
 
 const cmd = z
@@ -109,7 +109,7 @@ Work out:
 - How the app runs in development:
   - ONE server (most apps): put its command in "run" and leave "services" empty.
   - SEVERAL processes that must run at the same time (e.g. a frontend + an API, a worker, a database container): list each in "services" with a short name ("web", "api", "worker"…), the command, "cwd" (folder relative to the project root, "" for the root) and the "port" it listens on. Put the user-facing app first. Set "run" to null.
-- Ports: every service gets a different port. Never use ${reserved.join(' or ')} (AgentForge uses them). Prefer each tool's default; if two would collide, give one another port and make the command use it (e.g. \`vite --port 5174\`, \`next dev -p 3001\`, or PORT=… where the app reads PORT). If the frontend calls the API, say in notes which env var/URL points at it.
+- Ports: every service gets a different port. Never use ${reserved.join(' or ')} (AI Harness uses them). Prefer each tool's default; if two would collide, give one another port and make the command use it (e.g. \`vite --port 5174\`, \`next dev -p 3001\`, or PORT=… where the app reads PORT). If the frontend calls the API, say in notes which env var/URL points at it.
 - notes: up to 5 short lines on anything the user must know first (required env vars, a database to start, Node/Python version, the URL to open).
 
 Commands run from the project root with bash, so they may use \`cd dir && …\`, but prefer "cwd". Don't include commands that need sudo or that deploy.

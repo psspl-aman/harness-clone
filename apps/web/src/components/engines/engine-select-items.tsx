@@ -5,7 +5,7 @@ import {
   ENGINE_LABELS,
   STATUS_LABELS,
   type EngineInfo,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useQuery } from '@tanstack/react-query';
 import { SelectItem } from '@/components/ui/select';
 import { api, qk } from '@/lib/api';

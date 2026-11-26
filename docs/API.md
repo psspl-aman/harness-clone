@@ -2,7 +2,7 @@
 
 The daemon listens on `http://127.0.0.1:4317` by default.
 
-**Formats.** Request and response bodies are JSON. Errors always have the shape `{ "error": { "code", "message", "details?" } }`. Input is validated with the Zod schemas in `@agentforge/shared`.
+**Formats.** Request and response bodies are JSON. Errors always have the shape `{ "error": { "code", "message", "details?" } }`. Input is validated with the Zod schemas in `@ai-harness/shared`.
 
 **Live updates.** These come over the WebSocket at `/ws`. See [ARCHITECTURE.md](ARCHITECTURE.md#events-and-the-websocket-protocol).
 
@@ -42,7 +42,7 @@ The daemon listens on `http://127.0.0.1:4317` by default.
 | POST   | `/api/projects`                         | Creates a project; the body is a `CreateProjectInput` (shape below). Returns 201 with `ProjectDetail` and starts the onboarding analysis                      |
 | GET    | `/api/projects/:id`                     | `ProjectDetail`, including the onboarding report and the per-role engine overrides                                                                            |
 | PATCH  | `/api/projects/:id`                     | `{ name?, description?, stackPreferences?, commands?, roleEngines? }`. `commands.services` lists servers that run together (below). Unknown keys are rejected |
-| DELETE | `/api/projects/:id`                     | Removes the project from AgentForge. Files on disk are untouched                                                                                              |
+| DELETE | `/api/projects/:id`                     | Removes the project from AI Harness. Files on disk are untouched                                                                                              |
 | POST   | `/api/projects/:id/analyze`             | Re-runs the onboarding analysis (202)                                                                                                                         |
 | POST   | `/api/projects/:id/commands/suggest`    | A read-only agent run that proposes the project's commands (202, `CommandSuggestionDto` with `status: running`). 409 while one runs                           |
 | GET    | `/api/projects/:id/commands/suggestion` | `{ suggestion }`: the latest `CommandSuggestionDto` (`commands`, `services`, `notes`, `status`, `error`) or null. Nothing is saved                            |
@@ -144,7 +144,7 @@ Live output arrives as transient `terminal.output` events (`{ terminalId, data }
 | POST   | `/api/tasks/:id/request-changes`                       | `{ comments }`. Sends the task back to the Fixer with your comments                                       |
 | GET    | `/api/tasks/:id/runs`                                  | Run summaries: role, engine, model, status, tokens, cost, files changed, timing                           |
 | GET    | `/api/tasks/:id/reviews`                               | Agent and human reviews, with comments                                                                    |
-| GET    | `/api/tasks/:id/tests`                                 | Test results, including AgentForge's own check logs                                                       |
+| GET    | `/api/tasks/:id/tests`                                 | Test results, including AI Harness's own check logs                                                       |
 | GET    | `/api/tasks/:id/diff`                                  | `{ files: [{ path, status, additions, deletions }], patch }`. For merged tasks, the merge commit's change |
 | GET    | `/api/tasks/:id/report`                                | The task report (markdown)                                                                                |
 
@@ -265,7 +265,7 @@ Live event: `memory.updated` (`projectId`, or `null` for global preferences). Se
 
 | Method | Path                        | Description                                                                                                                                         |
 | ------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/safety/check`         | Called by the guard hook (per-run `x-agentforge-guard` header) with `{ tool, input, cwd }` → `{ decision: allow \| deny \| pending, reason?, id? }` |
+| POST   | `/api/safety/check`         | Called by the guard hook (per-run `x-ai-harness-guard` header) with `{ tool, input, cwd }` → `{ decision: allow \| deny \| pending, reason?, id? }` |
 | POST   | `/api/safety/wait`          | Called by the hook while a decision is pending: `{ id }` → the same shape (holds about 20 s per call)                                               |
 | GET    | `/api/safety/approvals`     | Pending requests and the latest 100 decisions (`SafetyApprovalDto`)                                                                                 |
 | POST   | `/api/safety/approvals/:id` | `{ decision: 'approve' \| 'deny' }`. Requires the web app's `Origin` (scripts get 403)                                                              |
@@ -276,5 +276,5 @@ Live event: `safety.approval` (a request was created, answered, expired or block
 
 | Method | Path                | Description                                                                                                                              |
 | ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/mcp`              | MCP Streamable HTTP endpoint (stateless) for agents during a run; requires the run's `x-agentforge-guard` header (401 once the run ends) |
+| POST   | `/mcp`              | MCP Streamable HTTP endpoint (stateless) for agents during a run; requires the run's `x-ai-harness-guard` header (401 once the run ends) |
 | GET    | `/api/tasks/paused` | Tasks paused for quota or login in every project (`PausedTaskDto[]`), soonest resume first                                               |

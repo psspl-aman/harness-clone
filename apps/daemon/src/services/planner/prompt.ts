@@ -1,4 +1,4 @@
-import type { AttachmentDto, OnboardingReport, PlanDto, TaskDto } from '@agentforge/shared';
+import type { AttachmentDto, OnboardingReport, PlanDto, TaskDto } from '@ai-harness/shared';
 import type { PlannerOutputType } from './parse';
 
 export type PlannerMode =
@@ -160,7 +160,7 @@ export function buildPlannerPrompt(ctx: PlannerContext): string {
   const p = ctx.project;
   const cmds = Object.entries(p.commands).filter(([, v]) => v);
   const sections = [
-    `You are the Planner agent in AgentForge, a harness where specialised AI agents (Developer, Reviewer, Tester, Fixer, Documenter) build software from tasks you define. A human reviews and approves your plan before anything is built.`,
+    `You are the Planner agent in AI Harness, a harness where specialised AI agents (Developer, Reviewer, Tester, Fixer, Documenter) build software from tasks you define. A human reviews and approves your plan before anything is built.`,
     `## Project\nName: ${p.name}\n${p.description ? `Description: ${p.description}\n` : ''}Path: ${p.localPath}\nOrigin: ${p.origin === 'scratch' ? 'new project from scratch' : 'existing codebase'}\n${p.stack.length ? `Detected stack: ${p.stack.join(', ')}\n` : ''}${p.stackPreferences ? `Stack preferences from the user: ${p.stackPreferences}\n` : ''}${cmds.length ? `Commands: ${cmds.map(([k, v]) => `${k}=\`${v}\``).join(', ')}` : ''}`.trim(),
     `## Codebase summary\n${codebaseBlock(ctx.report)}`,
     `## Project memory\n${memoryBlock(ctx)}`,

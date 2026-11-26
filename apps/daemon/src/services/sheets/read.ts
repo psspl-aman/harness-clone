@@ -9,7 +9,7 @@ import {
   type SheetPreviewDto,
   type SheetRowDto,
   type TaskType,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -313,7 +313,7 @@ const PRIORITY_WORDS: [RegExp, Priority, number][] = [
 ];
 
 /**
- * Sheet priority → AgentForge priority plus a rank (lower runs sooner).
+ * Sheet priority → AI Harness priority plus a rank (lower runs sooner).
  * Accepts words (High, Urgent…), P0–P9, and numbers where 1 is the most important.
  */
 export function parsePriority(raw: string): { priority: Priority; rank: number } {

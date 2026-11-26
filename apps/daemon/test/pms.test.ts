@@ -1,4 +1,4 @@
-import type { AnyAppEvent, McpServerDto, PmsMappingDto, TaskDto } from '@agentforge/shared';
+import type { AnyAppEvent, McpServerDto, PmsMappingDto, TaskDto } from '@ai-harness/shared';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -569,7 +569,7 @@ describe('PMS sync', () => {
       { key: 'WEB-1', status: 'Done' },
     ]);
     expect(state().comments[0]!.body).toMatch(
-      /^✅ Completed by AgentForge \(WA-\d+\)\.[\s\S]*Usage: 0 tokens/,
+      /^✅ Completed by AI Harness \(WA-\d+\)\.[\s\S]*Usage: 0 tokens/,
     );
   });
 

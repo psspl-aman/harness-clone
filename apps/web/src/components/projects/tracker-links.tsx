@@ -1,6 +1,6 @@
 'use client';
 
-import type { PmsMappingDto, TaskStatus } from '@agentforge/shared';
+import type { PmsMappingDto, TaskStatus } from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Link2, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
@@ -164,8 +164,8 @@ function MappingDialog({
           <div className="space-y-2">
             <Label>Status mapping</Label>
             <p className="text-muted-foreground text-xs">
-              Tracker status → AgentForge status. Tickets already Done or Cancelled aren’t imported,
-              and AgentForge moves tickets to the mapped status as tasks progress.
+              Tracker status → AI Harness status. Tickets already Done or Cancelled aren’t imported,
+              and AI Harness moves tickets to the mapped status as tasks progress.
             </p>
             {rows.map((r, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -185,7 +185,7 @@ function MappingDialog({
                     setRows(rows.map((x, j) => (j === i ? { ...x, to: v as TaskStatus } : x)))
                   }
                 >
-                  <SelectTrigger className="h-8 w-40" aria-label={`AgentForge status ${i + 1}`}>
+                  <SelectTrigger className="h-8 w-40" aria-label={`AI Harness status ${i + 1}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

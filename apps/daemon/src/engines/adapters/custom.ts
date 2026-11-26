@@ -1,4 +1,4 @@
-import type { AgentEvent, CustomEngineConfig } from '@agentforge/shared';
+import type { AgentEvent, CustomEngineConfig } from '@ai-harness/shared';
 import { classifyEngineError } from '../errors';
 import {
   CliAdapter,

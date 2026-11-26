@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@agentforge/shared';
+import type { AgentEvent } from '@ai-harness/shared';
 
 /** One-line, human description of an agent stream event (null = not worth showing). */
 export function describeEvent(e: AgentEvent): string | null {

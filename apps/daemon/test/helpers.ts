@@ -10,15 +10,15 @@ export interface TestApp extends BuiltApp {
   cleanup(): Promise<void>;
 }
 
-/** Fresh daemon backed by a throwaway AGENTFORGE_HOME. */
+/** Fresh daemon backed by a throwaway AI_HARNESS_HOME. */
 export async function createTestApp(
   env: Record<string, string> = {},
   opts: BuildOptions = {},
 ): Promise<TestApp> {
-  const home = mkdtempSync(join(tmpdir(), 'agentforge-test-'));
+  const home = mkdtempSync(join(tmpdir(), 'ai-harness-test-'));
   const config = loadConfig({
-    AGENTFORGE_HOME: home,
-    AGENTFORGE_PORT: '0',
+    AI_HARNESS_HOME: home,
+    AI_HARNESS_PORT: '0',
     NODE_ENV: 'test',
     ...env,
   });

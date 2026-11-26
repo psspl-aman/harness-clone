@@ -1,4 +1,4 @@
-import { MEMORY_KINDS, MEMORY_SCOPES } from '@agentforge/shared';
+import { MEMORY_KINDS, MEMORY_SCOPES } from '@ai-harness/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context';

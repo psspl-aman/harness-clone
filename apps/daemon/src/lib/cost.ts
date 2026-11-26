@@ -1,4 +1,4 @@
-import type { AppSettings, UsageDelta } from '@agentforge/shared';
+import type { AppSettings, UsageDelta } from '@ai-harness/shared';
 
 export interface CostResult {
   costUsd: number;

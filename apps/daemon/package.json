@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/daemon",
+  "name": "@ai-harness/daemon",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@agentforge/shared": "workspace:*",
+    "@ai-harness/shared": "workspace:*",
     "@fastify/cors": "^11.1.0",
     "@fastify/multipart": "^9.4.0",
     "@fastify/websocket": "^11.2.0",

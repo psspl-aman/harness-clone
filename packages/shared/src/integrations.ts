@@ -180,7 +180,7 @@ export type PmsFilters = z.infer<typeof PmsFiltersSchema>;
 export const PmsMappingInputSchema = z.object({
   connectionId: z.string().min(1).max(64),
   externalProject: z.string().trim().min(1).max(300),
-  /** External status → AgentForge status (used to skip finished tickets and for write-back). */
+  /** External status → AI Harness status (used to skip finished tickets and for write-back). */
   statusMap: z.record(z.string().trim().min(1).max(100), z.enum(TASK_STATUSES)).default({}),
   filters: PmsFiltersSchema.default({}),
   /** null = manual sync only. */
@@ -223,7 +223,7 @@ export interface PmsMappingDto {
   updatedAt: number;
 }
 
-/** A ticket changed in the PMS while AgentForge was working on it. */
+/** A ticket changed in the PMS while AI Harness was working on it. */
 export interface PmsConflictDto {
   kind: 'changed' | 'closed';
   detectedAt: number;

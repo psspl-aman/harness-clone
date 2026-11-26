@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatMessageDto, TaskDto } from '@agentforge/shared';
+import type { ChatMessageDto, TaskDto } from '@ai-harness/shared';
 import { describeEvent } from '@/lib/agent-events';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {

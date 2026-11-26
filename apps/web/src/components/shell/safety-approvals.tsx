@@ -1,6 +1,6 @@
 'use client';
 
-import type { SafetyApprovalDto } from '@agentforge/shared';
+import type { SafetyApprovalDto } from '@ai-harness/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
 import { ShieldAlert } from 'lucide-react';

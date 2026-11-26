@@ -217,7 +217,7 @@ export interface TaskDiffDto {
   truncated: boolean;
 }
 
-/** A paused task anywhere in AgentForge (for the global banner). */
+/** A paused task anywhere in AI Harness (for the global banner). */
 export interface PausedTaskDto {
   id: string;
   key: string;

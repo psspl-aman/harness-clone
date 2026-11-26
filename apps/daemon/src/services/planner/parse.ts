@@ -1,4 +1,4 @@
-import { PlannerOutputSchema, type PlannerOutput } from '@agentforge/shared';
+import { PlannerOutputSchema, type PlannerOutput } from '@ai-harness/shared';
 import { validatePlannerGraph } from '../tasks';
 
 export type PlannerOutputType = PlannerOutput['type'];

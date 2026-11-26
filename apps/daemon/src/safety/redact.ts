@@ -1,6 +1,6 @@
 /**
  * Secret redaction for logs (run events, terminal output). Two layers:
- * exact values AgentForge knows are secret (its encrypted store), and
+ * exact values AI Harness knows are secret (its encrypted store), and
  * well-known token shapes. Replaced with `[REDACTED]`.
  */
 const MASK = '[REDACTED]';

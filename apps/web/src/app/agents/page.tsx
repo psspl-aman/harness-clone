@@ -26,7 +26,7 @@ export default function AgentsPage() {
     <div className="portal-content py-8">
       <PageHeader
         title="Agents & Accounts"
-        description="The coding-agent CLIs AgentForge can drive, and whether each is installed and signed in."
+        description="The coding-agent CLIs AI Harness can drive, and whether each is installed and signed in."
         actions={
           <>
             <Button

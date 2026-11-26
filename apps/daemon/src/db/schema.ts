@@ -1,5 +1,5 @@
 /**
- * AgentForge SQLite schema (Drizzle). All timestamps are epoch milliseconds.
+ * AI Harness SQLite schema (Drizzle). All timestamps are epoch milliseconds.
  * After changing this file run `pnpm db:generate` to emit a SQL migration.
  */
 import { sql } from 'drizzle-orm';
@@ -48,7 +48,7 @@ import type {
   SheetSyncResultDto,
   TaskStatus,
   TaskType,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 
 const now = () => Date.now();
 const createdAt = () => integer('created_at').notNull().$defaultFn(now);
@@ -147,7 +147,7 @@ export interface Attachment {
   name: string;
   mime: string;
   size: number;
-  /** Path relative to AGENTFORGE_HOME/attachments. */
+  /** Path relative to AI_HARNESS_HOME/attachments. */
   storagePath: string;
 }
 

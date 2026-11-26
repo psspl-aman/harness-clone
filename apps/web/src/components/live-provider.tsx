@@ -10,7 +10,7 @@ import type {
   PmsMappingDto,
   SheetSourceDto,
   SafetyApprovalDto,
-} from '@agentforge/shared';
+} from '@ai-harness/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';

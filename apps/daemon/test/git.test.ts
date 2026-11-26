@@ -1,4 +1,4 @@
-import type { GitActionResultDto, GitBranchDetailDto, GitOverviewDto } from '@agentforge/shared';
+import type { GitActionResultDto, GitBranchDetailDto, GitOverviewDto } from '@ai-harness/shared';
 import { execFileSync } from 'node:child_process';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
