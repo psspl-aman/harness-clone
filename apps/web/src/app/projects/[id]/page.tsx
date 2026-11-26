@@ -205,7 +205,7 @@ export default function ProjectWorkspace() {
           aria-label="Requirement chat"
           className={cn(
             'bg-background hidden min-h-0 shrink-0 flex-col border-r md:flex',
-            chatOpen ? 'w-[clamp(16rem,23vw,21rem)]' : 'w-0 border-r-0',
+            chatOpen ? 'w-[clamp(18rem,26vw,24rem)]' : 'w-0 border-r-0',
           )}
         >
           {chatOpen && (

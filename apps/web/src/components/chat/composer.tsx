@@ -1,10 +1,21 @@
 'use client';
 
-import type { AttachmentDto, RequirementIntent } from '@ai-harness/shared';
+import type { AttachmentDto, RequirementIntent, SheetKind } from '@ai-harness/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowUp, FileCode2, Hash, Loader2, Paperclip, X } from 'lucide-react';
+import {
+  ArrowUp,
+  FileCode2,
+  FileSpreadsheet,
+  Hash,
+  ListPlus,
+  Loader2,
+  Paperclip,
+  Sheet,
+  X,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { toast } from 'sonner';
+import { SheetSourceDialog } from '@/components/integrations/sheet-sources';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useDebounced } from '@/hooks/use-debounced';
@@ -32,6 +43,9 @@ interface Props {
   initial?: ComposerDraft | null;
 }
 
+const SPREADSHEET_FILE = /\.(xlsx|csv|tsv)$/i;
+const GOOGLE_SHEET_LINK = /https:\/\/docs\.google\.com\/spreadsheets\/d\/[\w-]+[^\s)>\]]*/i;
+
 /** The token being typed at the caret: "@src/ap" → { trigger: '@', query: 'src/ap' }. */
 function activeToken(text: string, caret: number) {
   const m = text.slice(0, caret).match(/(^|\s)([@#])([\w./-]*)$/);
@@ -52,6 +66,16 @@ export function Composer({ projectId, hasPlan, busy, initial }: Props) {
   const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  /** Open "import tasks from a spreadsheet", optionally prefilled from the chat. */
+  const [sheetImport, setSheetImport] = useState<{
+    kind?: SheetKind;
+    location?: string;
+    /** Chat attachment the sheet came from (dropped from the message once imported). */
+    attachmentId?: string;
+    /** Link pasted in the message (removed from the text once imported). */
+    link?: string;
+  } | null>(null);
+  const sheetLink = text.match(GOOGLE_SHEET_LINK)?.[0] ?? null;
   const effectiveIntent = intentTouched ? intent : hasPlan ? 'add_to_plan' : 'generate_plan';
 
   // Focus with the caret at the end when opened with a draft.
@@ -226,7 +250,19 @@ export function Composer({ projectId, hasPlan, busy, initial }: Props) {
                 className="bg-muted flex items-center gap-1 rounded-md px-2 py-0.5 text-xs"
               >
                 <Paperclip className="size-3" /> {a.name}
+                {SPREADSHEET_FILE.test(a.name) && (
+                  <button
+                    type="button"
+                    className="text-primary ml-1 inline-flex items-center gap-0.5 font-medium hover:underline"
+                    onClick={() =>
+                      setSheetImport({ kind: 'file', location: a.path, attachmentId: a.id })
+                    }
+                  >
+                    <ListPlus className="size-3" /> Import as tasks
+                  </button>
+                )}
                 <button
+                  type="button"
                   aria-label={`Remove ${a.name}`}
                   onClick={() => setAttachments((xs) => xs.filter((x) => x.id !== a.id))}
                 >
@@ -234,6 +270,23 @@ export function Composer({ projectId, hasPlan, busy, initial }: Props) {
                 </button>
               </span>
             ))}
+          </div>
+        )}
+        {sheetLink && (
+          <div className="bg-primary/5 mx-2 mt-2 flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
+            <Sheet className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">
+              Google Sheet link — turn its rows into tasks?
+            </span>
+            <button
+              type="button"
+              className="text-primary shrink-0 font-medium hover:underline"
+              onClick={() =>
+                setSheetImport({ kind: 'google', location: sheetLink, link: sheetLink })
+              }
+            >
+              Import as tasks
+            </button>
           </div>
         )}
         <textarea
@@ -279,6 +332,17 @@ export function Composer({ projectId, hasPlan, busy, initial }: Props) {
             disabled={upload.isPending}
           >
             {upload.isPending ? <Loader2 className="animate-spin" /> : <Paperclip />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label="Import tasks from a Google Sheet or Excel file"
+            title="Import tasks from a Google Sheet or Excel file"
+            onClick={() => setSheetImport({})}
+          >
+            <FileSpreadsheet />
           </Button>
           <div
             role="radiogroup"
@@ -328,6 +392,21 @@ export function Composer({ projectId, hasPlan, busy, initial }: Props) {
           </Button>
         </div>
       </div>
+      {sheetImport && (
+        <SheetSourceDialog
+          projectId={projectId}
+          open
+          onOpenChange={(o) => !o && setSheetImport(null)}
+          initialKind={sheetImport.kind}
+          initialLocation={sheetImport.location}
+          offerOneAtATime
+          onConnected={() => {
+            const { attachmentId, link } = sheetImport;
+            if (attachmentId) setAttachments((xs) => xs.filter((x) => x.id !== attachmentId));
+            if (link) setText((t) => t.replace(link, '').trim());
+          }}
+        />
+      )}
     </div>
   );
 }
