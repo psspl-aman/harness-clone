@@ -3,7 +3,6 @@ import {
   DocOutputSchema,
   RequestChangesInputSchema,
   ReviewOutputSchema,
-  resolveRoleModel,
   resolveRouting,
   routingRuleFor,
   SteerInputSchema,
@@ -2098,8 +2097,13 @@ export class Orchestrator {
       .from(projectSettings)
       .where(eq(projectSettings.projectId, task.projectId))
       .get();
-    const explicit = resolveRoleModel(task.roleModels, ps?.m, role);
-    if (explicit) return explicit;
+    // Task → project. A model that belongs to another engine (project on "haiku", task
+    // routed to Codex) is skipped with a warning instead of being passed as `--model haiku`.
+    for (const model of [task.roleModels[role], ps?.m[role]]) {
+      if (!model) continue;
+      if (!this.modelForeignTo(engineId, model)) return model;
+      this.warnSkippedModel(task, role, engineId, model);
+    }
     const rule = this.routingRule(task);
     if (rule?.model && this.engineOffersModel(engineId, rule.model)) return rule.model;
     return null;
@@ -2107,6 +2111,34 @@ export class Orchestrator {
 
   private engineOffersModel(engineId: string, model: string): boolean {
     return this.safeEngine(engineId)?.models.some((m) => m.id === model) ?? false;
+  }
+
+  /**
+   * True when `model` is clearly meant for a different engine: this engine lists its models,
+   * doesn't list this one, and another engine does. Unknown ids (a custom model typed by hand)
+   * are passed through so a newer model than the static list still works.
+   */
+  private modelForeignTo(engineId: string, model: string): boolean {
+    const engine = this.safeEngine(engineId);
+    if (!engine?.models.length || this.engineOffersModel(engineId, model)) return false;
+    return this.d.engines.list().some((e) => e.id !== engineId && e.models.some((m) => m.id === model));
+  }
+
+  private readonly skippedModelWarnings = new Set<string>();
+  private warnSkippedModel(task: TaskRow, role: AgentRole, engineId: string, model: string) {
+    const key = `${task.id}:${role}:${engineId}:${model}`;
+    if (this.skippedModelWarnings.has(key)) return;
+    this.skippedModelWarnings.add(key);
+    const label = (
+      this.d.engines.list().flatMap((e) => e.models).find((m) => m.id === model)?.label ?? model
+    ).replace(/\s*\(latest\)$/, '');
+    const engine = this.engineName(engineId);
+    this.notify(
+      task,
+      'warning',
+      `${label} isn’t available on ${engine}`,
+      `${task.key} ${role}: using the ${engine} default model instead.`,
+    );
   }
 
   /** The complexity-routing rule for a task, or null when routing is off (full pipeline). */

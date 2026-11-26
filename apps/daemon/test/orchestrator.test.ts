@@ -8,6 +8,7 @@ import { agentRuns, documents, memoryEntries, reviewComments, testResults } from
 import {
   claudeLimitStream,
   claudeStream,
+  FIXTURES,
   makeFakeCli,
   type FakeCli,
   type FakeResponse,
@@ -1244,5 +1245,36 @@ describe('pipeline: complexity routing & model selection', () => {
     // A role without an override uses the engine default — no explicit --model flag.
     const rev = agent.calls().find((c) => c.stdin.includes('# Role: Reviewer'))!;
     expect(rev.args).not.toContain('--model');
+  });
+
+  it('skips a project model the task’s engine doesn’t offer (Haiku on Codex → Codex default)', async () => {
+    const codex = await installFakeEngine(t, 'codex', [
+      {
+        match: 'exec',
+        stdoutFile: join(FIXTURES, 'codex-success.jsonl'),
+        writeFiles: { 'src/a.txt': 'codex\n' },
+      },
+    ]);
+    script(reviewer(), tester(), role('Reviewer (tests)', APPROVE), documenter());
+    await setProject({ roleModels: { developer: 'haiku', reviewer: 'haiku' } });
+    const { planId, tasks } = plan(pt('T1', 'Feature'));
+    const id = tasks[0]!.id;
+    t.ctx.tasks.update(id, { roleEngines: { developer: 'codex' } });
+    await approveAll(planId);
+    await t.ctx.orchestrator.idle();
+
+    const dev = codex.calls().find((c) => c.args[0] === 'exec')!;
+    expect(dev).toBeDefined();
+    expect(dev.args).not.toContain('haiku');
+    expect(dev.args).not.toContain('-m');
+    // Claude still gets the project model for the roles it runs.
+    const rev = agent.calls().find((c) => c.stdin.includes('# Role: Reviewer'))!;
+    expect(rev.args).toEqual(expect.arrayContaining(['--model', 'haiku']));
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'notification',
+        payload: expect.objectContaining({ title: 'Haiku isn’t available on OpenAI Codex' }),
+      }),
+    );
   });
 });
