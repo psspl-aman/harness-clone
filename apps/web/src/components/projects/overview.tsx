@@ -1,7 +1,16 @@
 'use client';
 
-import type { ProjectDetail, RoleEngines, RoleModels } from '@agentforge/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  AGENT_ROLES,
+  cheapModelFor,
+  cheapRouting,
+  type Effort,
+  type ProjectDetail,
+  type RoleEngines,
+  type RoleModels,
+  type UpdateProjectInput,
+} from '@agentforge/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   FileLock2,
@@ -10,11 +19,14 @@ import {
   GitCommitHorizontal,
   Loader2,
   RefreshCw,
+  RotateCcw,
   Save,
+  Zap,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { EngineRoles } from '@/components/projects/engine-roles';
+import { EffortSelect, EngineRoles, useResolvedEngines } from '@/components/projects/engine-roles';
+import { useUnsavedGuard } from '@/hooks/use-unsaved-guard';
 import { PipelineSettingsCard } from '@/components/projects/pipeline-settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,42 +104,120 @@ function OnboardingBanner({ project, onRetry }: { project: ProjectDetail; onRetr
 
 function EnginesCard({ project }: { project: ProjectDetail }) {
   const queryClient = useQueryClient();
+  const settings = useQuery({ queryKey: qk.settings, queryFn: api.settings.get });
+  const engines = useQuery({ queryKey: qk.engines, queryFn: api.engines.list });
   const [edits, setEdits] = useState<Partial<RoleEngines> | null>(null);
   const [modelEdits, setModelEdits] = useState<RoleModels | null>(null);
+  const [effortEdit, setEffortEdit] = useState<{ v: Effort | null } | null>(null);
   const value = edits ?? project.roleEngines;
   const models = modelEdits ?? project.roleModels;
+  const effort = effortEdit ? effortEdit.v : project.effort;
   const dirty =
     (edits !== null && JSON.stringify(edits) !== JSON.stringify(project.roleEngines)) ||
-    (modelEdits !== null && JSON.stringify(modelEdits) !== JSON.stringify(project.roleModels));
+    (modelEdits !== null && JSON.stringify(modelEdits) !== JSON.stringify(project.roleModels)) ||
+    (effortEdit !== null && effortEdit.v !== project.effort);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useUnsavedGuard(dirty, cardRef);
+  const resolved = useResolvedEngines(value);
+  const discard = () => {
+    setEdits(null);
+    setModelEdits(null);
+    setEffortEdit(null);
+  };
   const save = useMutation({
-    mutationFn: () => api.projects.update(project.id, { roleEngines: value, roleModels: models }),
-    onSuccess: (p) => {
+    mutationFn: (input: UpdateProjectInput) => api.projects.update(project.id, input),
+    onSuccess: (p, input) => {
       queryClient.setQueryData(qk.project(p.id), p);
-      setEdits(null);
-      setModelEdits(null);
-      toast.success('Agent engines saved');
+      discard();
+      toast.success(
+        input.pipeline
+          ? input.effort === 'low'
+            ? 'Cheap mode on — cheapest models, low effort, LITE pipeline for xs/s tasks'
+            : 'Reset to defaults'
+          : 'Agent engines saved',
+      );
     },
     onError: (e) => toast.error('Could not save', { description: errMsg(e) }),
   });
+  const cheapMode = () => {
+    if (!settings.data) return;
+    const cheap: RoleModels = {};
+    for (const role of AGENT_ROLES) {
+      const engineId = resolved[role];
+      const m = cheapModelFor(engineId, engines.data?.find((e) => e.id === engineId)?.models);
+      if (m) cheap[role] = m;
+    }
+    save.mutate({
+      roleEngines: value,
+      roleModels: cheap,
+      effort: 'low',
+      pipeline: { routing: cheapRouting(project.pipeline.routing ?? settings.data.routing) },
+    });
+  };
+  const reset = () =>
+    save.mutate({ roleEngines: value, roleModels: {}, effort: null, pipeline: { routing: null } });
   return (
-    <Section
-      title="Agent engines & models"
-      description="Per-role engine and model overrides for this project."
-      action={
-        dirty && (
-          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? <Loader2 className="animate-spin" /> : <Save />} Save
-          </Button>
-        )
-      }
-    >
-      <EngineRoles
-        value={value}
-        onChange={setEdits}
-        models={models}
-        onModelsChange={setModelEdits}
-      />
-    </Section>
+    <div ref={cardRef}>
+      <Section
+        title="Agent engines & models"
+        description="Per-role engine and model overrides for this project."
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {dirty ? (
+              <>
+                <Badge variant="outline" className="border-warning text-warning" role="status">
+                  Unsaved changes
+                </Badge>
+                <Button size="sm" variant="ghost" onClick={discard} disabled={save.isPending}>
+                  Discard
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => save.mutate({ roleEngines: value, roleModels: models, effort })}
+                  disabled={save.isPending}
+                >
+                  {save.isPending ? <Loader2 className="animate-spin" /> : <Save />} Save
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={cheapMode}
+                  disabled={save.isPending || !settings.data}
+                  title="Cheapest model per engine (Haiku on Claude Code), low effort, and the LITE pipeline for xs/s tasks"
+                >
+                  <Zap /> Cheap mode
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={reset}
+                  disabled={save.isPending}
+                  title="Clear model, effort and routing overrides (engine choices stay)"
+                >
+                  <RotateCcw /> Reset to defaults
+                </Button>
+              </>
+            )}
+          </div>
+        }
+      >
+        <div className="space-y-2">
+          <EngineRoles
+            value={value}
+            onChange={setEdits}
+            models={models}
+            onModelsChange={setModelEdits}
+            effort={effort}
+          />
+          <div className="rounded-xl border">
+            <EffortSelect value={effort} onChange={(v) => setEffortEdit({ v })} />
+          </div>
+        </div>
+      </Section>
+    </div>
   );
 }
 

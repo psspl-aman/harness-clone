@@ -1,10 +1,13 @@
 'use client';
 
-import type {
-  CreateProjectInput,
-  GithubRepo,
-  RoleEngines,
-  StagedAttachmentDto,
+import {
+  AGENT_ROLES,
+  cheapModelFor,
+  type CreateProjectInput,
+  type GithubRepo,
+  type RoleEngines,
+  type RoleModels,
+  type StagedAttachmentDto,
 } from '@agentforge/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
@@ -22,12 +25,12 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { DirectoryPicker } from '@/components/fs/directory-picker';
+import { DirectoryPicker, useFsRoots } from '@/components/fs/directory-picker';
 import { PathCheckStatus } from '@/components/fs/path-check';
 import { GithubConnect, useGithubStatus } from '@/components/github/github-connect';
 import { RepoPicker } from '@/components/github/repo-picker';
 import { GithubIcon } from '@/components/icons';
-import { EngineRoles } from '@/components/projects/engine-roles';
+import { EngineRoles, useResolvedEngines } from '@/components/projects/engine-roles';
 import { RequirementFiles } from '@/components/projects/requirement-files';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +70,7 @@ const STEPS: Record<Mode, { id: StepId; label: string }[]> = {
 };
 
 const STACK_CHIPS = [
+  'Static site (HTML/CSS/JS)',
   'TypeScript',
   'Next.js',
   'React + Vite',
@@ -96,6 +100,14 @@ const basename = (p: string) =>
     .pop() ?? '';
 // An absolute path on either platform: POSIX "/…" or Windows "C:\…" / "C:/…".
 const isAbsPath = (p: string) => /^(\/|[A-Za-z]:[\\/])/.test(p);
+/**
+ * Join a parent folder and a child name with the separator the parent already uses
+ * (`F:\prep` + `tip-splitter` → `F:\prep\tip-splitter`), else the daemon's separator.
+ */
+const joinPath = (parent: string, child: string, sep?: string) => {
+  const s = parent.includes('\\') ? '\\' : parent.includes('/') ? '/' : (sep ?? '/');
+  return `${parent.replace(/[\\/]+$/, '')}${s}${child}`;
+};
 
 function Field({
   label,
@@ -216,6 +228,20 @@ function Wizard({ mode }: { mode: Mode }) {
   const [nameTouched, setNameTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [roleEngines, setRoleEngines] = useState<Partial<RoleEngines>>({});
+  const [cheap, setCheap] = useState(false);
+  const roots = useFsRoots();
+  const resolvedEngines = useResolvedEngines(roleEngines);
+  const engineList = useQuery({ queryKey: qk.engines, queryFn: api.engines.list });
+  const cheapModels = useMemo((): RoleModels => {
+    if (!cheap) return {};
+    const out: RoleModels = {};
+    for (const role of AGENT_ROLES) {
+      const id = resolvedEngines[role];
+      const m = cheapModelFor(id, engineList.data?.find((e) => e.id === id)?.models);
+      if (m) out[role] = m;
+    }
+    return out;
+  }, [cheap, resolvedEngines, engineList.data]);
   // Scratch
   const [where, setWhere] = useState<'local' | 'github'>('local');
   const [parentDir, setParentDir] = useState('');
@@ -247,7 +273,7 @@ function Wizard({ mode }: { mode: Mode }) {
   const checkPath =
     mode === 'scratch'
       ? parentDir && effectiveFolder
-        ? `${parentDir.replace(/[\\/]+$/, '')}/${effectiveFolder}`
+        ? joinPath(parentDir, effectiveFolder, roots.data?.sep)
         : ''
       : existingPath.trim();
   const usesLocal =
@@ -293,6 +319,7 @@ function Wizard({ mode }: { mode: Mode }) {
         location,
         stackPreferences: stack.trim() || undefined,
         roleEngines,
+        ...(cheap ? { roleModels: cheapModels, effort: 'low' as const } : {}),
         initialRequirement: requirement.trim() || undefined,
         initialAttachmentIds: requirementFiles.map((f) => f.id),
       };
@@ -306,6 +333,7 @@ function Wizard({ mode }: { mode: Mode }) {
           ? { kind: 'local', path: existingPath.trim(), initGit }
           : { kind: 'github', fullName: ghRepo?.fullName ?? '' },
       roleEngines,
+      ...(cheap ? { roleModels: cheapModels, effort: 'low' as const } : {}),
     };
   }, [
     mode,
@@ -321,6 +349,8 @@ function Wizard({ mode }: { mode: Mode }) {
     name,
     stack,
     roleEngines,
+    cheap,
+    cheapModels,
     requirement,
     requirementFiles,
     derivedName,
@@ -354,6 +384,9 @@ function Wizard({ mode }: { mode: Mode }) {
       toast.success(mode === 'scratch' ? `Created ${p.name}` : `Attached ${p.name}`, {
         description: 'Analysing the project…',
       });
+      // The project route can take a while to compile/load; the button stays busy
+      // (create.isSuccess) until this page unmounts, so a second click can't re-create it.
+      router.prefetch(`/projects/${p.id}`);
       router.push(`/projects/${p.id}`);
     },
     onError: (err) =>
@@ -362,7 +395,52 @@ function Wizard({ mode }: { mode: Mode }) {
       }),
   });
 
+  /** Why Next is disabled on a step, shown next to the buttons. */
+  const blockedReason = (id: StepId): string | null => {
+    if (stepValid(id)) return null;
+    const pathReason = (path: string, emptyMsg: string) => {
+      if (!path.trim()) return emptyMsg;
+      if (!isAbsPath(path.trim())) return 'Use a full (absolute) path';
+      if (checkLoading) return 'Checking the folder…';
+      if (check.error)
+        return check.error instanceof ApiClientError
+          ? check.error.message
+          : 'Could not check the folder';
+      if (check.data && !check.data.ok) return check.data.reason ?? 'This folder can’t be used';
+      return null;
+    };
+    switch (id) {
+      case 'details':
+        return 'Enter a project name';
+      case 'location':
+        if (where === 'local') {
+          if (!parentDir.trim()) return 'Choose a parent folder';
+          if (!effectiveFolder) return 'Enter a project folder name';
+          if (!SAFE_NAME.test(effectiveFolder))
+            return 'The folder name can only use letters, numbers, dots, dashes and underscores';
+          return pathReason(checkPath, 'Choose a parent folder');
+        }
+        if (!ghConnected) return 'Connect GitHub to continue';
+        if (ghAction === 'create')
+          return !effectiveOwner
+            ? 'Choose an owner'
+            : 'The repository name can only use letters, numbers, dots, dashes and underscores';
+        return 'Choose a repository';
+      case 'source':
+        if (where === 'local')
+          return (
+            pathReason(existingPath, 'Enter or browse to the project folder') ??
+            'Not a git repository — turn on “Initialise a git repository”'
+          );
+        return ghConnected ? 'Choose a repository' : 'Connect GitHub to continue';
+      default:
+        return null;
+    }
+  };
   const canNext = stepValid(step.id);
+  const nextHint = blockedReason(step.id);
+  // Stays busy after success until the project page replaces this one.
+  const busy = create.isPending || create.isSuccess;
   const isLast = stepIdx === steps.length - 1;
   const next = () => {
     if (!canNext) return;
@@ -380,7 +458,11 @@ function Wizard({ mode }: { mode: Mode }) {
       <div className="flex gap-2">
         <Input
           id="path"
-          placeholder="/home/you/code"
+          placeholder={
+            roots.data
+              ? `${roots.data.home.replace(/[\\/]+$/, '')}${roots.data.sep}code`
+              : undefined
+          }
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="font-mono text-sm"
@@ -445,6 +527,7 @@ function Wizard({ mode }: { mode: Mode }) {
             autoFocus
             placeholder={mode === 'scratch' ? 'e.g. Recipe planner' : undefined}
             value={mode === 'existing' && !nameTouched ? derivedName : name}
+            aria-invalid={mode === 'scratch' && nameTouched && !name.trim()}
             onChange={(e) => {
               setNameTouched(true);
               setName(e.target.value);
@@ -640,6 +723,16 @@ function Wizard({ mode }: { mode: Mode }) {
           Pick which engine runs each role for this project. “Default” follows your global settings.
         </p>
         <EngineRoles value={roleEngines} onChange={setRoleEngines} />
+        <Label className="bg-muted/50 flex items-start gap-3 rounded-lg border p-3 font-normal">
+          <Switch checked={cheap} onCheckedChange={setCheap} className="mt-0.5" />
+          <span className="text-sm">
+            Cheap mode
+            <span className="text-muted-foreground block text-xs">
+              Cheapest model per engine (Haiku on Claude Code, engine default elsewhere) and low
+              reasoning effort. Turn on LITE routing for small tasks from the project Overview.
+            </span>
+          </span>
+        </Label>
       </div>
     ),
     requirement: (
@@ -706,6 +799,7 @@ function Wizard({ mode }: { mode: Mode }) {
                   .join(', ')
               : 'Global defaults',
           ],
+          ...(cheap ? [['Cheap mode', 'Cheapest models, low effort']] : []),
         ].map(([k, v]) => (
           <div key={k} className="flex gap-4 px-4 py-3">
             <dt className="text-muted-foreground w-36 shrink-0">{k}</dt>
@@ -787,13 +881,31 @@ function Wizard({ mode }: { mode: Mode }) {
             <Button
               type="button"
               variant="ghost"
-              disabled={stepIdx === 0 || create.isPending}
+              disabled={stepIdx === 0 || busy}
               onClick={() => setStepIdx((i) => i - 1)}
             >
               <ArrowLeft /> Back
             </Button>
-            <Button type="submit" disabled={!canNext || create.isPending}>
-              {create.isPending ? (
+            {nextHint && !busy && (
+              <p
+                id="next-hint"
+                role="status"
+                className="text-muted-foreground mx-3 min-w-0 flex-1 text-right text-xs"
+              >
+                {nextHint}
+              </p>
+            )}
+            <Button
+              type="submit"
+              disabled={!canNext || busy}
+              aria-busy={busy}
+              aria-describedby={nextHint ? 'next-hint' : undefined}
+            >
+              {create.isSuccess ? (
+                <>
+                  <Loader2 className="animate-spin" /> Opening project…
+                </>
+              ) : create.isPending ? (
                 <>
                   <Loader2 className="animate-spin" />{' '}
                   {where === 'github' ? 'Cloning…' : 'Creating…'}

@@ -118,10 +118,14 @@ function CostBody({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat
           label="Total cost"
-          value={fmtUsd(t.costUsd)}
+          value={
+            t.estimatedShare > 0.01
+              ? `~${fmtUsd(t.costUsd)}${t.estimatedShare > 0.99 ? ' est.' : ''}`
+              : fmtUsd(t.costUsd)
+          }
           sub={
             t.estimatedShare > 0.01
-              ? `${Math.round(t.estimatedShare * 100)}% estimated from prices`
+              ? `${Math.round(t.estimatedShare * 100)}% estimated from list prices`
               : t.unpricedRuns
                 ? `${t.unpricedRuns} run${t.unpricedRuns === 1 ? '' : 's'} not priced`
                 : 'as reported by the engines'
@@ -196,7 +200,7 @@ function CostBody({
           key: b.key,
           label: b.label,
           value: val(b),
-          detail: `${b.runs} runs`,
+          detail: `${b.runs} runs${metric === 'cost' && (b.estimatedCostUsd ?? 0) > 0 ? ' · est.' : ''}`,
         }))}
       />
       <div className="grid gap-6 md:grid-cols-2">
@@ -208,7 +212,7 @@ function CostBody({
               key: b.key,
               label: ROLE[b.key] ?? b.label,
               value: val(b),
-              detail: `${b.runs} runs`,
+              detail: `${b.runs} runs${metric === 'cost' && (b.estimatedCostUsd ?? 0) > 0 ? ' · est.' : ''}`,
             }))}
           />
         </div>
@@ -221,7 +225,7 @@ function CostBody({
                 key: `e:${b.key}`,
                 label: engineName(b.key),
                 value: val(b),
-                detail: `${b.runs} runs`,
+                detail: `${b.runs} runs${metric === 'cost' && (b.estimatedCostUsd ?? 0) > 0 ? ' · est.' : ''}`,
               })),
               ...sorted(data.summary.byModel)
                 .filter((b) => b.key !== 'unknown')
@@ -229,7 +233,7 @@ function CostBody({
                   key: `m:${b.key}`,
                   label: `· ${b.label}`,
                   value: val(b),
-                  detail: `${b.runs} runs`,
+                  detail: `${b.runs} runs${metric === 'cost' && (b.estimatedCostUsd ?? 0) > 0 ? ' · est.' : ''}`,
                 })),
             ]}
           />
@@ -247,7 +251,7 @@ function CostBody({
                 key: b.key,
                 label: `${b.taskKey} · ${b.label}`,
                 value: val(b),
-                detail: `${b.runs} runs`,
+                detail: `${b.runs} runs${metric === 'cost' && (b.estimatedCostUsd ?? 0) > 0 ? ' · est.' : ''}`,
               }))}
           />
         </div>
