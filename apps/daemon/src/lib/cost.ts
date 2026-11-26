@@ -1,4 +1,4 @@
-import type { AppSettings, UsageDelta } from '@agentforge/shared';
+import { builtinPrice, type AppSettings, type UsageDelta } from '@agentforge/shared';
 
 export interface CostResult {
   costUsd: number;
@@ -6,8 +6,10 @@ export interface CostResult {
 }
 
 /**
- * Cost of a run: what the CLI reported, otherwise an estimate from the
- * configurable price table (model first, then engine), otherwise unknown.
+ * Cost of a run: what the CLI reported, otherwise an estimate from your
+ * price table in Settings (model first, then engine), otherwise from the
+ * built-in list prices (model family, then the engine's default model),
+ * otherwise unknown.
  */
 export function costOf(
   u: UsageDelta,
@@ -15,7 +17,7 @@ export function costOf(
   pricing: AppSettings['pricing'],
 ): CostResult {
   if (u.costUsd && u.costUsd > 0) return { costUsd: u.costUsd, source: 'reported' };
-  const p = (u.model && pricing[u.model]) || pricing[engineId];
+  const p = (u.model && pricing[u.model]) || pricing[engineId] || builtinPrice(u.model, engineId);
   if (!p) return { costUsd: 0, source: 'none' };
   const cost =
     (u.inputTokens * p.input +

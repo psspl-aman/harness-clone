@@ -109,6 +109,7 @@ export class ProjectService {
       onboardingReport: row.onboardingReport ?? null,
       roleEngines: settings?.roleEngines ?? {},
       roleModels: settings?.roleModels ?? {},
+      effort: settings?.effort ?? null,
       pipeline: {
         maxConcurrentTasks: settings?.maxConcurrentTasks ?? null,
         maxFixLoops: settings?.maxFixLoops ?? null,
@@ -249,7 +250,12 @@ export class ProjectService {
         })
         .run();
       tx.insert(projectSettings)
-        .values({ projectId: id, roleEngines: input.roleEngines ?? {} })
+        .values({
+          projectId: id,
+          roleEngines: input.roleEngines ?? {},
+          roleModels: input.roleModels ?? {},
+          effort: input.effort ?? null,
+        })
         .run();
       if (requirementText) {
         tx.insert(requirements)
@@ -323,6 +329,12 @@ export class ProjectService {
       if (input.roleModels !== undefined) {
         tx.update(projectSettings)
           .set({ roleModels: input.roleModels })
+          .where(eq(projectSettings.projectId, id))
+          .run();
+      }
+      if (input.effort !== undefined) {
+        tx.update(projectSettings)
+          .set({ effort: input.effort })
           .where(eq(projectSettings.projectId, id))
           .run();
       }

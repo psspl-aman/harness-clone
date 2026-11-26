@@ -4,11 +4,13 @@ import {
   RequestChangesInputSchema,
   ReviewOutputSchema,
   resolveRouting,
+  ROLE_LABELS,
   routingRuleFor,
   SteerInputSchema,
   TestOutputSchema,
   Topics,
   type AgentRole,
+  type Effort,
   type AgentRunResultDto,
   type CheckpointDto,
   type DocOutput,
@@ -84,6 +86,8 @@ const STEP_TIMEOUT_MS = 45 * 60_000;
 /** Task types with no behaviour of their own to test, so their tests aren't reviewed. */
 const NO_TEST_REVIEW_TYPES: ReadonlySet<TaskType> = new Set(['docs', 'chore']);
 const MAX_JSON_ATTEMPTS = 3;
+/** Automatic resumes of an auth-paused task before it waits for the user. */
+const MAX_AUTH_RESUMES = 2;
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 } as const;
 
 interface Driver {
@@ -520,7 +524,7 @@ export class Orchestrator {
    * when that is on, so a human can approve or request changes before it lands.
    */
   private async mergeLite(taskId: string): Promise<void> {
-    this.patchState(taskId, { lastError: null, quotaProbe: 0 }, false);
+    this.patchState(taskId, { lastError: null, quotaProbe: 0, authResumes: 0 }, false);
     const task = this.row(taskId);
     if (this.projectConfig(task.projectId).requireHumanReview) {
       this.patchState(taskId, { awaitingMergeReview: true });
@@ -953,6 +957,8 @@ export class Orchestrator {
     if (!['PAUSED_MANUAL', 'PAUSED_QUOTA', 'PAUSED_AUTH'].includes(t.status))
       throw conflict(`${t.key} isn't paused`);
     const to = t.resumeToStatus ?? 'QUEUED';
+    // A manual resume gets a fresh budget of automatic auth resumes.
+    if (t.pipelineState.authResumes) this.patchState(taskId, { authResumes: 0 }, false);
     this.d.tasks.transition(taskId, to, 'Resumed', 'user');
     this.d.db
       .update(tasks)
@@ -1356,6 +1362,16 @@ export class Orchestrator {
         attempt,
       });
       this.patchState(task.id, { activeRole: role, activeEngine: engineId, activeRunId: runId });
+      // A "— resuming" reason from a pause is stale once a run starts (maybe on another engine).
+      const reasonNow = this.row(task.id).statusReason;
+      if (reasonNow?.endsWith('— resuming')) {
+        this.d.db
+          .update(tasks)
+          .set({ statusReason: `${ROLE_LABELS[role]} running on ${this.engineName(engineId)}` })
+          .where(eq(tasks.id, task.id))
+          .run();
+        this.d.tasks.touch(task.id);
+      }
       const runController = new AbortController();
       driver.runController = runController;
       const onAbort = () => runController.abort();
@@ -1369,6 +1385,7 @@ export class Orchestrator {
             cwd,
             permission,
             model: this.modelFor(task, role, engineId),
+            effort: this.effortFor(task, engineId),
             resumeSessionId: resume,
             timeoutMs: STEP_TIMEOUT_MS,
             signal: runController.signal,
@@ -1683,8 +1700,22 @@ export class Orchestrator {
           this.d.tasks.touch(t.id);
           continue;
         }
-      } else if (this.safeEngine(engineId)?.authStatus !== 'ACTIVE') {
-        continue;
+      } else {
+        // The engine shows ACTIVE only after its CLI probe passes and no real run has failed
+        // sign-in since (see EngineRegistry.runAuthFailed). Still cap automatic resumes, so a
+        // credential the probe can't see as broken doesn't loop pause → resume → 401 forever.
+        const engine = this.safeEngine(engineId);
+        if (engine?.authStatus !== 'ACTIVE') continue;
+        const resumes = t.pipelineState.authResumes ?? 0;
+        if (resumes >= MAX_AUTH_RESUMES) {
+          const reason = `${engine.displayName} keeps failing to sign in — fix the login, run Test on the Agents page, then resume the task`;
+          if (t.statusReason !== reason) {
+            this.d.db.update(tasks).set({ statusReason: reason }).where(eq(tasks.id, t.id)).run();
+            this.d.tasks.touch(t.id);
+          }
+          continue;
+        }
+        this.patchState(t.id, { authResumes: resumes + 1 }, false);
       }
       this.d.tasks.transition(
         t.id,
@@ -2086,7 +2117,7 @@ export class Orchestrator {
 
   /**
    * The model for a role on a task:
-   *   task.roleModels[role] → project.roleModels[role] → routing-profile model → null.
+   *   task.roleModels[role] → project.roleModels[role] → global roleModels[role] → routing model → null.
    * A null result lets the engine fall back to its own default model (then the CLI default).
    * The routing-profile model is only used when the chosen engine actually offers it, so a
    * profile tuned for one engine never hands an unknown model id to another.
@@ -2099,7 +2130,11 @@ export class Orchestrator {
       .get();
     // Task → project. A model that belongs to another engine (project on "haiku", task
     // routed to Codex) is skipped with a warning instead of being passed as `--model haiku`.
-    for (const model of [task.roleModels[role], ps?.m[role]]) {
+    for (const model of [
+      task.roleModels[role],
+      ps?.m[role],
+      this.d.settings.get().roleModels[role],
+    ]) {
       if (!model) continue;
       if (!this.modelForeignTo(engineId, model)) return model;
       this.warnSkippedModel(task, role, engineId, model);
@@ -2107,6 +2142,19 @@ export class Orchestrator {
     const rule = this.routingRule(task);
     if (rule?.model && this.engineOffersModel(engineId, rule.model)) return rule.model;
     return null;
+  }
+
+  /** Reasoning effort: task → project → null (CLI default); dropped for engines without it. */
+  private effortFor(task: TaskRow, engineId: string): Effort | null {
+    if (!this.safeEngine(engineId)?.capabilities.effort) return null;
+    if (task.effort) return task.effort;
+    return (
+      this.d.db
+        .select({ e: projectSettings.effort })
+        .from(projectSettings)
+        .where(eq(projectSettings.projectId, task.projectId))
+        .get()?.e ?? null
+    );
   }
 
   private engineOffersModel(engineId: string, model: string): boolean {
@@ -2121,7 +2169,9 @@ export class Orchestrator {
   private modelForeignTo(engineId: string, model: string): boolean {
     const engine = this.safeEngine(engineId);
     if (!engine?.models.length || this.engineOffersModel(engineId, model)) return false;
-    return this.d.engines.list().some((e) => e.id !== engineId && e.models.some((m) => m.id === model));
+    return this.d.engines
+      .list()
+      .some((e) => e.id !== engineId && e.models.some((m) => m.id === model));
   }
 
   private readonly skippedModelWarnings = new Set<string>();
@@ -2130,7 +2180,10 @@ export class Orchestrator {
     if (this.skippedModelWarnings.has(key)) return;
     this.skippedModelWarnings.add(key);
     const label = (
-      this.d.engines.list().flatMap((e) => e.models).find((m) => m.id === model)?.label ?? model
+      this.d.engines
+        .list()
+        .flatMap((e) => e.models)
+        .find((m) => m.id === model)?.label ?? model
     ).replace(/\s*\(latest\)$/, '');
     const engine = this.engineName(engineId);
     this.notify(

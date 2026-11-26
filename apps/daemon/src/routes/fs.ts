@@ -4,6 +4,8 @@ import { z } from 'zod';
 import type { AppContext } from '../context';
 
 export function registerFsRoutes(app: FastifyInstance, ctx: AppContext): void {
+  app.get('/api/fs/roots', async () => ctx.fs.roots());
+
   app.get('/api/fs/browse', async (req) => {
     const q = z
       .object({ path: z.string().optional(), hidden: z.enum(['0', '1']).optional() })

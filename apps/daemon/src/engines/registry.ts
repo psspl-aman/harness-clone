@@ -95,6 +95,15 @@ export class EngineRegistry {
   private stopped = false;
   private readonly testRuns = new Map<string, AbortController>();
   private readonly testRunPromises = new Set<Promise<void>>();
+  /**
+   * Engines whose last real run failed to authenticate (e.g. `401 Invalid credential`) even
+   * though their CLI's auth probe says "logged in". The failure holds (status EXPIRED) until a
+   * run succeeds or the user logs in / changes the key, so the UI doesn't show "Active" and
+   * paused tasks don't resume into the same failure.
+   */
+  private readonly runAuthFailed = new Map<string, string>();
+  /** Finished test runs (most recent last), so a client that missed the live event can fetch it. */
+  private readonly testResults = new Map<string, AgentRunResult>();
 
   constructor(private readonly o: EngineRegistryOptions) {}
 
@@ -189,9 +198,15 @@ export class EngineRegistry {
         before.resetAt !== null &&
         before.resetAt > Date.now() &&
         auth.status === 'ACTIVE';
+      const runAuthError = this.runAuthFailed.get(id);
+      const authFailHolds = !quotaHolds && auth.status === 'ACTIVE' && runAuthError !== undefined;
       Object.assign(patch, {
-        authStatus: quotaHolds ? 'QUOTA_EXHAUSTED' : auth.status,
-        authDetail: quotaHolds ? before.authDetail : (auth.detail ?? null),
+        authStatus: quotaHolds ? 'QUOTA_EXHAUSTED' : authFailHolds ? 'EXPIRED' : auth.status,
+        authDetail: quotaHolds
+          ? before.authDetail
+          : authFailHolds
+            ? `Agent runs fail to sign in: ${runAuthError}`
+            : (auth.detail ?? null),
         accountLabel: 'accountLabel' in auth ? (auth.accountLabel ?? null) : null,
         resetAt: quotaHolds ? before.resetAt : 'resetAt' in auth ? (auth.resetAt ?? null) : null,
       });
@@ -237,12 +252,14 @@ export class EngineRegistry {
     if (!this.adapter(id).capabilities.apiKey)
       throw badRequest('This engine does not use API keys');
     this.o.secrets.set(apiKeyName(id), apiKey);
+    this.runAuthFailed.delete(id);
     return this.refresh(id);
   }
 
   clearApiKey(id: string): Promise<EngineInfo> {
     this.adapter(id);
     this.o.secrets.delete(apiKeyName(id));
+    this.runAuthFailed.delete(id);
     return this.refresh(id);
   }
 
@@ -303,7 +320,11 @@ export class EngineRegistry {
       args: flow.args,
       env: flow.env,
       engineId: id,
-      onExit: () => void this.refresh(id),
+      onExit: () => {
+        // Logged in again: let the next run prove it (a still-broken login fails again).
+        this.runAuthFailed.delete(id);
+        void this.refresh(id);
+      },
     });
     return { terminal, hint: flow.hint };
   }
@@ -315,6 +336,7 @@ export class EngineRegistry {
     } catch (err) {
       throw new AppError(409, 'LOGOUT_UNSUPPORTED', (err as Error).message);
     }
+    this.runAuthFailed.delete(id);
     return this.refresh(id);
   }
 
@@ -365,6 +387,7 @@ export class EngineRegistry {
   private applyRunOutcome(id: string, result: AgentRunResult) {
     const e = result.error;
     if (!e) {
+      this.runAuthFailed.delete(id);
       const row = this.row(id);
       if (row.authStatus !== 'ACTIVE' && row.installed)
         this.apply(id, { authStatus: 'ACTIVE', authDetail: row.authDetail, resetAt: null });
@@ -373,7 +396,12 @@ export class EngineRegistry {
     if (e.kind === 'QUOTA_EXPIRED' || e.kind === 'RATE_LIMIT') {
       this.apply(id, { authStatus: 'QUOTA_EXHAUSTED', authDetail: e.message, resetAt: e.resetAt });
     } else if (e.kind === 'AUTH_EXPIRED') {
-      this.apply(id, { authStatus: 'EXPIRED', authDetail: e.message, resetAt: null });
+      this.runAuthFailed.set(id, e.message);
+      this.apply(id, {
+        authStatus: 'EXPIRED',
+        authDetail: `Agent runs fail to sign in: ${e.message}`,
+        resetAt: null,
+      });
     }
   }
 
@@ -428,11 +456,21 @@ export class EngineRegistry {
             })
             .run();
         }
+        this.testResults.set(runId, result);
+        if (this.testResults.size > 50)
+          this.testResults.delete(this.testResults.keys().next().value!);
         this.o.bus.emit('run.finished', { runId, result }, topics);
       })
       .finally(() => this.testRunPromises.delete(done));
     this.testRunPromises.add(done);
     return { runId };
+  }
+
+  /** A test run's state: still running, or its result. */
+  testRunResult(runId: string): { running: boolean; result: AgentRunResult | null } {
+    const result = this.testResults.get(runId) ?? null;
+    if (!result && !this.testRuns.has(runId)) throw notFound('Run');
+    return { running: !result, result };
   }
 
   cancelTestRun(runId: string): void {

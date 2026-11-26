@@ -36,6 +36,7 @@ export class GeminiCliAdapter extends CliAdapter {
     apiKey: true,
     resume: true,
     modelList: false,
+    effort: false,
   };
   override readonly staticModels = [
     { id: 'auto', label: 'Auto' },

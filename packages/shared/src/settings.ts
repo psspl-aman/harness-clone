@@ -23,6 +23,12 @@ export type RoleEngines = z.infer<typeof RoleEnginesSchema>;
 export const RoleModelsSchema = z.partialRecord(z.enum(AGENT_ROLES), ModelIdSchema);
 export type RoleModels = z.infer<typeof RoleModelsSchema>;
 
+/** Reasoning effort passed to engines that support it. null/absent → the CLI's own default. */
+export const EFFORTS = ['low', 'medium', 'high'] as const;
+export const EffortSchema = z.enum(EFFORTS);
+export type Effort = z.infer<typeof EffortSchema>;
+export const EFFORT_LABELS: Record<Effort, string> = { low: 'Low', medium: 'Medium', high: 'High' };
+
 // ─── Complexity-aware routing ────────────────────────────────────────────────
 
 /**
@@ -64,6 +70,38 @@ export const DEFAULT_ROUTING: Routing = {
     xl: { pipeline: 'full', model: 'opus' },
   },
 };
+
+// ─── Cheap mode ──────────────────────────────────────────────────────────────
+
+/**
+ * The cheapest model per engine, used by "Cheap mode". Only engines with a clear small
+ * model are listed; others keep their engine default (Codex has no obvious "mini" model).
+ */
+export const CHEAP_MODELS: Record<string, string> = {
+  'claude-code': 'haiku',
+  'gemini-cli': 'flash-lite',
+};
+
+/** The cheap model for an engine, if it has one and the engine actually offers it. */
+export function cheapModelFor(
+  engineId: string | undefined,
+  offered: { id: string }[] | undefined,
+): string | undefined {
+  const m = engineId ? CHEAP_MODELS[engineId] : undefined;
+  return m && (!offered || offered.some((x) => x.id === m)) ? m : undefined;
+}
+
+/** Routing for "Cheap mode": the base routing turned on, with xs/s tasks on the LITE pipeline. */
+export function cheapRouting(base: Routing): Routing {
+  return {
+    enabled: true,
+    profiles: {
+      ...base.profiles,
+      xs: { pipeline: 'lite', model: null },
+      s: { pipeline: 'lite', model: null },
+    },
+  };
+}
 
 /** The effective routing for a project: its override, else the global routing. */
 export function resolveRouting(global: Routing, override: Routing | null | undefined): Routing {

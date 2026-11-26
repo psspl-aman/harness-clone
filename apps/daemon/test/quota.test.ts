@@ -102,6 +102,22 @@ const until = async (fn: () => boolean, ms = 15_000) => {
   }
 };
 
+/** The engine page's Test: a tiny real run; resolves when it finishes. */
+const testReply = (): FakeResponse => ({
+  match: '-p',
+  stdinIncludes: 'Reply with exactly: OK',
+  stdout: claudeStream('OK'),
+});
+async function passingTest() {
+  const { runId } = t.ctx.engines.startTestRun('claude-code');
+  const end = Date.now() + 15_000;
+  while (t.ctx.engines.testRunResult(runId).running) {
+    if (Date.now() > end) throw new Error('test run timed out');
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  expect(t.ctx.engines.testRunResult(runId).result?.status).toBe('succeeded');
+}
+
 describe('auto-pause and auto-resume', () => {
   // Windows: the quota-pause/resume pipeline spawns engine CLIs through cmd.exe shims and exceeds
   // the test budget under parallel forks (cold-start cost). The daemon runs it fine. Runs on POSIX.
@@ -249,6 +265,7 @@ describe('auto-pause and auto-resume', () => {
   it('resumes a login pause once the engine is active again', async () => {
     agent.setResponses([
       ...base(),
+      testReply(),
       {
         match: '-p',
         stdinIncludes: '# Role: Developer',
@@ -256,7 +273,7 @@ describe('auto-pause and auto-resume', () => {
         exitCode: 1,
         once: true,
       },
-      role('Developer', 'done', { writeFiles: { 'a.txt': 'a' } }),
+      role('Developer', 'done', { writeFiles: { 'a.txt': 'a' }, sleepMs: 1500 }),
       ...rest(),
     ]);
     const id = await start();
@@ -264,10 +281,52 @@ describe('auto-pause and auto-resume', () => {
     expect(t.ctx.engines.get('claude-code').authStatus).toBe('EXPIRED');
     await t.ctx.orchestrator.tick();
     expect(get(id).status).toBe('PAUSED_AUTH'); // still logged out
-    await t.ctx.engines.refresh('claude-code'); // e.g. after you log in
+    // The CLI's auth probe says "logged in", but a real run failed to sign in: that holds.
+    await t.ctx.engines.refresh('claude-code');
+    expect(t.ctx.engines.get('claude-code')).toMatchObject({
+      authStatus: 'EXPIRED',
+      authDetail: expect.stringContaining('Agent runs fail to sign in'),
+    });
+    await t.ctx.orchestrator.tick();
+    expect(get(id).status).toBe('PAUSED_AUTH');
+    // A passing Test (a real run) proves the login works again → the task resumes.
+    await passingTest();
+    expect(t.ctx.engines.get('claude-code').authStatus).toBe('ACTIVE');
     await until(() => get(id).status !== 'PAUSED_AUTH');
+    // Once the step's run starts, the stale "— resuming" reason is replaced.
+    await until(() => get(id).pipeline.activeRole === 'developer');
+    expect(get(id).statusReason).toBe('Developer running on Claude Code');
     await t.ctx.orchestrator.idle();
     expect(get(id).status).toBe('DONE');
+    expect(t.ctx.tasks.history(id).map((h) => h.reason)).toContain('Logged in again — resuming');
+  });
+
+  it('stops auto-resuming a login pause after 2 tries when the credential stays broken', async () => {
+    agent.setResponses([
+      ...base(),
+      testReply(),
+      {
+        match: '-p',
+        stdinIncludes: '# Role: Developer',
+        stdoutFile: join(FIXTURES, 'claude-auth.jsonl'),
+        exitCode: 1,
+      },
+    ]);
+    const id = await start();
+    expect(get(id).status).toBe('PAUSED_AUTH');
+    for (let i = 0; i < 2; i++) {
+      await passingTest(); // the probe passes, but agent runs keep getting a 401
+      await until(() => get(id).status !== 'PAUSED_AUTH');
+      await t.ctx.orchestrator.idle();
+      expect(get(id).status).toBe('PAUSED_AUTH');
+    }
+    await passingTest();
+    for (let i = 0; i < 3; i++) await t.ctx.orchestrator.tick();
+    expect(get(id).status).toBe('PAUSED_AUTH');
+    expect(get(id).statusReason).toMatch(/keeps failing to sign in/);
+    // Resuming by hand gets a fresh budget.
+    await t.app.inject({ method: 'POST', url: `/api/tasks/${id}/resume` });
+    expect(get(id).status).not.toBe('PAUSED_AUTH');
   });
 
   it("doesn't start work on an engine whose window is exhausted", async () => {

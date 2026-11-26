@@ -1,10 +1,14 @@
 import type { AgentEvent } from '@agentforge/shared';
-import { rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AntigravityAdapter } from '../src/engines/adapters/antigravity';
 import { ClaudeCodeAdapter } from '../src/engines/adapters/claude-code';
-import { CodexAdapter } from '../src/engines/adapters/codex';
+import {
+  CODEX_DEFAULT_MODEL,
+  CodexAdapter,
+  codexRateLimitEvent,
+} from '../src/engines/adapters/codex';
 import { CustomCliAdapter } from '../src/engines/adapters/custom';
 import { GeminiCliAdapter } from '../src/engines/adapters/gemini-cli';
 import type { AdapterEnv, AgentEngineAdapter, AgentRunInput } from '../src/engines/types';
@@ -128,6 +132,8 @@ describe('Claude Code adapter', () => {
     ]);
     const { result } = await run(new ClaudeCodeAdapter(env()));
     expect(result.error?.kind).toBe('AUTH_EXPIRED');
+    // The result's subtype is "success" even on is_error results — it isn't echoed.
+    expect(result.error?.message).toBe('Invalid API key · Please run /login');
   });
 
   it('reads auth status JSON (active, expired, logged out) and passes the API key via env', async () => {
@@ -180,6 +186,28 @@ describe('Claude Code adapter', () => {
 });
 
 describe('Codex adapter', () => {
+  // Point Codex's home (rollout files, config.toml) at a temp dir, never the real ~/.codex.
+  let codexHome: string;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const THREAD = '0199a213-81c0-7800-8aa1-bbab2a035a53';
+  beforeEach(() => {
+    codexHome = join(dir, 'codex-home');
+    mkdirSync(codexHome, { recursive: true });
+    process.env.CODEX_HOME = codexHome;
+  });
+  afterEach(() => {
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+  });
+  const writeRollout = () => {
+    const day = join(codexHome, 'sessions', '2026', '11', '26');
+    mkdirSync(day, { recursive: true });
+    copyFileSync(
+      join(FIXTURES, 'codex-rollout.jsonl'),
+      join(day, `rollout-2026-11-26T12-59-28-${THREAD}.jsonl`),
+    );
+  };
+
   it('parses exec --json events (contract fixture)', async () => {
     fake.setResponses([{ match: 'exec', stdoutFile: join(FIXTURES, 'codex-success.jsonl') }]);
     const { result, events } = await run(new CodexAdapter(env()), {
@@ -196,7 +224,11 @@ describe('Codex adapter', () => {
       outputTokens: 186,
       cacheReadTokens: 24448,
       cacheWriteTokens: 0,
+      model: 'gpt-5-codex', // the requested model (no rollout file to read)
     });
+    const usage = events.find((e) => e.kind === 'usage');
+    expect(usage).toMatchObject({ usage: { model: 'gpt-5-codex' } });
+    expect(events.some((e) => e.kind === 'rate_limit')).toBe(false);
     expect(
       events.filter((e) => e.kind === 'tool_call').map((e) => (e as { name: string }).name),
     ).toEqual(['shell', 'file_change']);
@@ -233,6 +265,61 @@ describe('Codex adapter', () => {
     expect(fake.calls()[0]!.args).toEqual(
       expect.arrayContaining(['--sandbox', 'read-only', 'resume', 'thread-1', '-']),
     );
+  });
+
+  it('reads 5-hour / 7-day windows and the model from the session rollout file', async () => {
+    writeRollout();
+    fake.setResponses([{ match: 'exec', stdoutFile: join(FIXTURES, 'codex-success.jsonl') }]);
+    const { result, events } = await run(new CodexAdapter(env()));
+    expect(result.usage.model).toBe('gpt-5.1-codex');
+    expect(events.find((e) => e.kind === 'usage')).toMatchObject({
+      usage: { model: 'gpt-5.1-codex' },
+    });
+    const limits = events.filter((e) => e.kind === 'rate_limit');
+    expect(limits).toHaveLength(1);
+    // The last token_count wins: 25% of 5h, 85% of 7d → "warning" (running low).
+    expect(limits[0]).toEqual({
+      kind: 'rate_limit',
+      status: 'warning',
+      resetsAt: 1795690768_000,
+      windows: [
+        { name: 'five_hour', utilization: 0.25, resetsAt: 1795690768_000, status: 'allowed' },
+        { name: 'seven_day', utilization: 0.85, resetsAt: 1795715361_000, status: 'warning' },
+      ],
+    });
+  });
+
+  it('falls back to config.toml, then "codex (default)", for the model', async () => {
+    fake.setResponses([{ match: 'exec', stdoutFile: join(FIXTURES, 'codex-success.jsonl') }]);
+    expect((await run(new CodexAdapter(env()))).result.usage.model).toBe(CODEX_DEFAULT_MODEL);
+    writeFileSync(
+      join(codexHome, 'config.toml'),
+      'model = "gpt-5-codex-max"\nmodel_reasoning_effort = "high"\n[profiles.x]\nmodel = "o3"\n',
+    );
+    expect((await run(new CodexAdapter(env()))).result.usage.model).toBe('gpt-5-codex-max');
+  });
+
+  it('maps rate_limits on a stream event (resets_in_seconds, exhausted window)', () => {
+    const now = 1_000_000;
+    expect(
+      codexRateLimitEvent(
+        {
+          primary: { used_percent: 100, window_minutes: 300, resets_in_seconds: 60 },
+          secondary: { used_percent: 10, window_minutes: 10080, resets_in_seconds: 3600 },
+        },
+        now,
+      ),
+    ).toEqual({
+      kind: 'rate_limit',
+      status: 'rejected',
+      resetsAt: now + 60_000,
+      windows: [
+        { name: 'five_hour', utilization: 1, resetsAt: now + 60_000, status: 'rejected' },
+        { name: 'seven_day', utilization: 0.1, resetsAt: now + 3_600_000, status: 'allowed' },
+      ],
+    });
+    expect(codexRateLimitEvent(null)).toBeNull();
+    expect(codexRateLimitEvent({ primary: null, secondary: null })).toBeNull();
   });
 
   it('reads `codex login status`', async () => {

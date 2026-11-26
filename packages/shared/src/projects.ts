@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RoleEnginesSchema, RoleModelsSchema, RoutingSchema } from './settings';
+import { EffortSchema, RoleEnginesSchema, RoleModelsSchema, RoutingSchema } from './settings';
 import { ProjectSummarySchema, Timestamp } from './entities';
 
 // ─── Directory browser ───────────────────────────────────────────────────────
@@ -22,6 +22,16 @@ export interface FsBrowseResult {
   /** Number of non-directory items, so the UI can show "empty" vs "has files". */
   fileCount: number;
   truncated: boolean;
+}
+
+/** `GET /api/fs/roots` — what the daemon's filesystem looks like, for the folder picker. */
+export interface FsRoots {
+  platform: 'win32' | 'posix';
+  /** Path separator on the daemon's OS (`\` or `/`). */
+  sep: '\\' | '/';
+  home: string;
+  /** Drive roots (`C:\`, `D:\`) on Windows; `['/']` on POSIX. */
+  drives: string[];
 }
 
 export const PATH_CHECK_MODES = ['scratch', 'existing'] as const;
@@ -104,6 +114,8 @@ export const CreateProjectInputSchema = z.discriminatedUnion('mode', [
     location: ScratchLocationSchema,
     stackPreferences: z.string().max(4000).optional(),
     roleEngines: RoleEnginesSchema.partial().optional(),
+    roleModels: RoleModelsSchema.optional(),
+    effort: EffortSchema.nullable().optional(),
     initialRequirement: z.string().max(50_000).optional(),
     /** Files staged with POST /api/attachments/staged, attached to the initial requirement. */
     initialAttachmentIds: z
@@ -117,6 +129,8 @@ export const CreateProjectInputSchema = z.discriminatedUnion('mode', [
     description: z.string().max(2000).optional(),
     location: ExistingLocationSchema,
     roleEngines: RoleEnginesSchema.partial().optional(),
+    roleModels: RoleModelsSchema.optional(),
+    effort: EffortSchema.nullable().optional(),
   }),
 ]);
 export type CreateProjectInput = z.input<typeof CreateProjectInputSchema>;
@@ -237,6 +251,8 @@ export const ProjectDetailSchema = ProjectSummarySchema.extend({
   onboardedAt: Timestamp.nullable(),
   roleEngines: RoleEnginesSchema.partial(),
   roleModels: RoleModelsSchema,
+  /** Reasoning effort for agent runs; null → each CLI's default. */
+  effort: EffortSchema.nullable(),
   pipeline: z.object({
     maxConcurrentTasks: z.number().nullable(),
     maxFixLoops: z.number().nullable(),
@@ -261,6 +277,7 @@ export const UpdateProjectInputSchema = z
     commands: ProjectCommandsSchema.optional(),
     roleEngines: RoleEnginesSchema.partial().optional(),
     roleModels: RoleModelsSchema.optional(),
+    effort: EffortSchema.nullable().optional(),
     /** Per-project overrides; null clears an override (back to the global setting). */
     pipeline: z
       .object({
