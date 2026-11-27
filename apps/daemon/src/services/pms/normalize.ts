@@ -65,6 +65,22 @@ export function renderArgs(template: unknown, vars: TemplateVars): unknown {
   return template;
 }
 
+/**
+ * Fill the given placeholders in a template now (e.g. a site id found at setup
+ * time) and leave every other `{{var}}` for render time.
+ */
+export function bindConstants<T>(template: T, constants: Record<string, string>): T {
+  const bind = (t: unknown): unknown => {
+    if (typeof t === 'string')
+      return t.replace(INLINE, (whole, k: string) => constants[k] ?? whole);
+    if (Array.isArray(t)) return t.map(bind);
+    if (t && typeof t === 'object')
+      return Object.fromEntries(Object.entries(t).map(([k, v]) => [k, bind(v)]));
+    return t;
+  };
+  return bind(template) as T;
+}
+
 // ─── Result normalisation ────────────────────────────────────────────────────
 
 const get = (o: unknown, path: string): unknown =>
@@ -252,6 +268,45 @@ export function normalizeIssue(
   };
 }
 
+/**
+ * The id of the transition that moves an issue into `status`, matched on the
+ * target status first (Jira `to.name`, mcp-atlassian `to_status`) and then on
+ * the transition's own name. null when the workflow offers none.
+ */
+export function findTransition(items: Record<string, unknown>[], status: string): string | null {
+  const want = status.trim().toLowerCase();
+  const idOf = (i: Record<string, unknown>) => asText(i.id);
+  const target = (i: Record<string, unknown>) =>
+    asText(get(i, 'to.name') ?? i.to_status ?? i.toStatus ?? i.to);
+  const byTarget = items.find((i) => target(i)?.toLowerCase() === want && idOf(i));
+  const byName = items.find((i) => asText(i.name)?.toLowerCase() === want && idOf(i));
+  const hit = byTarget ?? byName;
+  return hit ? idOf(hit) : null;
+}
+
+/** Human-readable names of the transitions on offer, for error messages. */
+export const transitionNames = (items: Record<string, unknown>[]): string[] =>
+  items
+    .map((i) => asText(get(i, 'to.name') ?? i.to_status ?? i.name))
+    .filter((x): x is string => !!x);
+
+/**
+ * The Jira site (cloud id) from Atlassian's accessible-resources listing:
+ * the first site whose scopes mention Jira, else the first site.
+ */
+export function pickAtlassianSite(json: unknown): string | null {
+  let sites: Record<string, unknown>[];
+  try {
+    sites = extractItems(json);
+  } catch {
+    return null;
+  }
+  const scopes = (s: Record<string, unknown>) =>
+    Array.isArray(s.scopes) ? s.scopes.map(String).join(' ') : '';
+  const site = sites.find((s) => /jira/i.test(scopes(s))) ?? sites[0];
+  return (site && (asText(site.id) ?? asText(site.url))) || null;
+}
+
 /** Client-side filters, applied when the tool doesn't filter by itself. */
 export function matchesFilters(
   i: PmsIssue,
@@ -266,7 +321,9 @@ export function matchesFilters(
 
 // ─── Tool-map detection ──────────────────────────────────────────────────────
 
-const OP_PATTERNS: Record<'list' | 'get' | 'updateStatus' | 'comment', RegExp[]> = {
+const OP_PATTERNS: Record<'list' | 'get' | 'updateStatus' | 'transitions' | 'comment', RegExp[]> = {
+  // Before updateStatus, whose /transition/ pattern would otherwise claim it.
+  transitions: [/(get|list)_?(issue_?)?transitions/i],
   list: [
     /^(jira_)?search(_issues)?$/i,
     /(list|search|find|query|get)_?(all_)?(issues|tasks|tickets|cards|work_?items|stories)/i,
@@ -356,7 +413,8 @@ export function detectToolMap(tools: McpToolDto[]): PmsToolMap {
   };
   const list = find('list');
   const comment = find('comment');
+  const transitions = find('transitions');
   const updateStatus = find('updateStatus');
   const get = find('get');
-  return { list, get, updateStatus, comment, fields: {} };
+  return { list, get, updateStatus, transitions, comment, fields: {} };
 }

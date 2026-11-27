@@ -36,7 +36,7 @@ export interface ServiceRunDto {
   url: string | null;
   startedAt: number | null;
   exitCode: number | null;
-  /** Why it didn't start (e.g. its port is taken). */
+  /** Why it didn't start (e.g. its port is taken, or installing dependencies failed). */
   error: string | null;
 }
 
@@ -45,8 +45,16 @@ export interface ProjectRunDto {
   /** Overall: crashed if any service crashed, starting while any is starting, else running. */
   status: ProcessStatus;
   command: string | null;
-  /** The first service's terminal (the single dev server for one-command projects). */
+  /**
+   * The first service's terminal (the single dev server for one-command projects),
+   * or the install terminal while dependencies install.
+   */
   terminalId: string | null;
+  /**
+   * Set while the project's install command runs before its servers start (Run
+   * found packages missing or out of date); the servers stay `starting` meanwhile.
+   */
+  installTerminalId: string | null;
   /** The main app's URL (a "web"/"frontend" service when there are several). */
   previewUrl: string | null;
   startedAt: number | null;

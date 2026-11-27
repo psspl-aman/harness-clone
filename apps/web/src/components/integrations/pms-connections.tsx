@@ -36,7 +36,7 @@ import { api, ApiClientError, qk } from '@/lib/api';
 import { McpServerDialog, McpStatus, useMcpServers, type McpServerDraft } from './mcp-servers';
 
 const errMsg = (e: unknown) => (e instanceof ApiClientError ? e.message : String(e));
-type OpKey = 'list' | 'get' | 'updateStatus' | 'comment';
+type OpKey = 'list' | 'get' | 'updateStatus' | 'transitions' | 'comment';
 const OPS: { key: OpKey; label: string; hint: string }[] = [
   {
     key: 'list',
@@ -47,7 +47,12 @@ const OPS: { key: OpKey; label: string; hint: string }[] = [
   {
     key: 'updateStatus',
     label: 'Change status',
-    hint: 'For write-back. Vars: {{issueId}}, {{status}}',
+    hint: 'For write-back. Vars: {{issueId}}, {{status}}, {{transitionId}}',
+  },
+  {
+    key: 'transitions',
+    label: 'List transitions',
+    hint: 'Optional, for Jira-style workflows: finds the {{transitionId}} that moves a ticket to the mapped status. Vars: {{issueId}}',
   },
   { key: 'comment', label: 'Add a comment', hint: 'For write-back. Vars: {{issueId}}, {{body}}' },
 ];
@@ -147,9 +152,9 @@ export function PmsConnectionDialog({
       setOps(toDraft(m));
       setFields(m.fields);
       const found = OPS.filter((o) => m[o.key]).length;
-      toast.success(`Found ${found} of 4 operations`, {
+      toast.success(`Found ${found} of ${OPS.length} operations`, {
         description:
-          found < 4 ? 'Pick the missing tools by hand if the server has them.' : undefined,
+          found < OPS.length ? 'Pick the missing tools by hand if the server has them.' : undefined,
       });
     },
     onError: (e) => toast.error('Could not read the server’s tools', { description: errMsg(e) }),

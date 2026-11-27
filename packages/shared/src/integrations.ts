@@ -85,7 +85,9 @@ export type PmsProvider = (typeof PMS_PROVIDERS)[number];
  * may contain `{{var}}` placeholders; a string that is exactly `{{var}}` is
  * replaced by the raw value, and `{{var|number}}` converts it to a number.
  * Variables: project, owner, repo (from "owner/repo"), issueId, status, body,
- * limit, filters.assignee, filters.sprint, filters.labels, filters.status.
+ * limit, filters.assignee, filters.sprint, filters.labels, filters.status, and
+ * transitionId (write-back only: the transition into `status` found by the
+ * `transitions` operation, or the status name when there is none).
  */
 export const PmsOperationSchema = z.object({
   tool: z.string().trim().min(1).max(200),
@@ -111,6 +113,12 @@ export const PmsToolMapSchema = z.object({
   list: PmsOperationSchema.optional(),
   get: PmsOperationSchema.optional(),
   updateStatus: PmsOperationSchema.optional(),
+  /**
+   * Lists the transitions available on an issue (Jira-style workflows), so
+   * write-back can move a ticket by status name: `{{transitionId}}` is the id
+   * of the transition whose target status matches.
+   */
+  transitions: PmsOperationSchema.optional(),
   comment: PmsOperationSchema.optional(),
   /** Dot paths overriding where each field is read from an issue object. */
   fields: z.partialRecord(z.enum(PMS_FIELDS), z.string().max(200)).default({}),

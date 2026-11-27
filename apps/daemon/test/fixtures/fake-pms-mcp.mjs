@@ -21,10 +21,116 @@ const save = (s) => writeFileSync(STATE, JSON.stringify(s, null, 2));
 const text = (o) => ({ content: [{ type: 'text', text: JSON.stringify(o) }] });
 const fail = (m) => ({ isError: true, content: [{ type: 'text', text: m }] });
 
+// ─── FAKE_PMS_FLAVOR=atlassian: the hosted Atlassian (Rovo) tool surface ─────
+const CLOUD_ID = 'cloud-123';
+const WORKFLOW = { 'To Do': '11', 'In Progress': '21', 'In Review': '31', Done: '41' };
+const jiraIssue = ({ project: _p, key, title, description, status, labels, updated_at }) => ({
+  key,
+  self: `https://api.atlassian.com/ex/jira/${CLOUD_ID}/rest/api/3/issue/${key}`,
+  fields: { summary: title, description, status, labels, updated: updated_at },
+});
+
+function buildAtlassian(server, guard) {
+  const site = (fn) =>
+    guard(async (args) =>
+      args.cloudId === CLOUD_ID ? fn(args) : fail(`Unknown cloudId ${args.cloudId}`),
+    );
+  const issueArgs = { cloudId: z.string(), issueIdOrKey: z.string() };
+  server.registerTool(
+    'getAccessibleAtlassianResources',
+    { description: 'Get cloudId', inputSchema: {} },
+    guard(async () =>
+      text([
+        { id: 'conf-only', url: 'https://wiki.example', name: 'wiki', scopes: ['read:confluence'] },
+        {
+          id: CLOUD_ID,
+          url: 'https://acme.atlassian.net',
+          name: 'acme',
+          scopes: ['read:jira-work'],
+        },
+      ]),
+    ),
+  );
+  server.registerTool(
+    'searchJiraIssuesUsingJql',
+    {
+      description: 'Search issues with JQL',
+      inputSchema: {
+        cloudId: z.string(),
+        jql: z.string(),
+        maxResults: z.number().optional(),
+        responseContentFormat: z.string().optional(),
+      },
+    },
+    site(async ({ jql }) => {
+      const project = /project = (\w+)/.exec(jql)?.[1];
+      const open = load().issues.filter((i) => i.project === project && i.status.name !== 'Done');
+      return text({ issues: open.map(jiraIssue), isLast: true });
+    }),
+  );
+  server.registerTool(
+    'getJiraIssue',
+    {
+      description: 'Get issue',
+      inputSchema: { ...issueArgs, responseContentFormat: z.string().optional() },
+    },
+    site(async ({ issueIdOrKey }) => {
+      const i = load().issues.find((x) => x.key === issueIdOrKey);
+      return i ? text(jiraIssue(i)) : fail(`No issue ${issueIdOrKey}`);
+    }),
+  );
+  server.registerTool(
+    'getTransitionsForJiraIssue',
+    { description: 'Get transitions', inputSchema: issueArgs },
+    site(async ({ issueIdOrKey }) => {
+      const i = load().issues.find((x) => x.key === issueIdOrKey);
+      if (!i) return fail(`No issue ${issueIdOrKey}`);
+      // Like Jira: every status but the current one, named differently from the target.
+      const transitions = Object.entries(WORKFLOW)
+        .filter(([name]) => name !== i.status.name)
+        .map(([name, id]) => ({ id, name: `Move to ${name}`, to: { name, id: `s${id}` } }));
+      return text({ expand: 'transitions', transitions });
+    }),
+  );
+  server.registerTool(
+    'transitionJiraIssue',
+    {
+      description: 'Transition issue status',
+      inputSchema: { ...issueArgs, transition: z.object({ id: z.string() }) },
+    },
+    site(async ({ issueIdOrKey, transition }) => {
+      const s = load();
+      const i = s.issues.find((x) => x.key === issueIdOrKey);
+      const status = Object.entries(WORKFLOW).find(([, id]) => id === transition.id)?.[0];
+      if (!i || !status || status === i.status.name)
+        return fail(`Transition ${transition.id} is not valid for ${issueIdOrKey}`);
+      i.status = { name: status };
+      s.transitions.push({ key: issueIdOrKey, status });
+      save(s);
+      return text({});
+    }),
+  );
+  server.registerTool(
+    'addCommentToJiraIssue',
+    {
+      description: 'Add a comment',
+      inputSchema: { ...issueArgs, commentBody: z.string(), contentFormat: z.string().optional() },
+    },
+    site(async ({ issueIdOrKey, commentBody }) => {
+      const s = load();
+      s.comments.push({ key: issueIdOrKey, body: commentBody });
+      save(s);
+      return text({ id: '10001' });
+    }),
+  );
+  return server;
+}
+
 function build(authorized) {
   const server = new McpServer({ name: 'fake-pms', version: '1.0.0' });
   const guard = (fn) => async (args) =>
     authorized() ? fn(args) : fail('401 unauthorized: bad or missing token');
+  if (process.env.FAKE_PMS_FLAVOR === 'atlassian') return buildAtlassian(server, guard);
   server.registerTool(
     'search_issues',
     {

@@ -23,6 +23,7 @@ import { CommandAdvisor } from './services/onboarding/command-advisor';
 import { UsageService } from './services/usage';
 import { Orchestrator } from './services/orchestrator/orchestrator';
 import { PlannerService } from './services/planner/service';
+import type { TicketReference } from './services/planner/tickets';
 import { RunRecorder } from './services/runs';
 import { TaskService } from './services/tasks';
 import websocket from '@fastify/websocket';
@@ -178,6 +179,11 @@ export async function buildApp(config: DaemonConfig, opts: BuildOptions = {}): P
     settings,
     memory,
     attachments,
+    // PmsService is built later (it depends on the Planner); resolved per lookup.
+    tickets: {
+      lookup: (projectId: string, keys: string[]): Promise<TicketReference[]> =>
+        pms.lookupTickets(projectId, keys),
+    },
     log: app.log,
   });
   const orchestrator = new Orchestrator({
