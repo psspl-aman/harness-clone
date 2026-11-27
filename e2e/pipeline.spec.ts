@@ -211,8 +211,9 @@ test('approve a plan and watch agents build and merge it', async ({ page, reques
   await page.getByRole('button', { name: /Hello file/ }).click();
   const d = page.getByRole('dialog');
   await d.getByRole('tab', { name: 'Activity' }).click();
+  // .first(): a role can run more than once (the Reviewer reviews the code, then the tests).
   for (const verb of ['Developing', 'Reviewing', 'Testing', 'Documenting'])
-    await expect(d.getByRole('button', { name: new RegExp(verb) })).toBeVisible();
+    await expect(d.getByRole('button', { name: new RegExp(verb) }).first()).toBeVisible();
   await d.getByRole('tab', { name: 'Changes' }).click();
   await expect(d.getByText('gre-1.txt')).toBeVisible();
   await expect(d.getByText('+Hello from GRE-1')).toBeVisible();
