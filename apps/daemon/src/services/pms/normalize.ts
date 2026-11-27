@@ -172,6 +172,7 @@ const CANDIDATES: Record<PmsField, string[]> = {
     'web_url',
     'webUrl',
     'permalink_url',
+    'browse_url',
     'permalink',
     'shortUrl',
     '_links.html.href',
@@ -191,6 +192,7 @@ const CANDIDATES: Record<PmsField, string[]> = {
   assignee: [
     'assignee.name',
     'assignee.displayName',
+    'assignee.display_name',
     'assignee.login',
     'fields.assignee.displayName',
     'assignee',

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mcpServers } from '../src/db/schema';
+import { toolResultJson } from '../src/services/mcp/tool-result';
 import {
   baseVars,
   bindConstants,
@@ -39,6 +40,45 @@ interface State {
   comments: { key: string; body: string }[];
   transitions: { key: string; status: string }[];
 }
+
+describe('tool results', () => {
+  it('unwraps the result wrapper Python FastMCP servers send', () => {
+    const issue = { key: 'TVI-1', summary: 'Hi' };
+    const json = JSON.stringify(issue);
+    expect(toolResultJson({ result: json }, json)).toEqual(issue);
+    expect(toolResultJson({ result: [1, 2] }, '')).toEqual([1, 2]);
+    // A plain-text result is text, not data.
+    expect(toolResultJson({ result: 'Issue not found' }, 'Issue not found')).toBeUndefined();
+    // Real structured content is used as is; without it, JSON text is parsed.
+    expect(toolResultJson({ result: 'x', total: 1 }, '')).toEqual({ result: 'x', total: 1 });
+    expect(toolResultJson(undefined, json)).toEqual(issue);
+    expect(toolResultJson(undefined, 'hello')).toBeUndefined();
+  });
+
+  it('reads mcp-atlassian tickets', () => {
+    const i = normalizeIssue(
+      {
+        id: '92672',
+        key: 'TVI-569',
+        summary: 'Build vehicle inspection capture',
+        browse_url: 'https://example.atlassian.net/browse/TVI-569',
+        description: '### Summary\n\nCapture images.',
+        status: { name: 'In Review', category: 'In Progress' },
+        assignee: { account_id: 'a1', display_name: 'Sam Lee' },
+        updated: '2026-10-22 15:49:59 IST',
+      },
+      { id: 'key', updatedAt: 'updated' },
+    );
+    expect(i).toMatchObject({
+      id: 'TVI-569',
+      title: 'Build vehicle inspection capture',
+      description: '### Summary\n\nCapture images.',
+      status: 'In Review',
+      assignee: 'Sam Lee',
+      url: 'https://example.atlassian.net/browse/TVI-569',
+    });
+  });
+});
 
 describe('normalize', () => {
   it('renders argument templates', () => {
@@ -312,7 +352,7 @@ afterEach(async () => {
   rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
-const createStdioServer = async (token = TOKEN) =>
+const createStdioServer = async (token = TOKEN, extraEnv: { key: string; value: string }[] = []) =>
   (
     await t.app.inject({
       method: 'POST',
@@ -326,13 +366,19 @@ const createStdioServer = async (token = TOKEN) =>
           { key: 'FAKE_PMS_STATE', value: statePath },
           { key: 'FAKE_PMS_REQUIRE_TOKEN', value: TOKEN },
           { key: 'FAKE_PMS_TOKEN', value: token, secret: true },
+          ...extraEnv,
         ],
       },
     })
   ).json() as McpServerDto;
 
-async function connect(opts: { writeBack?: boolean; autoEnrich?: boolean } = {}) {
-  const server = await createStdioServer();
+async function connect(
+  opts: { writeBack?: boolean; autoEnrich?: boolean; fastmcp?: boolean } = {},
+) {
+  const server = await createStdioServer(
+    TOKEN,
+    opts.fastmcp ? [{ key: 'FAKE_PMS_WRAP', value: 'fastmcp' }] : [],
+  );
   const toolMap = (
     await t.app.inject({
       method: 'POST',
@@ -849,6 +895,17 @@ describe('PMS sync', () => {
     expect(prompt).toMatch(/### WEB-99: could not be read[\s\S]*No issue WEB-99/);
     // Not under a linked tracker project: flagged, not fetched.
     expect(prompt).toContain('### Not looked up: API-1, UTF-8');
+  });
+
+  it('syncs and looks up tickets from servers that wrap replies (Python FastMCP)', async () => {
+    const { mapping } = await connect({ fastmcp: true });
+    expect((await sync(mapping.id)).json()).toMatchObject({ total: 3, created: 2, errors: [] });
+    const [ref] = await t.ctx.pms.lookupTickets(projectId, ['WEB-2']);
+    expect(ref).toMatchObject({
+      key: 'WEB-2',
+      status: 'found',
+      issue: { title: 'Footer link is broken', description: 'Points to /old.' },
+    });
   });
 
   it('rejects duplicate links and surfaces sync errors', async () => {

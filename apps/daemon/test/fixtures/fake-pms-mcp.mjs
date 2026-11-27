@@ -18,7 +18,14 @@ if (!STATE) {
 }
 const load = () => JSON.parse(readFileSync(STATE, 'utf8'));
 const save = (s) => writeFileSync(STATE, JSON.stringify(s, null, 2));
-const text = (o) => ({ content: [{ type: 'text', text: JSON.stringify(o) }] });
+// FAKE_PMS_WRAP=fastmcp mimics Python FastMCP servers (e.g. mcp-atlassian), which also
+// send the reply as `structuredContent: { result: "<JSON text>" }`.
+const text = (o) => {
+  const json = JSON.stringify(o);
+  return process.env.FAKE_PMS_WRAP === 'fastmcp'
+    ? { content: [{ type: 'text', text: json }], structuredContent: { result: json } }
+    : { content: [{ type: 'text', text: json }] };
+};
 const fail = (m) => ({ isError: true, content: [{ type: 'text', text: m }] });
 
 // ─── FAKE_PMS_FLAVOR=atlassian: the hosted Atlassian (Rovo) tool surface ─────
