@@ -210,6 +210,8 @@ describe('Planner: generate plan', () => {
       expect(x.timing).toEqual({
         estimateMs: DEFAULT_ESTIMATE_MS[x.complexity],
         estimateBasis: 'default',
+        estCostUsd: null,
+        estCostBasis: 'none',
         spentMs: 0,
         runningSince: null,
         startedAt: null,

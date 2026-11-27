@@ -6,6 +6,8 @@ const timing = (estimateMin: number, spentMin = 0, runningSince: number | null =
   ({
     estimateMs: estimateMin * MIN,
     estimateBasis: 'default',
+    estCostUsd: null,
+    estCostBasis: 'none',
     spentMs: spentMin * MIN,
     runningSince,
     startedAt: null,

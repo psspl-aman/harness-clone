@@ -17,6 +17,13 @@ export interface TaskTimingDto {
   estimateMs: number;
   /** `history`: median of your finished tasks of this complexity; `default`: built-in guess. */
   estimateBasis: 'history' | 'default';
+  /**
+   * Estimated USD cost for this task: the median total cost of your finished tasks of the same
+   * complexity. Null until there are enough samples — no fabricated figure without history.
+   */
+  estCostUsd: number | null;
+  /** `history` when `estCostUsd` is set; `none` when there isn't enough cost history yet. */
+  estCostBasis: 'history' | 'none';
   /** Agent time spent so far (finished runs). Add `now - runningSince` for a live total. */
   spentMs: number;
   /** Start of the agent run in progress, if any. */

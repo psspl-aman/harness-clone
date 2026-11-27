@@ -2,7 +2,8 @@ import type { PlannerTask } from '@ai-harness/shared';
 import { rmSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { tasks as tasksTable } from '../src/db/schema';
+import { agentRuns, tasks as tasksTable } from '../src/db/schema';
+import { newId } from '../src/lib/id';
 import { createTestApp, installFakeEngine, tempDir, type TestApp } from './helpers';
 
 let t: TestApp;
@@ -283,5 +284,54 @@ describe('plans and tasks', () => {
       409,
     );
     expect((await api('DELETE', `/api/tasks/${created[0]!.id}`)).statusCode).toBe(409);
+  });
+
+  it('estimates a task’s cost from the median of finished tasks of the same complexity', async () => {
+    const plan = t.ctx.tasks.createPlan(projectId, null, {
+      goal: 'g',
+      scope: '',
+      outOfScope: '',
+      architectureNotes: '',
+      risks: [],
+      assumptions: [],
+    });
+    // Three finished "s" tasks costing $0.10 / $0.20 / $0.30 → median $0.20. Plus a pending one.
+    const done = t.ctx.tasks.createFromPlanner(projectId, plan.id, null, [
+      pt('D1', [], { complexity: 's' }),
+      pt('D2', [], { complexity: 's' }),
+      pt('D3', [], { complexity: 's' }),
+    ]);
+    const pending = t.ctx.tasks.createFromPlanner(projectId, plan.id, null, [
+      pt('P1', [], { complexity: 's' }),
+    ])[0]!;
+    done.forEach((task, i) => {
+      t.ctx.db.update(tasksTable).set({ status: 'DONE' }).where(eq(tasksTable.id, task.id)).run();
+      t.ctx.db
+        .insert(agentRuns)
+        .values({
+          id: newId('run'),
+          projectId,
+          taskId: task.id,
+          role: 'developer',
+          engineId: 'claude-code',
+          prompt: 'x',
+          status: 'DONE',
+          costUsd: (i + 1) / 10,
+          durationMs: 60_000,
+        })
+        .run();
+    });
+
+    // The 60s median cache was warmed (empty) when the tasks were created; reset it so the board
+    // recomputes now that they're DONE. (In the running app it refreshes on its own.)
+    (t.ctx.tasks as unknown as { costCache: unknown }).costCache = null;
+
+    const board = (await api('GET', `/api/projects/${projectId}/board`)).json();
+    const p1 = board.tasks.find((x: { id: string }) => x.id === pending.id);
+    expect(p1.timing.estCostBasis).toBe('history');
+    expect(p1.timing.estCostUsd).toBeCloseTo(0.2, 5);
+    // A complexity with no finished history gets no fabricated figure.
+    const d1 = board.tasks.find((x: { id: string }) => x.id === done[0]!.id);
+    expect(['history', 'none']).toContain(d1.timing.estCostBasis);
   });
 });

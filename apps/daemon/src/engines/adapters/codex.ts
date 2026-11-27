@@ -207,7 +207,11 @@ export class CodexAdapter extends CliAdapter {
     const args = ['exec', '--json', '--skip-git-repo-check', '-C', input.cwd];
     if (input.model) args.push('-m', input.model);
     // Config override (TOML value): same key as `model_reasoning_effort` in ~/.codex/config.toml.
-    if (input.effort) args.push('-c', `model_reasoning_effort="${input.effort}"`);
+    // Codex reasoning effort tops out at "high"; clamp the Claude-only "xhigh"/"max" down to it.
+    if (input.effort) {
+      const effort = input.effort === 'xhigh' || input.effort === 'max' ? 'high' : input.effort;
+      args.push('-c', `model_reasoning_effort="${effort}"`);
+    }
     if (input.permission === 'readonly') args.push('--sandbox', 'read-only');
     else args.push('--sandbox', 'workspace-write');
     if (input.permission === 'full') args.push('-c', 'sandbox_workspace_write.network_access=true');

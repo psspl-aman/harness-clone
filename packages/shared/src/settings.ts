@@ -24,10 +24,20 @@ export const RoleModelsSchema = z.partialRecord(z.enum(AGENT_ROLES), ModelIdSche
 export type RoleModels = z.infer<typeof RoleModelsSchema>;
 
 /** Reasoning effort passed to engines that support it. null/absent → the CLI's own default. */
-export const EFFORTS = ['low', 'medium', 'high'] as const;
+// Claude Code's `--effort` accepts all five; Codex (`model_reasoning_effort`) tops out at "high"
+// and clamps "xhigh"/"max" down to it, so one shared control works across engines.
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export const EffortSchema = z.enum(EFFORTS);
 export type Effort = z.infer<typeof EffortSchema>;
-export const EFFORT_LABELS: Record<Effort, string> = { low: 'Low', medium: 'Medium', high: 'High' };
+export const EFFORT_LABELS: Record<Effort, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Max',
+};
+/** Effort levels Codex supports; higher levels clamp to "high". */
+export const CODEX_MAX_EFFORT: Effort = 'high';
 
 // ─── Complexity-aware routing ────────────────────────────────────────────────
 
