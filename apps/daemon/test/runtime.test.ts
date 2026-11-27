@@ -1,9 +1,10 @@
 import type { AnyAppEvent, ErrorDto } from '@ai-harness/shared';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { claudeStream, makeFakeCli, type FakeCli, type FakeResponse } from './fake-cli';
+import { needsInstall, nodePackagesStale } from '../src/services/dependency-check';
 import { parseSuggestion } from '../src/services/onboarding/command-advisor';
 import { createTestApp, tempDir, type TestApp } from './helpers';
 
@@ -67,56 +68,65 @@ afterEach(async () => {
 describe('run service', () => {
   // Windows: dev servers run through node-pty, which can't attach a console under
   // vitest (the live daemon spawns them fine). Runs on Linux/macOS.
-  it.skipIf(process.platform === 'win32')('starts the dev server, detects the preview URL and stops it', async () => {
-    await setCommands({ run: 'echo "ready on http://0.0.0.0:5199/app" && sleep 30' });
-    const start = await t.app.inject({
-      method: 'POST',
-      url: `/api/projects/${projectId}/run/start`,
-    });
-    expect(start.statusCode).toBe(200);
-    expect(start.json()).toMatchObject({
-      status: 'starting',
-      command: expect.stringContaining('5199'),
-    });
-    await until(() => t.ctx.runner.status(projectId).previewUrl !== null);
-    expect(t.ctx.runner.status(projectId)).toMatchObject({
-      status: 'running',
-      previewUrl: 'http://localhost:5199/app',
-    });
-    expect((await t.app.inject({ url: `/api/projects/${projectId}` })).json().runningStatus).toBe(
-      'running',
-    );
-    // A second start is refused while running.
-    expect(
-      (await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/start` }))
-        .statusCode,
-    ).toBe(409);
+  it.skipIf(process.platform === 'win32')(
+    'starts the dev server, detects the preview URL and stops it',
+    async () => {
+      await setCommands({ run: 'echo "ready on http://0.0.0.0:5199/app" && sleep 30' });
+      const start = await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/run/start`,
+      });
+      expect(start.statusCode).toBe(200);
+      expect(start.json()).toMatchObject({
+        status: 'starting',
+        command: expect.stringContaining('5199'),
+      });
+      await until(() => t.ctx.runner.status(projectId).previewUrl !== null);
+      expect(t.ctx.runner.status(projectId)).toMatchObject({
+        status: 'running',
+        previewUrl: 'http://localhost:5199/app',
+      });
+      expect((await t.app.inject({ url: `/api/projects/${projectId}` })).json().runningStatus).toBe(
+        'running',
+      );
+      // A second start is refused while running.
+      expect(
+        (await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/start` }))
+          .statusCode,
+      ).toBe(409);
 
-    const stop = await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/stop` });
-    expect(stop.json().status).toBe('stopped');
-    expect(events.some((e) => e.type === 'project.run' && e.payload.run.status === 'stopped')).toBe(
-      true,
-    );
-    // A deliberate stop is not an error.
-    expect((await errorsOf()).length).toBe(0);
-  });
+      const stop = await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/run/stop`,
+      });
+      expect(stop.json().status).toBe('stopped');
+      expect(
+        events.some((e) => e.type === 'project.run' && e.payload.run.status === 'stopped'),
+      ).toBe(true);
+      // A deliberate stop is not an error.
+      expect((await errorsOf()).length).toBe(0);
+    },
+  );
 
   // Windows: server lifecycle runs through node-pty (no console under vitest). Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('marks a crashing server and records the exit as an error', async () => {
-    await setCommands({ run: 'echo booting; exit 3' });
-    await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/start` });
-    await until(() => t.ctx.runner.status(projectId).status === 'crashed');
-    expect(t.ctx.runner.status(projectId).exitCode).toBe(3);
-    await until(async () => (await errorsOf()).length === 1);
-    const [e] = await errorsOf();
-    expect(e).toMatchObject({
-      source: 'run',
-      matcher: 'process-exit',
-      message: 'Dev server exited with code 3',
-      status: 'open',
-    });
-    expect(e!.excerpt).toContain('booting');
-  });
+  it.skipIf(process.platform === 'win32')(
+    'marks a crashing server and records the exit as an error',
+    async () => {
+      await setCommands({ run: 'echo booting; exit 3' });
+      await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/start` });
+      await until(() => t.ctx.runner.status(projectId).status === 'crashed');
+      expect(t.ctx.runner.status(projectId).exitCode).toBe(3);
+      await until(async () => (await errorsOf()).length === 1);
+      const [e] = await errorsOf();
+      expect(e).toMatchObject({
+        source: 'run',
+        matcher: 'process-exit',
+        message: 'Dev server exited with code 3',
+        status: 'open',
+      });
+      expect(e!.excerpt).toContain('booting');
+    },
+  );
 
   it('requires a configured command', async () => {
     await setCommands({ run: null, build: null });
@@ -129,13 +139,127 @@ describe('run service', () => {
   });
 
   // Windows: shell terminals are node-pty PTYs (no console under vitest). Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('opens shell terminals in the project folder', async () => {
-    const r = await t.app.inject({
-      method: 'POST',
-      url: `/api/projects/${projectId}/terminals`,
-      payload: {},
-    });
-    expect(r.json()).toMatchObject({ kind: 'shell', projectId, cwd: repo, title: 'Terminal 1' });
+  it.skipIf(process.platform === 'win32')(
+    'opens shell terminals in the project folder',
+    async () => {
+      const r = await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/terminals`,
+        payload: {},
+      });
+      expect(r.json()).toMatchObject({ kind: 'shell', projectId, cwd: repo, title: 'Terminal 1' });
+    },
+  );
+});
+
+describe('dependency check', () => {
+  const at = (path: string, secondsAgo: number) => {
+    const t = new Date(Date.now() - secondsAgo * 1000);
+    utimesSync(path, t, t);
+  };
+
+  it('knows when a Node package needs installing', () => {
+    const dir = tempDir('af-deps-');
+    try {
+      expect(nodePackagesStale(dir, dir)).toBeNull(); // not a Node package
+      expect(needsInstall(dir, [])).toBe(false);
+      writeFileSync(join(dir, 'package.json'), '{}');
+      expect(nodePackagesStale(dir, dir)).toBe(true); // nothing installed yet
+      mkdirSync(join(dir, 'node_modules'));
+      writeFileSync(join(dir, 'node_modules', '.package-lock.json'), '{}');
+      at(join(dir, 'package.json'), 60);
+      at(join(dir, 'node_modules', '.package-lock.json'), 30);
+      expect(nodePackagesStale(dir, dir)).toBe(false);
+      writeFileSync(join(dir, 'package-lock.json'), '{}'); // the lockfile changed since
+      expect(needsInstall(dir, [])).toBe(true);
+      at(join(dir, 'package-lock.json'), 60);
+      expect(needsInstall(dir, [])).toBe(false);
+
+      // A workspace package served by the root's hoisted node_modules.
+      const web = join(dir, 'web');
+      mkdirSync(web);
+      writeFileSync(join(web, 'package.json'), '{}');
+      at(join(web, 'package.json'), 60);
+      expect(needsInstall(dir, [web])).toBe(false);
+      writeFileSync(join(web, 'package.json'), '{"dependencies":{"a":"1"}}');
+      expect(needsInstall(dir, [web])).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('installing before a run', () => {
+  const INSTALL =
+    'echo installing && mkdir -p node_modules && echo {} > node_modules/.package-lock.json';
+  const titles = () => t.ctx.terminals.list({ projectId }).map((x) => x.title);
+
+  // Windows: runs go through node-pty (no console under vitest). Runs on POSIX.
+  it.skipIf(process.platform === 'win32')(
+    'runs the install command first when packages are missing, then only when they change',
+    async () => {
+      writeFileSync(join(repo, 'package.json'), '{"name":"app"}');
+      const past = new Date(Date.now() - 60_000);
+      utimesSync(join(repo, 'package.json'), past, past);
+      await setCommands({
+        install: INSTALL,
+        run: 'echo "ready on http://localhost:5197" && sleep 30',
+      });
+      const start = await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/run/start`,
+      });
+      expect(start.statusCode).toBe(200);
+      expect(start.json()).toMatchObject({
+        status: 'starting',
+        installTerminalId: expect.any(String),
+      });
+      expect(start.json().terminalId).toBe(start.json().installTerminalId);
+      expect(start.json().services[0].terminalId).toBeNull();
+
+      await until(() => t.ctx.runner.status(projectId).previewUrl !== null);
+      expect(t.ctx.runner.status(projectId)).toMatchObject({
+        status: 'running',
+        installTerminalId: null,
+        previewUrl: 'http://localhost:5197',
+      });
+      expect(titles()).toEqual(expect.arrayContaining(['Install', 'Dev server']));
+      await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/stop` });
+
+      // Packages are up to date now: the next run starts straight away.
+      const again = await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/run/start`,
+      });
+      expect(again.json().installTerminalId).toBeNull();
+      expect(again.json().services[0].terminalId).not.toBeNull();
+      await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/stop` });
+      expect((await errorsOf()).length).toBe(0);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'explains a failed install instead of starting a broken server',
+    async () => {
+      writeFileSync(join(repo, 'package.json'), '{"name":"app"}');
+      await setCommands({ install: 'echo "npm ERR! network" && exit 4', run: 'sleep 30' });
+      await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/start` });
+      await until(() => t.ctx.runner.status(projectId).status === 'crashed');
+      const st = t.ctx.runner.status(projectId);
+      expect(st).toMatchObject({ installTerminalId: null, exitCode: 4 });
+      expect(st.services[0]!.error).toMatch(/Installing dependencies failed \(exit 4\)/);
+      expect(titles()).not.toContain('Dev server');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')('stops cleanly while installing', async () => {
+    writeFileSync(join(repo, 'package.json'), '{"name":"app"}');
+    await setCommands({ install: 'sleep 30', run: 'sleep 30' });
+    await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/start` });
+    const stop = await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/stop` });
+    expect(stop.json()).toMatchObject({ status: 'stopped', installTerminalId: null });
+    expect(titles()).not.toContain('Dev server');
+    expect((await errorsOf()).length).toBe(0);
   });
 });
 
@@ -156,90 +280,102 @@ const setServices = (services: unknown) =>
 
 describe('several servers', () => {
   // Windows: multi-server startup runs through node-pty (no console under vitest). Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('starts every service in its own folder and port, each with its own URL', async () => {
-    mkdirSync(join(repo, 'api'));
-    const [web, api] = [await freePort(), await freePort()];
-    const res = await setServices([
-      { name: 'web', command: 'echo "Local: http://localhost:$PORT/" && sleep 30', port: web },
-      {
-        name: 'api',
-        // Mentions the web URL first: that one belongs to the other service.
-        command: `echo "CORS for http://localhost:${web}" && echo "API on http://localhost:$PORT" && pwd && sleep 30`,
-        cwd: './api/',
-        port: api,
-      },
-    ]);
-    expect(res.statusCode).toBe(200);
-    expect(res.json().commands.services[1]).toMatchObject({ cwd: 'api', port: api });
-
-    const start = await t.app.inject({
-      method: 'POST',
-      url: `/api/projects/${projectId}/run/start`,
-    });
-    expect(start.statusCode).toBe(200);
-    expect(start.json()).toMatchObject({ command: 'web + api' });
-    await until(() => t.ctx.runner.status(projectId).services.every((s) => s.url));
-    const st = t.ctx.runner.status(projectId);
-    expect(st.status).toBe('running');
-    expect(st.previewUrl).toBe(`http://localhost:${web}/`);
-    expect(st.services.map((s) => [s.name, s.url])).toEqual([
-      ['web', `http://localhost:${web}/`],
-      ['api', `http://localhost:${api}`],
-    ]);
-    const terms = t.ctx.terminals.list({ projectId });
-    expect(terms.find((x) => x.id === st.services[1]!.terminalId)).toMatchObject({
-      cwd: join(repo, 'api'),
-      title: 'Dev server · api',
-    });
-
-    const stop = await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/stop` });
-    expect(stop.json().status).toBe('stopped');
-    expect(stop.json().services.map((s: { status: string }) => s.status)).toEqual([
-      'stopped',
-      'stopped',
-    ]);
-    expect((await errorsOf()).length).toBe(0);
-  });
-
-  // Windows: port-clash check starts servers via node-pty (no console under vitest). Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('checks ports before starting and reports a clash instead of a crash loop', async () => {
-    const taken = await freePort();
-    const blocker = createServer().listen(taken, '127.0.0.1');
-    await new Promise((r) => blocker.once('listening', r));
-    try {
-      const free = await freePort();
-      await setServices([
-        { name: 'web', command: 'sleep 30', port: free },
-        { name: 'api', command: 'sleep 30', port: taken },
+  it.skipIf(process.platform === 'win32')(
+    'starts every service in its own folder and port, each with its own URL',
+    async () => {
+      mkdirSync(join(repo, 'api'));
+      const [web, api] = [await freePort(), await freePort()];
+      const res = await setServices([
+        { name: 'web', command: 'echo "Local: http://localhost:$PORT/" && sleep 30', port: web },
+        {
+          name: 'api',
+          // Mentions the web URL first: that one belongs to the other service.
+          command: `echo "CORS for http://localhost:${web}" && echo "API on http://localhost:$PORT" && pwd && sleep 30`,
+          cwd: './api/',
+          port: api,
+        },
       ]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().commands.services[1]).toMatchObject({ cwd: 'api', port: api });
+
       const start = await t.app.inject({
         method: 'POST',
         url: `/api/projects/${projectId}/run/start`,
       });
       expect(start.statusCode).toBe(200);
-      const api = start.json().services[1];
-      expect(api).toMatchObject({ status: 'crashed', terminalId: null });
-      expect(api.error).toMatch(new RegExp(`Port ${taken} is already in use`));
-      await until(() => t.ctx.runner.status(projectId).services[0]!.status === 'running', 8000);
-      // The web service falls back to its port as the URL when it prints none.
-      expect(t.ctx.runner.status(projectId).previewUrl).toBe(`http://localhost:${free}`);
-      await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/stop` });
-
-      // Only clashing services: nothing starts and the reason is the error.
-      await setServices([{ name: 'api', command: 'sleep 30', port: taken }]);
-      const r = await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/start` });
-      expect(r.statusCode).toBe(400);
-      expect(r.json().error.message).toMatch(/already in use/);
-      await setServices([{ name: 'self', command: 'sleep 30', port: 4318 }]);
-      const own = await t.app.inject({
-        method: 'POST',
-        url: `/api/projects/${projectId}/run/start`,
+      expect(start.json()).toMatchObject({ command: 'web + api' });
+      await until(() => t.ctx.runner.status(projectId).services.every((s) => s.url));
+      const st = t.ctx.runner.status(projectId);
+      expect(st.status).toBe('running');
+      expect(st.previewUrl).toBe(`http://localhost:${web}/`);
+      expect(st.services.map((s) => [s.name, s.url])).toEqual([
+        ['web', `http://localhost:${web}/`],
+        ['api', `http://localhost:${api}`],
+      ]);
+      const terms = t.ctx.terminals.list({ projectId });
+      expect(terms.find((x) => x.id === st.services[1]!.terminalId)).toMatchObject({
+        cwd: join(repo, 'api'),
+        title: 'Dev server · api',
       });
-      expect(own.json().error.message).toMatch(/used by AI Harness itself/);
-    } finally {
-      blocker.close();
-    }
-  });
+
+      const stop = await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/run/stop`,
+      });
+      expect(stop.json().status).toBe('stopped');
+      expect(stop.json().services.map((s: { status: string }) => s.status)).toEqual([
+        'stopped',
+        'stopped',
+      ]);
+      expect((await errorsOf()).length).toBe(0);
+    },
+  );
+
+  // Windows: port-clash check starts servers via node-pty (no console under vitest). Runs on POSIX.
+  it.skipIf(process.platform === 'win32')(
+    'checks ports before starting and reports a clash instead of a crash loop',
+    async () => {
+      const taken = await freePort();
+      const blocker = createServer().listen(taken, '127.0.0.1');
+      await new Promise((r) => blocker.once('listening', r));
+      try {
+        const free = await freePort();
+        await setServices([
+          { name: 'web', command: 'sleep 30', port: free },
+          { name: 'api', command: 'sleep 30', port: taken },
+        ]);
+        const start = await t.app.inject({
+          method: 'POST',
+          url: `/api/projects/${projectId}/run/start`,
+        });
+        expect(start.statusCode).toBe(200);
+        const api = start.json().services[1];
+        expect(api).toMatchObject({ status: 'crashed', terminalId: null });
+        expect(api.error).toMatch(new RegExp(`Port ${taken} is already in use`));
+        await until(() => t.ctx.runner.status(projectId).services[0]!.status === 'running', 8000);
+        // The web service falls back to its port as the URL when it prints none.
+        expect(t.ctx.runner.status(projectId).previewUrl).toBe(`http://localhost:${free}`);
+        await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/stop` });
+
+        // Only clashing services: nothing starts and the reason is the error.
+        await setServices([{ name: 'api', command: 'sleep 30', port: taken }]);
+        const r = await t.app.inject({
+          method: 'POST',
+          url: `/api/projects/${projectId}/run/start`,
+        });
+        expect(r.statusCode).toBe(400);
+        expect(r.json().error.message).toMatch(/already in use/);
+        await setServices([{ name: 'self', command: 'sleep 30', port: 4318 }]);
+        const own = await t.app.inject({
+          method: 'POST',
+          url: `/api/projects/${projectId}/run/start`,
+        });
+        expect(own.json().error.message).toMatch(/used by AI Harness itself/);
+      } finally {
+        blocker.close();
+      }
+    },
+  );
 
   it('flags a port clash the server itself reports', async () => {
     await setCommands({
@@ -343,108 +479,118 @@ describe('command suggestions', () => {
 
 describe('error detection', () => {
   // Windows: drives a build through node-pty and parses its streamed output (no console under vitest). Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('detects, de-duplicates and reopens errors from build output', async () => {
-    await setCommands({
-      build: `printf "src/app.ts(4,7): error TS2322: Type 'string' is not assignable to type 'number'.\\n"; exit 2`,
-    });
-    const run1 = await t.app.inject({
-      method: 'POST',
-      url: `/api/projects/${projectId}/run/build`,
-    });
-    expect(run1.json()).toMatchObject({ kind: 'run', title: 'Build' });
-    await until(async () => (await errorsOf()).length === 1);
-    const [e] = await errorsOf();
-    expect(e).toMatchObject({
-      source: 'run',
-      matcher: 'typescript',
-      filePath: 'src/app.ts',
-      line: 4,
-      column: 7,
-      occurrences: 1,
-    });
+  it.skipIf(process.platform === 'win32')(
+    'detects, de-duplicates and reopens errors from build output',
+    async () => {
+      await setCommands({
+        build: `printf "src/app.ts(4,7): error TS2322: Type 'string' is not assignable to type 'number'.\\n"; exit 2`,
+      });
+      const run1 = await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/run/build`,
+      });
+      expect(run1.json()).toMatchObject({ kind: 'run', title: 'Build' });
+      await until(async () => (await errorsOf()).length === 1);
+      const [e] = await errorsOf();
+      expect(e).toMatchObject({
+        source: 'run',
+        matcher: 'typescript',
+        filePath: 'src/app.ts',
+        line: 4,
+        column: 7,
+        occurrences: 1,
+      });
 
-    await t.app.inject({ method: 'POST', url: `/api/errors/${e!.id}/resolve` });
-    await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/build` });
-    await until(async () => (await errorsOf())[0]!.occurrences === 2);
-    // Same fingerprint → one row; an error that comes back is open again.
-    expect(await errorsOf()).toHaveLength(1);
-    expect((await errorsOf())[0]!.status).toBe('open');
+      await t.app.inject({ method: 'POST', url: `/api/errors/${e!.id}/resolve` });
+      await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/build` });
+      await until(async () => (await errorsOf())[0]!.occurrences === 2);
+      // Same fingerprint → one row; an error that comes back is open again.
+      expect(await errorsOf()).toHaveLength(1);
+      expect((await errorsOf())[0]!.status).toBe('open');
 
-    await t.app.inject({ method: 'POST', url: `/api/errors/${e!.id}/ignore` });
-    expect(
-      (await t.app.inject({ url: `/api/projects/${projectId}/errors?status=open,fixing` })).json(),
-    ).toHaveLength(0);
-    expect(events.some((x) => x.type === 'error.updated')).toBe(true);
-  });
+      await t.app.inject({ method: 'POST', url: `/api/errors/${e!.id}/ignore` });
+      expect(
+        (
+          await t.app.inject({ url: `/api/projects/${projectId}/errors?status=open,fixing` })
+        ).json(),
+      ).toHaveLength(0);
+      expect(events.some((x) => x.type === 'error.updated')).toBe(true);
+    },
+  );
 
   // Windows: end-to-end run+fix pipeline drives servers/agents via node-pty (no console under vitest). Runs on POSIX.
-  it.skipIf(process.platform === 'win32')('turns an error into a Fixer-first task and resolves it when the task is done', async () => {
-    await setCommands({
-      build: `printf "TypeError: Cannot read properties of undefined (reading 'id')\\n    at load (src/data.js:12:5)\\n"; exit 1`,
-      test: null,
-    });
-    await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/build` });
-    await until(async () => (await errorsOf()).length >= 1);
-    const err = (await errorsOf()).find((x) => x.matcher === 'js-exception')!;
-    expect(err.filePath).toBe('src/data.js');
+  it.skipIf(process.platform === 'win32')(
+    'turns an error into a Fixer-first task and resolves it when the task is done',
+    async () => {
+      await setCommands({
+        build: `printf "TypeError: Cannot read properties of undefined (reading 'id')\\n    at load (src/data.js:12:5)\\n"; exit 1`,
+        test: null,
+      });
+      await t.app.inject({ method: 'POST', url: `/api/projects/${projectId}/run/build` });
+      await until(async () => (await errorsOf()).length >= 1);
+      const err = (await errorsOf()).find((x) => x.matcher === 'js-exception')!;
+      expect(err.filePath).toBe('src/data.js');
 
-    const fixed = await t.app.inject({ method: 'POST', url: `/api/errors/${err.id}/fix` });
-    expect(fixed.json()).toMatchObject({ status: 'fixing', fixTaskId: expect.any(String) });
-    // A second fix request while one is running is refused.
-    expect(
-      (await t.app.inject({ method: 'POST', url: `/api/errors/${err.id}/fix` })).statusCode,
-    ).toBe(409);
-    const taskId = fixed.json().fixTaskId as string;
-    const task = t.ctx.tasks.get(taskId);
-    expect(task).toMatchObject({ origin: 'error', type: 'bug', priority: 'high' });
-    expect(task.description).toContain('Cannot read properties of undefined');
+      const fixed = await t.app.inject({ method: 'POST', url: `/api/errors/${err.id}/fix` });
+      expect(fixed.json()).toMatchObject({ status: 'fixing', fixTaskId: expect.any(String) });
+      // A second fix request while one is running is refused.
+      expect(
+        (await t.app.inject({ method: 'POST', url: `/api/errors/${err.id}/fix` })).statusCode,
+      ).toBe(409);
+      const taskId = fixed.json().fixTaskId as string;
+      const task = t.ctx.tasks.get(taskId);
+      expect(task).toMatchObject({ origin: 'error', type: 'bug', priority: 'high' });
+      expect(task.description).toContain('Cannot read properties of undefined');
 
-    // The fake fix doesn't touch the build script; drop it so AI Harness's own checks pass.
-    await setCommands({ build: null });
-    agent.setResponses([
-      ...BASE,
-      {
-        match: '-p',
-        stdinIncludes: ['# Role: Fixer', 'detected while running the project'],
-        stdout: claudeStream('Guarded the undefined lookup.'),
-        writeFiles: { 'src/data.js': 'export const load = (x) => x?.id;\n' },
-      },
-      {
-        match: '-p',
-        stdinIncludes: '# Role: Reviewer',
-        stdout: claudeStream(JSON.stringify({ verdict: 'APPROVE', summary: 'ok', comments: [] })),
-      },
-      {
-        match: '-p',
-        stdinIncludes: '# Role: Tester',
-        stdout: claudeStream(JSON.stringify({ passed: true, summary: 'ok', total: 1, failed: 0 })),
-      },
-      {
-        match: '-p',
-        stdinIncludes: '# Role: Documenter',
-        stdout: claudeStream(
-          JSON.stringify({
-            summary: 'Fixed',
-            report: 'Fixed the crash',
-            docsUpdated: [],
-            memory: [],
-            limitations: [],
-          }),
-        ),
-      },
-    ]);
-    if (task.status === 'DRAFT')
-      await t.app.inject({ method: 'POST', url: `/api/tasks/${taskId}/approve`, payload: {} });
-    await t.ctx.orchestrator.tick();
-    await t.ctx.orchestrator.idle();
-    expect(t.ctx.tasks.get(taskId)).toMatchObject({
-      status: 'DONE',
-      statusReason: 'Merged into main',
-    });
-    // The develop step ran the Fixer, not the Developer.
-    expect(agent.calls().some((c) => c.stdin.includes('# Role: Developer'))).toBe(false);
-    expect((await errorsOf()).find((x) => x.id === err.id)!.status).toBe('resolved');
-  });
+      // The fake fix doesn't touch the build script; drop it so AI Harness's own checks pass.
+      await setCommands({ build: null });
+      agent.setResponses([
+        ...BASE,
+        {
+          match: '-p',
+          stdinIncludes: ['# Role: Fixer', 'detected while running the project'],
+          stdout: claudeStream('Guarded the undefined lookup.'),
+          writeFiles: { 'src/data.js': 'export const load = (x) => x?.id;\n' },
+        },
+        {
+          match: '-p',
+          stdinIncludes: '# Role: Reviewer',
+          stdout: claudeStream(JSON.stringify({ verdict: 'APPROVE', summary: 'ok', comments: [] })),
+        },
+        {
+          match: '-p',
+          stdinIncludes: '# Role: Tester',
+          stdout: claudeStream(
+            JSON.stringify({ passed: true, summary: 'ok', total: 1, failed: 0 }),
+          ),
+        },
+        {
+          match: '-p',
+          stdinIncludes: '# Role: Documenter',
+          stdout: claudeStream(
+            JSON.stringify({
+              summary: 'Fixed',
+              report: 'Fixed the crash',
+              docsUpdated: [],
+              memory: [],
+              limitations: [],
+            }),
+          ),
+        },
+      ]);
+      if (task.status === 'DRAFT')
+        await t.app.inject({ method: 'POST', url: `/api/tasks/${taskId}/approve`, payload: {} });
+      await t.ctx.orchestrator.tick();
+      await t.ctx.orchestrator.idle();
+      expect(t.ctx.tasks.get(taskId)).toMatchObject({
+        status: 'DONE',
+        statusReason: 'Merged into main',
+      });
+      // The develop step ran the Fixer, not the Developer.
+      expect(agent.calls().some((c) => c.stdin.includes('# Role: Developer'))).toBe(false);
+      expect((await errorsOf()).find((x) => x.id === err.id)!.status).toBe('resolved');
+    },
+  );
 
   it('records task failures and resolves them when a retry succeeds', async () => {
     const { id } = t.ctx.tasks.createFollowUp(projectId, null, {
@@ -474,31 +620,35 @@ describe('error detection', () => {
 describe('files', () => {
   // Windows: asserts POSIX path/traversal semantics the file API normalises differently on Windows
   // (a known cross-platform path gap, tracked as follow-up). Runs on Linux/macOS.
-  it.skipIf(process.platform === 'win32')('lists the tree and reads files, refusing secrets, traversal and binaries', async () => {
-    writeFileSync(join(repo, 'hello.ts'), 'export const x = 1;\n');
-    writeFileSync(join(repo, '.env'), 'X=1\n');
-    writeFileSync(join(repo, 'blob.bin'), Buffer.from([0, 1, 2, 3]));
-    const tree = (await t.app.inject({ url: `/api/projects/${projectId}/files` })).json();
-    expect(tree.files).toContain('hello.ts');
-    const f = await t.app.inject({ url: `/api/projects/${projectId}/file?path=hello.ts` });
-    expect(f.json()).toMatchObject({
-      path: 'hello.ts',
-      language: 'typescript',
-      binary: false,
-      content: 'export const x = 1;\n',
-    });
-    expect(
-      (await t.app.inject({ url: `/api/projects/${projectId}/file?path=.env` })).statusCode,
-    ).toBe(403);
-    expect(
-      (await t.app.inject({ url: `/api/projects/${projectId}/file?path=../../etc/passwd` }))
-        .statusCode,
-    ).toBe(404);
-    expect(
-      (await t.app.inject({ url: `/api/projects/${projectId}/file?path=.git/config` })).statusCode,
-    ).toBe(400);
-    expect(
-      (await t.app.inject({ url: `/api/projects/${projectId}/file?path=blob.bin` })).json(),
-    ).toMatchObject({ binary: true, content: '' });
-  });
+  it.skipIf(process.platform === 'win32')(
+    'lists the tree and reads files, refusing secrets, traversal and binaries',
+    async () => {
+      writeFileSync(join(repo, 'hello.ts'), 'export const x = 1;\n');
+      writeFileSync(join(repo, '.env'), 'X=1\n');
+      writeFileSync(join(repo, 'blob.bin'), Buffer.from([0, 1, 2, 3]));
+      const tree = (await t.app.inject({ url: `/api/projects/${projectId}/files` })).json();
+      expect(tree.files).toContain('hello.ts');
+      const f = await t.app.inject({ url: `/api/projects/${projectId}/file?path=hello.ts` });
+      expect(f.json()).toMatchObject({
+        path: 'hello.ts',
+        language: 'typescript',
+        binary: false,
+        content: 'export const x = 1;\n',
+      });
+      expect(
+        (await t.app.inject({ url: `/api/projects/${projectId}/file?path=.env` })).statusCode,
+      ).toBe(403);
+      expect(
+        (await t.app.inject({ url: `/api/projects/${projectId}/file?path=../../etc/passwd` }))
+          .statusCode,
+      ).toBe(404);
+      expect(
+        (await t.app.inject({ url: `/api/projects/${projectId}/file?path=.git/config` }))
+          .statusCode,
+      ).toBe(400);
+      expect(
+        (await t.app.inject({ url: `/api/projects/${projectId}/file?path=blob.bin` })).json(),
+      ).toMatchObject({ binary: true, content: '' });
+    },
+  );
 });

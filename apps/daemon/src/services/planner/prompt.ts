@@ -1,5 +1,6 @@
 import type { AttachmentDto, OnboardingReport, PlanDto, TaskDto } from '@ai-harness/shared';
 import type { PlannerOutputType } from './parse';
+import type { TicketReference } from './tickets';
 
 export type PlannerMode =
   'generate_plan' | 'add_to_plan' | 'discuss' | 'regenerate_plan' | 'regenerate_task';
@@ -26,6 +27,7 @@ export interface PlannerContext {
   targetTask?: TaskDto;
   referencedFiles: string[];
   referencedTasks: TaskDto[];
+  referencedTickets: TicketReference[];
   attachments: AttachmentDto[];
   engines: string[];
   allowQuestions: boolean;
@@ -194,6 +196,8 @@ export function buildPlannerPrompt(ctx: PlannerContext): string {
       `## Tasks the user referenced\n${ctx.referencedTasks.map((t) => `- ${t.key} [${t.status}] ${t.title}\n  ${clip(t.description, 600).replace(/\n/g, '\n  ')}`).join('\n')}`,
     );
   }
+  const tickets = ticketsSection(ctx.referencedTickets);
+  if (tickets) sections.push(tickets);
   if (ctx.attachments.length) {
     sections.push(
       `## Attachments (read them; images included)\n${ctx.attachments.map((a) => `- ${a.name} (${a.mime}, ${a.size} bytes): ${a.path}${a.textPath ? `\n  Text version (read this one): ${a.textPath}` : ''}`).join('\n')}`,
@@ -208,4 +212,37 @@ export function buildPlannerPrompt(ctx: PlannerContext): string {
 
 export function buildRetryPrompt(errors: string[], allowed: PlannerOutputType[]): string {
   return `Your previous response could not be used:\n${errors.map((e) => `- ${e}`).join('\n')}\n\nReply again with ONLY the corrected JSON object (type ${allowed.map((t) => `"${t}"`).join(' or ')}), no prose and no code fences.`;
+}
+
+/**
+ * Tracker tickets the user mentioned, fetched by AI Harness. The Planner has no
+ * tracker access of its own, so it must work from this and never guess.
+ */
+function ticketsSection(refs: TicketReference[]): string | null {
+  if (!refs.length) return null;
+  const lines: string[] = [];
+  for (const r of refs) {
+    if (r.status === 'found') {
+      const i = r.issue;
+      const meta = [
+        i.status && `status: ${i.status}`,
+        i.assignee && `assignee: ${i.assignee}`,
+        i.labels.length && `labels: ${i.labels.join(', ')}`,
+        i.url,
+      ].filter(Boolean);
+      lines.push(
+        `### ${r.key}: ${i.title}\nFrom ${r.tracker}${meta.length ? ` (${meta.join(' · ')})` : ''}\n${clip(i.description.trim() || '(No description in the ticket.)', 6000)}`,
+      );
+    } else if (r.status === 'failed') {
+      lines.push(
+        `### ${r.key}: could not be read from ${r.tracker}\nReason: ${r.reason}\nTell the user this reason. Don't guess the ticket's content.`,
+      );
+    }
+  }
+  const unlinked = refs.filter((r) => r.status === 'unlinked').map((r) => r.key);
+  if (unlinked.length)
+    lines.push(
+      `### Not looked up: ${unlinked.join(', ')}\nThese look like tracker ticket keys, but no issue tracker project linked to this project uses that prefix. If the user meant tickets, tell them to link the tracker project in Project → Overview → Issue tracker (connect a tracker first in Integrations → Issue trackers), or to paste the ticket. Ignore this note if they aren't tickets.`,
+    );
+  return `## Tracker tickets the user referenced (fetched by AI Harness; you have no tracker access yourself)\n${lines.join('\n\n')}`;
 }

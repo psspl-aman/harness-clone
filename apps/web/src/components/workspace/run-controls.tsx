@@ -125,11 +125,13 @@ function RunStatus({ run }: { run: ProjectRunDto }) {
       )}
       {s === 'running'
         ? 'Running'
-        : s === 'starting'
-          ? 'Starting'
-          : s === 'crashed'
-            ? `Crashed${run.exitCode !== null ? ` (exit ${run.exitCode})` : ''}`
-            : 'Stopped'}
+        : run.installTerminalId
+          ? 'Installing dependencies'
+          : s === 'starting'
+            ? 'Starting'
+            : s === 'crashed'
+              ? `Crashed${run.exitCode !== null ? ` (exit ${run.exitCode})` : ''}`
+              : 'Stopped'}
     </span>
   );
 }
@@ -230,11 +232,13 @@ export function RunControls({
             onClick={() => (canRun ? start.mutate() : onConfigure())}
             disabled={busy}
             title={
-              cmds.services?.length
-                ? `Starts ${cmds.services.map((x) => x.name).join(', ')}`
-                : cmds.run
-                  ? `Runs: ${cmds.run}`
-                  : 'Set a run command first'
+              !canRun
+                ? 'Set a run command first'
+                : `${
+                    cmds.services?.length
+                      ? `Starts ${cmds.services.map((x) => x.name).join(', ')}`
+                      : `Runs: ${cmds.run}`
+                  }${cmds.install ? ` (runs “${cmds.install}” first if packages are missing or out of date)` : ''}`
             }
           >
             {start.isPending ? <Loader2 className="animate-spin" /> : <Play />} Run

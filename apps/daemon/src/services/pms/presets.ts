@@ -1,4 +1,4 @@
-import type { PmsProviderPreset, TaskStatus } from '@ai-harness/shared';
+import type { PmsProvider, PmsProviderPreset, PmsToolMap, TaskStatus } from '@ai-harness/shared';
 
 const TODO_FLOW: Record<string, TaskStatus> = {
   'To Do': 'APPROVED',
@@ -80,9 +80,10 @@ export const PMS_PRESETS: PmsProviderPreset[] = [
         },
       },
       get: { tool: 'jira_get_issue', args: { issue_key: '{{issueId}}' } },
+      transitions: { tool: 'jira_get_transitions', args: { issue_key: '{{issueId}}' } },
       updateStatus: {
         tool: 'jira_transition_issue',
-        args: { issue_key: '{{issueId}}', transition_id: '{{status}}' },
+        args: { issue_key: '{{issueId}}', transition_id: '{{transitionId}}' },
       },
       comment: {
         tool: 'jira_add_comment',
@@ -176,3 +177,56 @@ export const PMS_PRESETS: PmsProviderPreset[] = [
 
 export const presetFor = (id: string) =>
   PMS_PRESETS.find((p) => p.id === id) ?? PMS_PRESETS.at(-1)!;
+
+/**
+ * A complete tool map for one specific MCP server, recognised by a tool only
+ * that server has. Used by auto-detect so users don't write templates by hand.
+ */
+export interface ServerToolMap {
+  provider: PmsProvider;
+  /** A tool name unique to this server. */
+  marker: string;
+  toolMap: PmsToolMap;
+  /**
+   * Fill `{{cloudId}}` with the user's Atlassian site, looked up with this
+   * tool (it takes no arguments) when the tool map is detected.
+   */
+  siteLookupTool?: string;
+}
+
+const CLOUD_ID = '{{cloudId}}';
+const ATLASSIAN_ISSUE = { cloudId: CLOUD_ID, issueIdOrKey: '{{issueId}}' };
+
+export const SERVER_TOOL_MAPS: ServerToolMap[] = [
+  {
+    // Atlassian's hosted Rovo MCP server (https://mcp.atlassian.com/v2/mcp).
+    provider: 'jira',
+    marker: 'searchJiraIssuesUsingJql',
+    siteLookupTool: 'getAccessibleAtlassianResources',
+    toolMap: {
+      list: {
+        tool: 'searchJiraIssuesUsingJql',
+        args: {
+          cloudId: CLOUD_ID,
+          jql: 'project = {{project}} AND statusCategory != Done ORDER BY updated DESC',
+          maxResults: '{{limit|number}}',
+          responseContentFormat: 'markdown',
+        },
+      },
+      get: {
+        tool: 'getJiraIssue',
+        args: { ...ATLASSIAN_ISSUE, responseContentFormat: 'markdown' },
+      },
+      transitions: { tool: 'getTransitionsForJiraIssue', args: ATLASSIAN_ISSUE },
+      updateStatus: {
+        tool: 'transitionJiraIssue',
+        args: { ...ATLASSIAN_ISSUE, transition: { id: '{{transitionId}}' } },
+      },
+      comment: {
+        tool: 'addCommentToJiraIssue',
+        args: { ...ATLASSIAN_ISSUE, commentBody: '{{body}}', contentFormat: 'markdown' },
+      },
+      fields: { id: 'key' },
+    },
+  },
+];

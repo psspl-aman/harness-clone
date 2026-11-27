@@ -33,16 +33,21 @@ import { newId } from '../../lib/id';
 import { McpError, type McpService } from '../mcp/mcp-service';
 import type { Orchestrator } from '../orchestrator/orchestrator';
 import type { PlannerService } from '../planner/service';
+import type { TicketReference } from '../planner/tickets';
 import type { TaskService } from '../tasks';
 import {
   baseVars,
+  bindConstants,
   detectToolMap,
   extractItems,
+  findTransition,
   matchesFilters,
   normalizeIssue,
+  pickAtlassianSite,
   renderArgs,
+  transitionNames,
 } from './normalize';
-import { PMS_PRESETS, presetFor } from './presets';
+import { PMS_PRESETS, presetFor, SERVER_TOOL_MAPS, type ServerToolMap } from './presets';
 
 type ConnRow = typeof pmsConnections.$inferSelect;
 type MappingRow = typeof pmsMappings.$inferSelect;
@@ -167,17 +172,34 @@ export class PmsService {
       .parse(raw);
     const tools = await this.d.mcp.listTools(mcpServerId);
     const names = new Set(tools.map((t) => t.name));
+    const known = SERVER_TOOL_MAPS.find(
+      (s) => (s.provider === provider || provider === 'custom') && names.has(s.marker),
+    );
+    if (known) return this.bindServerToolMap(mcpServerId, known);
     const preset = presetFor(provider).toolMap;
     const detected = detectToolMap(tools);
-    const pick = (k: 'list' | 'get' | 'updateStatus' | 'comment') =>
+    const pick = (k: 'list' | 'get' | 'updateStatus' | 'transitions' | 'comment') =>
       preset[k] && names.has(preset[k].tool) ? preset[k] : detected[k];
     return {
       list: pick('list'),
       get: pick('get'),
       updateStatus: pick('updateStatus'),
+      transitions: pick('transitions'),
       comment: pick('comment'),
       fields: { ...preset.fields },
     };
+  }
+
+  /** A known server's tool map, with the user's site filled in where it needs one. */
+  private async bindServerToolMap(serverId: string, known: ServerToolMap): Promise<PmsToolMap> {
+    if (!known.siteLookupTool) return known.toolMap;
+    const res = await this.call({ mcpServerId: serverId }, known.siteLookupTool, {});
+    const cloudId = pickAtlassianSite(res.json);
+    if (!cloudId)
+      throw badRequest(
+        `The server didn't list any Atlassian site for these credentials (${known.siteLookupTool}). Check that the account can open Jira.`,
+      );
+    return bindConstants(known.toolMap, { cloudId });
   }
 
   /** Run the list operation with an unsaved configuration and show what would be imported. */
@@ -185,6 +207,60 @@ export class PmsService {
     const v = PreviewInputSchema.parse(raw);
     const issues = await this.fetchIssues(v.mcpServerId, v.toolMap, v.externalProject, v.filters);
     return { issues: issues.slice(0, 25), total: issues.length };
+  }
+
+  /**
+   * Read tickets mentioned in chat (the Planner's TicketSource). A key is
+   * read through the tracker project linked to this project under the key's
+   * prefix (`TVI-569` → the link for `TVI`), with that connection's "get one
+   * issue" tool; other keys are reported as unlinked.
+   */
+  async lookupTickets(projectId: string, keys: string[]): Promise<TicketReference[]> {
+    const links = this.d.db
+      .select({ m: pmsMappings, c: pmsConnections })
+      .from(pmsMappings)
+      .innerJoin(pmsConnections, eq(pmsConnections.id, pmsMappings.connectionId))
+      .where(eq(pmsMappings.projectId, projectId))
+      .all();
+    return Promise.all(
+      keys.map(async (key): Promise<TicketReference> => {
+        const prefix = key.slice(0, key.lastIndexOf('-')).toLowerCase();
+        const link = links.find((l) => l.m.externalProject.trim().toLowerCase() === prefix);
+        if (!link) return { key, status: 'unlinked' };
+        const tracker = `${presetFor(link.c.provider).label} (${link.c.name})`;
+        const op = PmsToolMapSchema.parse(link.c.toolMap ?? {}).get;
+        if (!op)
+          return {
+            key,
+            status: 'failed',
+            tracker,
+            reason:
+              'The tracker connection has no "Get one issue" tool set up (Integrations → Issue trackers → edit → Auto-detect).',
+          };
+        try {
+          const res = await this.call(
+            link.c,
+            op.tool,
+            renderArgs(op.args, baseVars(link.m.externalProject, link.m.filters, { issueId: key })),
+          );
+          const json = res.json;
+          const issue =
+            json && typeof json === 'object' && !Array.isArray(json)
+              ? normalizeIssue(json as Record<string, unknown>, link.c.toolMap.fields)
+              : null;
+          if (!issue)
+            return {
+              key,
+              status: 'failed',
+              tracker,
+              reason: `"${op.tool}" didn't return a readable ticket: ${res.text.slice(0, 200)}`,
+            };
+          return { key, status: 'found', tracker, issue };
+        } catch (err) {
+          return { key, status: 'failed', tracker, reason: (err as Error).message.slice(0, 300) };
+        }
+      }),
+    );
   }
 
   // ─── Mappings ──────────────────────────────────────────────────────────────
@@ -482,12 +558,15 @@ export class PmsService {
     const vars = (extra: Record<string, unknown>) =>
       baseVars(m.externalProject, m.filters, { issueId: t.external!.id, ...extra });
     const external = Object.entries(m.statusMap).find(([, s]) => s === to)?.[0];
-    if (external && c.toolMap.updateStatus)
-      await this.call(
-        c,
-        c.toolMap.updateStatus.tool,
-        renderArgs(c.toolMap.updateStatus.args, vars({ status: external })),
-      );
+    if (external && c.toolMap.updateStatus) {
+      const transitionId = await this.transitionInto(c.toolMap, c, vars({}), external);
+      if (transitionId !== null)
+        await this.call(
+          c,
+          c.toolMap.updateStatus.tool,
+          renderArgs(c.toolMap.updateStatus.args, vars({ status: external, transitionId })),
+        );
+    }
     const body =
       to === 'DONE'
         ? this.doneComment(t)
@@ -500,6 +579,37 @@ export class PmsService {
         c.toolMap.comment.tool,
         renderArgs(c.toolMap.comment.args, vars({ body })),
       );
+  }
+
+  /**
+   * What `{{transitionId}}` should be to move the ticket into `status`. Without a
+   * `transitions` operation that's the status name itself (trackers that move
+   * by name). With one, it's the matching transition's id, or null when the
+   * ticket is already in that status. A workflow with no way there is an error.
+   */
+  private async transitionInto(
+    map: PmsToolMap,
+    c: Pick<ConnRow, 'mcpServerId'>,
+    vars: Record<string, unknown>,
+    status: string,
+  ): Promise<string | null> {
+    if (!map.transitions) return status;
+    const res = await this.call(c, map.transitions.tool, renderArgs(map.transitions.args, vars));
+    const items = extractItems(res.json ?? {}, map.transitions.itemsPath);
+    const id = findTransition(items, status);
+    if (id) return id;
+    if (map.get) {
+      const cur = await this.call(c, map.get.tool, renderArgs(map.get.args, vars));
+      const issue =
+        cur.json && typeof cur.json === 'object'
+          ? normalizeIssue(cur.json as Record<string, unknown>, map.fields)
+          : null;
+      if (issue?.status?.toLowerCase() === status.toLowerCase()) return null;
+    }
+    const offered = transitionNames(items);
+    throw badRequest(
+      `The ticket's workflow has no transition to "${status}"${offered.length ? ` (it offers: ${offered.join(', ')})` : ''}. Match the status mapping to your board's status names.`,
+    );
   }
 
   private doneComment(t: ReturnType<TaskService['get']>): string {

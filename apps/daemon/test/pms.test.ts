@@ -6,13 +6,19 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mcpServers } from '../src/db/schema';
+import { toolResultJson } from '../src/services/mcp/tool-result';
 import {
   baseVars,
+  bindConstants,
   detectToolMap,
   extractItems,
+  findTransition,
   normalizeIssue,
+  pickAtlassianSite,
   renderArgs,
+  transitionNames,
 } from '../src/services/pms/normalize';
+import { extractTicketKeys } from '../src/services/planner/tickets';
 import { claudeStream, makeFakeCli, type FakeCli } from './fake-cli';
 import { createTestApp, tempDir, type TestApp } from './helpers';
 
@@ -34,6 +40,45 @@ interface State {
   comments: { key: string; body: string }[];
   transitions: { key: string; status: string }[];
 }
+
+describe('tool results', () => {
+  it('unwraps the result wrapper Python FastMCP servers send', () => {
+    const issue = { key: 'TVI-1', summary: 'Hi' };
+    const json = JSON.stringify(issue);
+    expect(toolResultJson({ result: json }, json)).toEqual(issue);
+    expect(toolResultJson({ result: [1, 2] }, '')).toEqual([1, 2]);
+    // A plain-text result is text, not data.
+    expect(toolResultJson({ result: 'Issue not found' }, 'Issue not found')).toBeUndefined();
+    // Real structured content is used as is; without it, JSON text is parsed.
+    expect(toolResultJson({ result: 'x', total: 1 }, '')).toEqual({ result: 'x', total: 1 });
+    expect(toolResultJson(undefined, json)).toEqual(issue);
+    expect(toolResultJson(undefined, 'hello')).toBeUndefined();
+  });
+
+  it('reads mcp-atlassian tickets', () => {
+    const i = normalizeIssue(
+      {
+        id: '92672',
+        key: 'TVI-569',
+        summary: 'Build vehicle inspection capture',
+        browse_url: 'https://example.atlassian.net/browse/TVI-569',
+        description: '### Summary\n\nCapture images.',
+        status: { name: 'In Review', category: 'In Progress' },
+        assignee: { account_id: 'a1', display_name: 'Sam Lee' },
+        updated: '2026-10-22 15:49:59 IST',
+      },
+      { id: 'key', updatedAt: 'updated' },
+    );
+    expect(i).toMatchObject({
+      id: 'TVI-569',
+      title: 'Build vehicle inspection capture',
+      description: '### Summary\n\nCapture images.',
+      status: 'In Review',
+      assignee: 'Sam Lee',
+      url: 'https://example.atlassian.net/browse/TVI-569',
+    });
+  });
+});
 
 describe('normalize', () => {
   it('renders argument templates', () => {
@@ -117,6 +162,58 @@ describe('normalize', () => {
     expect(normalizeIssue({ foo: 1 })).toBeNull();
   });
 
+  it('finds ticket keys in a chat message', () => {
+    expect(
+      extractTicketKeys(
+        'Fix TVI-569 and TVI-569 again, see #WA-2, WA-3, PROJ_X-12, ab-1, x/TVI-1, TVI-2.',
+        new Set(['WA-3']),
+      ),
+    ).toEqual(['TVI-569', 'PROJ_X-12', 'TVI-2']);
+    expect(extractTicketKeys('A1-1 B1-2 C1-3', new Set(), 2)).toEqual(['A1-1', 'B1-2']);
+  });
+
+  it('binds constants and leaves other placeholders for render time', () => {
+    expect(
+      bindConstants(
+        { cloudId: '{{cloudId}}', jql: 'project = {{project}}', t: [{ id: '{{cloudId}}' }], n: 5 },
+        { cloudId: 'c-1' },
+      ),
+    ).toEqual({ cloudId: 'c-1', jql: 'project = {{project}}', t: [{ id: 'c-1' }], n: 5 });
+  });
+
+  it('finds the transition into a status', () => {
+    const jira = extractItems({
+      expand: 'transitions',
+      transitions: [
+        { id: '21', name: 'Start progress', to: { name: 'In Progress' } },
+        { id: '41', name: 'Done', to: { name: 'Done' } },
+      ],
+    });
+    expect(findTransition(jira, 'in progress')).toBe('21');
+    expect(findTransition(jira, 'Done')).toBe('41');
+    expect(findTransition(jira, 'In Review')).toBeNull();
+    expect(transitionNames(jira)).toEqual(['In Progress', 'Done']);
+    // mcp-atlassian's flattened shape, and matching on the transition name alone.
+    expect(findTransition([{ id: 31, name: 'Review', to_status: 'In Review' }], 'In Review')).toBe(
+      '31',
+    );
+    expect(findTransition([{ id: '5', name: 'Reopen' }], 'reopen')).toBe('5');
+  });
+
+  it('picks the Jira site from Atlassian resources', () => {
+    expect(
+      pickAtlassianSite([
+        { id: 'wiki', url: 'https://w', scopes: ['read:confluence-content'] },
+        { id: 'jira-1', url: 'https://acme.atlassian.net', scopes: ['read:jira-work'] },
+      ]),
+    ).toBe('jira-1');
+    expect(pickAtlassianSite({ resources: [{ url: 'https://acme.atlassian.net' }] })).toBe(
+      'https://acme.atlassian.net',
+    );
+    expect(pickAtlassianSite([])).toBeNull();
+    expect(pickAtlassianSite('not json')).toBeNull();
+  });
+
   it('detects a tool map from tool schemas', () => {
     const map = detectToolMap([
       { name: 'search_issues', inputSchema: { properties: { project_key: {}, max_results: {} } } },
@@ -137,6 +234,18 @@ describe('normalize', () => {
       tool: 'add_issue_comment',
       args: { issue_key: '{{issueId}}', body: '{{body}}' },
     });
+    expect(map.transitions).toBeUndefined();
+
+    // A transitions lister isn't mistaken for the status changer.
+    const jira = detectToolMap([
+      { name: 'jira_get_transitions', inputSchema: { properties: { issue_key: {} } } },
+      { name: 'jira_transition_issue', inputSchema: { properties: { issue_key: {} } } },
+    ]);
+    expect(jira.transitions).toEqual({
+      tool: 'jira_get_transitions',
+      args: { issue_key: '{{issueId}}' },
+    });
+    expect(jira.updateStatus?.tool).toBe('jira_transition_issue');
   });
 });
 
@@ -243,7 +352,7 @@ afterEach(async () => {
   rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
-const createStdioServer = async (token = TOKEN) =>
+const createStdioServer = async (token = TOKEN, extraEnv: { key: string; value: string }[] = []) =>
   (
     await t.app.inject({
       method: 'POST',
@@ -257,13 +366,19 @@ const createStdioServer = async (token = TOKEN) =>
           { key: 'FAKE_PMS_STATE', value: statePath },
           { key: 'FAKE_PMS_REQUIRE_TOKEN', value: TOKEN },
           { key: 'FAKE_PMS_TOKEN', value: token, secret: true },
+          ...extraEnv,
         ],
       },
     })
   ).json() as McpServerDto;
 
-async function connect(opts: { writeBack?: boolean; autoEnrich?: boolean } = {}) {
-  const server = await createStdioServer();
+async function connect(
+  opts: { writeBack?: boolean; autoEnrich?: boolean; fastmcp?: boolean } = {},
+) {
+  const server = await createStdioServer(
+    TOKEN,
+    opts.fastmcp ? [{ key: 'FAKE_PMS_WRAP', value: 'fastmcp' }] : [],
+  );
   const toolMap = (
     await t.app.inject({
       method: 'POST',
@@ -630,6 +745,167 @@ describe('PMS sync', () => {
       status: 'DRAFT',
     });
     expect(byExt('WEB-1').subtasks.map((s) => s.title)).toEqual(['Build form', 'Wire submit']);
+  });
+
+  it('sets up the hosted Atlassian server by itself and moves tickets by transition id', async () => {
+    const server = (
+      await t.app.inject({
+        method: 'POST',
+        url: '/api/mcp/servers',
+        payload: {
+          name: 'Atlassian',
+          transport: 'stdio',
+          command: process.execPath,
+          args: [SERVER],
+          env: [
+            { key: 'FAKE_PMS_STATE', value: statePath },
+            { key: 'FAKE_PMS_FLAVOR', value: 'atlassian' },
+          ],
+        },
+      })
+    ).json() as McpServerDto;
+    const toolMap = (
+      await t.app.inject({
+        method: 'POST',
+        url: '/api/pms/detect',
+        payload: { mcpServerId: server.id, provider: 'jira' },
+      })
+    ).json();
+    // Every operation, with the Jira site (not the Confluence-only one) filled in.
+    expect(toolMap.list).toMatchObject({
+      tool: 'searchJiraIssuesUsingJql',
+      args: { cloudId: 'cloud-123', jql: expect.stringContaining('project = {{project}}') },
+    });
+    expect(toolMap.transitions).toEqual({
+      tool: 'getTransitionsForJiraIssue',
+      args: { cloudId: 'cloud-123', issueIdOrKey: '{{issueId}}' },
+    });
+    expect(toolMap.updateStatus.args.transition).toEqual({ id: '{{transitionId}}' });
+    expect(toolMap.comment.tool).toBe('addCommentToJiraIssue');
+
+    const conn = (
+      await t.app.inject({
+        method: 'POST',
+        url: '/api/pms/connections',
+        payload: { name: 'Jira', provider: 'jira', mcpServerId: server.id, toolMap },
+      })
+    ).json();
+    const mapping = (
+      await t.app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/pms`,
+        payload: {
+          connectionId: conn.id,
+          externalProject: 'WEB',
+          statusMap: {
+            'To Do': 'APPROVED',
+            'In Progress': 'IN_DEVELOPMENT',
+            'In Review': 'IN_REVIEW',
+            Done: 'DONE',
+          },
+          autoEnrich: false,
+        },
+      })
+    ).json() as PmsMappingDto;
+    expect((await sync(mapping.id)).json()).toMatchObject({ total: 2, created: 2, errors: [] });
+    expect(byExt('WEB-1')).toMatchObject({ title: 'Add a contact form', status: 'DRAFT' });
+
+    const id = byExt('WEB-1').id;
+    for (const s of [
+      'APPROVED',
+      'QUEUED',
+      'IN_DEVELOPMENT',
+      'IN_REVIEW',
+      'IN_TESTING',
+      'DOCUMENTING',
+      'DONE',
+    ] as const)
+      t.ctx.tasks.transition(id, s, 'test', 'test');
+    await until(() => state().comments.length === 1);
+    // "To Do" is skipped: the ticket is already there, so Jira offers no transition to it.
+    expect(state().transitions).toEqual([
+      { key: 'WEB-1', status: 'In Progress' },
+      { key: 'WEB-1', status: 'In Review' },
+      { key: 'WEB-1', status: 'Done' },
+    ]);
+    expect(state().comments[0]!.body).toMatch(/^✅ Completed by AI Harness/);
+    const m = (await t.app.inject({ url: `/api/projects/${projectId}/pms` })).json()[0];
+    expect(m.lastError).toBeNull();
+  });
+
+  it('explains a status the Jira workflow cannot reach', async () => {
+    const { conn, mapping } = await connect();
+    await sync(mapping.id);
+    // Same fake tracker, but answering transitions like a Jira board without "In Progress".
+    await t.app.inject({
+      method: 'PUT',
+      url: `/api/pms/connections/${conn.id}`,
+      payload: {
+        ...conn,
+        toolMap: {
+          ...conn.toolMap,
+          transitions: { tool: 'search_issues', args: { project_key: 'NONE' } },
+        },
+      },
+    });
+    const id = byExt('WEB-1').id;
+    for (const s of ['APPROVED', 'QUEUED', 'IN_DEVELOPMENT'] as const)
+      t.ctx.tasks.transition(id, s, 'test', 'test');
+    await until(
+      () =>
+        events.filter(
+          (e) => e.type === 'notification' && e.payload.title === 'Issue tracker update failed',
+        ).length === 1,
+    );
+    const m = (await t.app.inject({ url: `/api/projects/${projectId}/pms` })).json()[0];
+    expect(m.lastError).toMatch(/workflow has no transition to "In Progress"/);
+  });
+
+  it('hands tickets mentioned in the chat to the Planner', async () => {
+    await connect();
+    agent.setResponses([
+      { match: '--version', stdout: '2.1.327' },
+      {
+        match: 'auth status',
+        stdout: JSON.stringify({ loggedIn: true, loginExpiresAt: '2099-01-01T00:00:00Z' }),
+      },
+      {
+        match: '-p',
+        stdout: claudeStream(JSON.stringify({ type: 'reply', message: 'Here is the analysis.' })),
+      },
+    ]);
+    const res = await t.app.inject({
+      method: 'POST',
+      url: `/api/projects/${projectId}/chat`,
+      payload: {
+        content: 'Analyse WEB-2 and WEB-99, compare with API-1. Use UTF-8.',
+        intent: 'discuss',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    await until(() => !t.ctx.planner.state(projectId).running);
+    const prompt = agent
+      .calls()
+      .filter((c) => c.args[0] === '-p')
+      .at(-1)!.stdin;
+    expect(prompt).toContain('## Tracker tickets the user referenced');
+    expect(prompt).toContain(
+      '### WEB-2: Footer link is broken\nFrom Other (custom MCP server) (Tracker) (status: To Do · labels: bug · https://tracker/WEB-2)\nPoints to /old.',
+    );
+    expect(prompt).toMatch(/### WEB-99: could not be read[\s\S]*No issue WEB-99/);
+    // Not under a linked tracker project: flagged, not fetched.
+    expect(prompt).toContain('### Not looked up: API-1, UTF-8');
+  });
+
+  it('syncs and looks up tickets from servers that wrap replies (Python FastMCP)', async () => {
+    const { mapping } = await connect({ fastmcp: true });
+    expect((await sync(mapping.id)).json()).toMatchObject({ total: 3, created: 2, errors: [] });
+    const [ref] = await t.ctx.pms.lookupTickets(projectId, ['WEB-2']);
+    expect(ref).toMatchObject({
+      key: 'WEB-2',
+      status: 'found',
+      issue: { title: 'Footer link is broken', description: 'Points to /old.' },
+    });
   });
 
   it('rejects duplicate links and surfaces sync errors', async () => {

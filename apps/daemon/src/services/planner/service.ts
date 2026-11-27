@@ -39,6 +39,7 @@ import {
   type PlannerContext,
   type PlannerMode,
 } from './prompt';
+import { extractTicketKeys, type TicketReference, type TicketSource } from './tickets';
 
 type MessageRow = typeof requirements.$inferSelect;
 
@@ -75,6 +76,8 @@ export interface PlannerDeps {
   settings: SettingsService;
   memory: MemoryService;
   attachments: AttachmentStore;
+  /** Reads tracker tickets mentioned in chat (absent: tickets aren't looked up). */
+  tickets?: TicketSource;
   log: { warn: (o: unknown, m?: string) => void; error: (o: unknown, m?: string) => void };
 }
 
@@ -393,7 +396,7 @@ export class PlannerService {
         content: `${engine.displayName} (the Planner engine) is not installed. Install it or pick another engine in Settings → Default engines.`,
       });
     }
-    const ctx = this.context(job, project);
+    const ctx = this.context(job, project, await this.referencedTickets(job));
     const allowed = ALLOWED_OUTPUTS[job.mode].filter(
       (t) => t !== 'questions' || job.allowQuestions,
     );
@@ -609,7 +612,30 @@ export class PlannerService {
 
   // ─── Context ───────────────────────────────────────────────────────────────
 
-  private context(job: Job, project: typeof projects.$inferSelect): PlannerContext {
+  /** Tracker tickets mentioned in the message, read through the project's linked trackers. */
+  private async referencedTickets(job: Job): Promise<TicketReference[]> {
+    if (!this.d.tickets) return [];
+    const ownKeys = new Set(this.d.tasks.board(job.projectId).tasks.map((t) => t.key));
+    const keys = extractTicketKeys(`${job.requirement}\n${job.instructions ?? ''}`, ownKeys);
+    if (!keys.length) return [];
+    try {
+      return await this.d.tickets.lookup(job.projectId, keys);
+    } catch (err) {
+      this.d.log.warn({ err, projectId: job.projectId }, 'Ticket lookup failed');
+      return keys.map((key) => ({
+        key,
+        status: 'failed',
+        tracker: 'the issue tracker',
+        reason: (err as Error).message.slice(0, 300),
+      }));
+    }
+  }
+
+  private context(
+    job: Job,
+    project: typeof projects.$inferSelect,
+    referencedTickets: TicketReference[] = [],
+  ): PlannerContext {
     const board = this.d.tasks.board(job.projectId);
     const plan = board.plans[0] ?? null;
     const memory = this.d.memory.forPrompt(
@@ -658,6 +684,7 @@ export class PlannerService {
       targetTask: job.targetTaskId ? board.tasks.find((t) => t.id === job.targetTaskId) : undefined,
       referencedFiles: job.references.files,
       referencedTasks,
+      referencedTickets,
       attachments: job.attachments,
       engines: [...this.usableEngines()],
       allowQuestions: job.allowQuestions,

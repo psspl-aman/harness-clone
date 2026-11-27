@@ -16,6 +16,7 @@ import { projects } from '../db/schema';
 import type { EventBus } from '../events/bus';
 import { badRequest, conflict, notFound } from '../http/errors';
 import { interactiveShell, shellCommand } from '../lib/platform';
+import { needsInstall } from './dependency-check';
 import { stripAnsi } from './errors/matchers';
 import type { ErrorService } from './errors/error-service';
 import type { ProjectService } from './projects';
@@ -41,10 +42,24 @@ interface ServiceState extends ServiceRunDto {
   stopping: boolean;
 }
 
+/** A server waiting to start, with its resolved folder. */
+interface Launch {
+  s: ServiceState;
+  cwd: string;
+}
+
+/** The install command running before the servers start. */
+interface PendingInstall {
+  terminalId: string;
+  stopping: boolean;
+  launches: Launch[];
+}
+
 interface ProjectRun {
   projectId: string;
   startedAt: number;
   services: ServiceState[];
+  install: PendingInstall | null;
 }
 
 /** Is something already listening on this port (IPv4 or IPv6 loopback)? */
@@ -124,6 +139,7 @@ export class RunService {
     );
     const main = withUrl.find((s) => MAIN_SERVICE.test(s.name)) ?? withUrl[0] ?? null;
     const crashed = services.find((s) => s.status === 'crashed');
+    const installTerminalId = r?.install?.terminalId ?? null;
     return {
       projectId,
       status,
@@ -131,7 +147,8 @@ export class RunService {
         services.length > 1
           ? services.map((s) => s.name).join(' + ')
           : (services[0]?.command ?? null),
-      terminalId: services.find((s) => s.terminalId)?.terminalId ?? null,
+      terminalId: installTerminalId ?? services.find((s) => s.terminalId)?.terminalId ?? null,
+      installTerminalId,
       previewUrl: main?.url ?? null,
       startedAt: r?.startedAt ?? null,
       exitCode: crashed?.exitCode ?? null,
@@ -165,9 +182,9 @@ export class RunService {
           : null;
       }),
     );
-    const run: ProjectRun = { projectId, startedAt: Date.now(), services: [] };
+    const run: ProjectRun = { projectId, startedAt: Date.now(), services: [], install: null };
     this.runs.set(projectId, run);
-    const multi = defs.length > 1;
+    const launches: Launch[] = [];
     defs.forEach((d, i) => {
       const s: ServiceState = {
         name: d.name,
@@ -187,32 +204,18 @@ export class RunService {
         s.status = 'crashed';
         return;
       }
-      let cwd: string;
       try {
-        cwd = this.serviceCwd(p.localPath, d.cwd);
+        launches.push({ s, cwd: this.serviceCwd(p.localPath, d.cwd) });
       } catch (err) {
         s.status = 'crashed';
         s.error = (err as Error).message;
-        return;
       }
-      const term = this.spawn(p, 'run', d.command, {
-        cwd,
-        title: multi ? `${TITLES.run} · ${d.name}` : TITLES.run,
-        env: d.port ? { PORT: String(d.port) } : {},
-      });
-      s.terminalId = term.id;
-      // No URL printed? Consider it running once it has stayed up for a few seconds.
-      this.settle.set(
-        term.id,
-        setTimeout(() => {
-          if (s.status !== 'starting') return;
-          this.patch(projectId, s, {
-            status: 'running',
-            url: s.url ?? (s.port ? `http://localhost:${s.port}` : null),
-          });
-        }, SETTLE_MS).unref(),
-      );
     });
+    const install = launches.length ? this.installFirst(p, launches) : null;
+    if (install) {
+      const term = this.spawn(p, 'install', install);
+      run.install = { terminalId: term.id, stopping: false, launches };
+    } else this.launch(p, run, launches);
     this.update(projectId);
     if (run.services.every((s) => s.status === 'crashed'))
       throw badRequest(
@@ -226,32 +229,44 @@ export class RunService {
 
   async stop(projectId: string): Promise<ProjectRunDto> {
     const r = this.runs.get(projectId);
-    const live = r?.services.filter(
-      (s) => s.terminalId && (s.status === 'running' || s.status === 'starting'),
-    );
-    if (!live?.length) return this.status(projectId);
-    await Promise.all(
-      live.map((s) => {
-        s.stopping = true;
-        const id = s.terminalId!;
-        this.errors.expectExit(id);
-        const exited = new Promise<void>((done) => {
-          const off = this.bus.subscribe((e) => {
-            if (e.type === 'terminal.exit' && e.payload.terminalId === id) {
-              off();
-              done();
-            }
-          });
-          setTimeout(() => {
-            off();
-            done();
-          }, 5000).unref();
-        });
-        this.terminals.kill(id);
-        return exited;
-      }),
-    );
+    const live =
+      r?.services.filter(
+        (s) => s.terminalId && (s.status === 'running' || s.status === 'starting'),
+      ) ?? [];
+    const install = r?.install;
+    if (!live.length && !install) return this.status(projectId);
+    const ids = live.map((s) => {
+      s.stopping = true;
+      return s.terminalId!;
+    });
+    if (install) {
+      // Servers still waiting on the install never started: stopping them is immediate.
+      install.stopping = true;
+      for (const { s } of install.launches) s.status = 'stopped';
+      ids.push(install.terminalId);
+      this.update(projectId);
+    }
+    await Promise.all(ids.map((id) => this.terminate(id)));
     return this.status(projectId);
+  }
+
+  /** Kill a terminal and wait (briefly) for it to exit; a deliberate stop isn't an error. */
+  private terminate(id: string): Promise<void> {
+    this.errors.expectExit(id);
+    const exited = new Promise<void>((done) => {
+      const off = this.bus.subscribe((e) => {
+        if (e.type === 'terminal.exit' && e.payload.terminalId === id) {
+          off();
+          done();
+        }
+      });
+      setTimeout(() => {
+        off();
+        done();
+      }, 5000).unref();
+    });
+    this.terminals.kill(id);
+    return exited;
   }
 
   async restart(projectId: string): Promise<ProjectRunDto> {
@@ -285,6 +300,61 @@ export class RunService {
 
   stopAll(): void {
     for (const t of this.settle.values()) clearTimeout(t);
+  }
+
+  /**
+   * The install command to run before the servers, when it's set and the project's
+   * packages are missing or older than its manifest/lockfile; otherwise null.
+   */
+  private installFirst(p: typeof projects.$inferSelect, launches: Launch[]): string | null {
+    const command = p.commands.install?.trim();
+    if (!command) return null;
+    return needsInstall(
+      p.localPath,
+      launches.map((l) => l.cwd),
+    )
+      ? command
+      : null;
+  }
+
+  /** Start each server in its own terminal. */
+  private launch(p: typeof projects.$inferSelect, run: ProjectRun, launches: Launch[]) {
+    const multi = run.services.length > 1;
+    for (const { s, cwd } of launches) {
+      s.startedAt = Date.now();
+      const term = this.spawn(p, 'run', s.command, {
+        cwd,
+        title: multi ? `${TITLES.run} · ${s.name}` : TITLES.run,
+        env: s.port ? { PORT: String(s.port) } : {},
+      });
+      s.terminalId = term.id;
+      // No URL printed? Consider it running once it has stayed up for a few seconds.
+      this.settle.set(
+        term.id,
+        setTimeout(() => {
+          if (s.status !== 'starting') return;
+          this.patch(run.projectId, s, {
+            status: 'running',
+            url: s.url ?? (s.port ? `http://localhost:${s.port}` : null),
+          });
+        }, SETTLE_MS).unref(),
+      );
+    }
+  }
+
+  /** The install before a run finished: start the servers, or explain why they can't. */
+  private onInstalled(run: ProjectRun, install: PendingInstall, code: number | null) {
+    run.install = null;
+    if (install.stopping) return;
+    const p = this.db.select().from(projects).where(eq(projects.id, run.projectId)).get();
+    if (code === 0 && p && !p.archivedAt) {
+      this.launch(p, run, install.launches);
+    } else {
+      const error = `Installing dependencies failed${code !== null ? ` (exit ${code})` : ''} — see the “${TITLES.install}” terminal, or fix the install command in Overview → Commands.`;
+      for (const { s } of install.launches)
+        Object.assign(s, { status: 'crashed', exitCode: code, error });
+    }
+    this.update(run.projectId);
   }
 
   private serviceCwd(root: string, dir: string | null | undefined): string {
@@ -357,6 +427,9 @@ export class RunService {
   }
 
   private onExit(terminalId: string, code: number | null) {
+    for (const run of this.runs.values()) {
+      if (run.install?.terminalId === terminalId) return this.onInstalled(run, run.install, code);
+    }
     const hit = this.find(terminalId);
     if (!hit) return;
     this.clearSettle(terminalId);

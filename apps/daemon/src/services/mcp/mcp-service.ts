@@ -22,6 +22,9 @@ import { AppError, badRequest, notFound } from '../../http/errors';
 import { newId } from '../../lib/id';
 import { PRODUCT_SLUG } from '../../lib/product';
 import type { SecretStore } from '../secrets';
+import { toToolResult, type ToolResult } from './tool-result';
+
+export type { ToolResult } from './tool-result';
 
 type ServerRow = typeof mcpServers.$inferSelect;
 
@@ -41,14 +44,6 @@ export class McpError extends AppError {
   constructor(message: string) {
     super(502, 'MCP_ERROR', message);
   }
-}
-
-/** Parsed result of an MCP tool call. */
-export interface ToolResult {
-  isError: boolean;
-  /** structuredContent, or the JSON parsed from the text content when it is JSON. */
-  json: unknown;
-  text: string;
 }
 
 /**
@@ -193,21 +188,7 @@ export class McpService {
     const r = await this.withClient(id, (c) =>
       c.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }),
     );
-    const text = Array.isArray(r.content)
-      ? (r.content as { type: string; text?: string }[])
-          .filter((p) => p.type === 'text' && typeof p.text === 'string')
-          .map((p) => p.text)
-          .join('\n')
-      : '';
-    let json: unknown = (r as { structuredContent?: unknown }).structuredContent ?? undefined;
-    if (json === undefined && text.trim()) {
-      try {
-        json = JSON.parse(text);
-      } catch {
-        json = undefined;
-      }
-    }
-    return { isError: !!r.isError, json, text };
+    return toToolResult(r);
   }
 
   // ─── Connections ───────────────────────────────────────────────────────────

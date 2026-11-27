@@ -81,7 +81,7 @@ test('connect a tracker over MCP, import tickets, handle a change and write back
   await cd.getByLabel('MCP server').click();
   await page.getByRole('option', { name: 'Fake tracker' }).click();
   await cd.getByRole('button', { name: 'Auto-detect' }).click();
-  await expect(page.getByText('Found 4 of 4 operations')).toBeVisible();
+  await expect(page.getByText('Found 4 of 5 operations')).toBeVisible();
   await cd.getByLabel('Try it').fill('WEB');
   await cd.getByRole('button', { name: 'Preview' }).click();
   await expect(cd.getByTestId('pms-preview')).toContainText('WEB-1');
