@@ -99,6 +99,22 @@ export function PipelineSettingsCard({ project }: { project: ProjectDetail }) {
             />
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="pp-budget">Monthly budget ($)</Label>
+            <Input
+              id="pp-budget"
+              type="number"
+              min={0}
+              max={1000000}
+              step={1}
+              placeholder={g?.monthlyBudgetUsd ? `Default ($${g.monthlyBudgetUsd})` : 'No cap'}
+              value={v.monthlyBudgetUsd ?? ''}
+              onChange={(e) =>
+                set({ monthlyBudgetUsd: e.target.value ? Number(e.target.value) : null })
+              }
+              className="h-8"
+            />
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="pp-review">Review before merge</Label>
             <Select
               value={v.requireHumanReview === null ? DEFAULT : v.requireHumanReview ? 'on' : 'off'}

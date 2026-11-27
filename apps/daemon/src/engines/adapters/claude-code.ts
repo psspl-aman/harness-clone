@@ -40,6 +40,7 @@ export class ClaudeCodeAdapter extends CliAdapter {
     apiKey: true,
     resume: true,
     modelList: false,
+    effort: true,
   };
   override readonly staticModels = [
     { id: 'opus', label: 'Opus (latest)' },
@@ -67,6 +68,8 @@ export class ClaudeCodeAdapter extends CliAdapter {
   protected buildCommand(input: AgentRunInput): BuiltCommand {
     const args = ['-p', '--output-format', 'stream-json', '--verbose'];
     if (input.model) args.push('--model', input.model);
+    // `claude --effort <low|medium|high|xhigh|max>` (Claude Code 2.1.x).
+    if (input.effort) args.push('--effort', input.effort);
     if (input.resumeSessionId) args.push('--resume', input.resumeSessionId);
     if (input.systemPrompt) args.push('--append-system-prompt', input.systemPrompt);
     // AI Harness's own MCP tools (project memory, task, errors) for this run.
@@ -229,7 +232,8 @@ export class ClaudeCodeAdapter extends CliAdapter {
           state.succeeded = false;
           const evidence = [
             text,
-            d.subtype,
+            // `subtype` is "success" even on is_error results (e.g. a 401) — don't echo it.
+            d.subtype !== 'success' ? d.subtype : '',
             d.api_error_status ? `HTTP ${String(d.api_error_status)}` : '',
           ]
             .filter(Boolean)

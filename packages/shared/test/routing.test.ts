@@ -18,18 +18,18 @@ describe('complexity routing', () => {
 
   it('maps complexity to a pipeline profile and model when enabled', () => {
     const routing: Routing = { ...DEFAULT_ROUTING, enabled: true };
-    expect(routingRuleFor(routing, 'xs')).toEqual({ pipeline: 'lite', model: 'haiku' });
-    expect(routingRuleFor(routing, 's')).toEqual({ pipeline: 'lite', model: 'haiku' });
-    expect(routingRuleFor(routing, 'm')).toEqual({ pipeline: 'full', model: null });
-    expect(routingRuleFor(routing, 'l')).toEqual({ pipeline: 'full', model: 'opus' });
-    expect(routingRuleFor(routing, 'xl')).toEqual({ pipeline: 'full', model: 'opus' });
+    expect(routingRuleFor(routing, 'xs')).toEqual({ pipeline: 'lite', model: 'haiku', effort: null });
+    expect(routingRuleFor(routing, 's')).toEqual({ pipeline: 'lite', model: 'haiku', effort: null });
+    expect(routingRuleFor(routing, 'm')).toEqual({ pipeline: 'full', model: null, effort: null });
+    expect(routingRuleFor(routing, 'l')).toEqual({ pipeline: 'full', model: 'opus', effort: null });
+    expect(routingRuleFor(routing, 'xl')).toEqual({ pipeline: 'full', model: 'opus', effort: null });
   });
 
   it('prefers a project override over the global routing', () => {
     const global: Routing = { ...DEFAULT_ROUTING, enabled: true };
     const override: Routing = {
       enabled: true,
-      profiles: { ...DEFAULT_ROUTING.profiles, xs: { pipeline: 'full', model: null } },
+      profiles: { ...DEFAULT_ROUTING.profiles, xs: { pipeline: 'full', model: null, effort: null } },
     };
     expect(resolveRouting(global, null)).toBe(global);
     expect(resolveRouting(global, undefined)).toBe(global);
@@ -37,6 +37,7 @@ describe('complexity routing', () => {
     expect(routingRuleFor(resolveRouting(global, override), 'xs')).toEqual({
       pipeline: 'full',
       model: null,
+      effort: null,
     });
   });
 });

@@ -1,10 +1,8 @@
 'use client';
 
-import type { AgentEvent, AgentRunResultDto, EngineInfo } from '@ai-harness/shared';
-import { useMutation } from '@tanstack/react-query';
+import type { AgentEvent, EngineInfo } from '@ai-harness/shared';
 import { CheckCircle2, CircleStop, Loader2, Play, XCircle } from 'lucide-react';
 import { useState } from 'react';
-import { useLiveEvent, useLiveTopic } from '@/components/live-provider';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,8 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { api, ApiClientError } from '@/lib/api';
+import { ApiClientError } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useEngineTest } from './use-engine-test';
 
 function describe(e: AgentEvent): { text: string; tone?: string } | null {
   switch (e.kind) {
@@ -64,24 +63,8 @@ export function TestRunDialog({
   onOpenChange: (o: boolean) => void;
 }) {
   const [prompt, setPrompt] = useState('Reply with exactly: OK');
-  const [runId, setRunId] = useState<string | null>(null);
-  const [events, setEvents] = useState<AgentEvent[]>([]);
-  const [result, setResult] = useState<AgentRunResultDto | null>(null);
-  useLiveTopic(runId ? `run:${runId}` : null);
-  useLiveEvent((e) => {
-    if (e.type === 'run.event' && e.payload.runId === runId)
-      setEvents((xs) => [...xs, e.payload.event]);
-    if (e.type === 'run.finished' && e.payload.runId === runId) setResult(e.payload.result);
-  });
-  const start = useMutation({
-    mutationFn: () =>
-      api.engines.test(engine.id, { prompt, model: engine.defaultModel ?? undefined }),
-    onMutate: () => {
-      setEvents([]);
-      setResult(null);
-    },
-    onSuccess: (r) => setRunId(r.runId),
-  });
+  const test = useEngineTest(engine.id);
+  const { runId, events, result, start } = test;
   const running = !!runId && !result;
 
   return (
@@ -97,7 +80,7 @@ export function TestRunDialog({
           className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!running) start.mutate();
+            if (!running) start.mutate({ prompt, model: engine.defaultModel ?? undefined });
           }}
         >
           <Input
@@ -106,11 +89,7 @@ export function TestRunDialog({
             aria-label="Test prompt"
           />
           {running ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => runId && void api.engines.cancelRun(runId)}
-            >
+            <Button type="button" variant="outline" onClick={test.cancel}>
               <CircleStop /> Stop
             </Button>
           ) : (

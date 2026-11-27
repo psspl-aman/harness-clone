@@ -16,7 +16,14 @@ import {
   type TaskStatus,
   type TaskType,
 } from './enums';
-import { EngineIdSchema, ModelIdSchema, type RoleEngines, type RoleModels } from './settings';
+import {
+  EffortSchema,
+  EngineIdSchema,
+  ModelIdSchema,
+  type Effort,
+  type RoleEngines,
+  type RoleModels,
+} from './settings';
 import type { TaskPipelineDto } from './pipeline';
 import type { TaskTimingDto } from './estimate';
 
@@ -200,6 +207,8 @@ export interface TaskDto {
   affectedAreas: string[];
   roleEngines: Partial<RoleEngines>;
   roleModels: RoleModels;
+  /** Reasoning-effort override; null → the project's effort. */
+  effort: Effort | null;
   orderIndex: number;
   dependsOn: string[];
   subtasks: SubtaskDto[];
@@ -247,6 +256,7 @@ const editable = {
   affectedAreas: strList(30, 300),
   roleEngines: z.partialRecord(z.enum(AGENT_ROLES), EngineIdSchema),
   roleModels: z.partialRecord(z.enum(AGENT_ROLES), ModelIdSchema),
+  effort: EffortSchema.nullable(),
 };
 
 export const UpdateTaskInputSchema = z.object(editable).partial().strict();
@@ -262,6 +272,7 @@ export const CreateTaskInputSchema = z.object({
   affectedAreas: editable.affectedAreas.default([]),
   roleEngines: editable.roleEngines.default({}),
   roleModels: editable.roleModels.default({}),
+  effort: editable.effort.default(null),
   dependsOn: z.array(z.string().max(64)).max(20).default([]),
   subtasks: strList(15, 300).default([]),
 });

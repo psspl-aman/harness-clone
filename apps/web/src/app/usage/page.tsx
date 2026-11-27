@@ -30,6 +30,11 @@ const tokens = (n: number) =>
         : String(Math.round(n));
 const usd = (n: number) =>
   n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`;
+/** A cost, marked "~… est." when (part of) it is estimated from list prices. */
+const usdEst = (n: number, estimated = 0) =>
+  estimated > 0 ? `~${usd(n)}${estimated >= n * 0.99 ? ' est.' : ''}` : usd(n);
+const runsDetail = (b: { runs: number; estimatedCostUsd?: number }, cost: boolean) =>
+  `${b.runs} runs${cost && (b.estimatedCostUsd ?? 0) > 0 ? ' · est.' : ''}`;
 const ROLE: Record<string, string> = {
   planner: 'Planner',
   developer: 'Developer',
@@ -87,8 +92,8 @@ function Windows() {
     >
       {!list.length ? (
         <p className="text-muted-foreground text-sm">
-          No window data yet. Claude Code reports its 5-hour and 7-day windows after a run; for
-          other engines set a limit under{' '}
+          No window data yet. Claude Code and Codex report their 5-hour and 7-day windows after a
+          run; for other engines set a limit under{' '}
           <Link href="/agents" className="text-primary hover:underline">
             Agents &amp; Accounts
           </Link>
@@ -255,10 +260,13 @@ export default function UsagePage() {
             />
             <Stat
               label="Cost"
-              value={usd(s.totals.costUsd)}
+              value={usdEst(
+                s.totals.costUsd,
+                s.totals.estimatedCostUsd ?? s.totals.estimatedShare * s.totals.costUsd,
+              )}
               sub={[
                 s.totals.estimatedShare > 0
-                  ? `${Math.round(s.totals.estimatedShare * 100)}% estimated`
+                  ? `${Math.round(s.totals.estimatedShare * 100)}% estimated from list prices`
                   : 'as reported by the CLIs',
                 s.totals.unpricedRuns ? `${s.totals.unpricedRuns} runs unpriced` : '',
               ]
@@ -307,7 +315,7 @@ export default function UsagePage() {
                     key: b.key,
                     label: b.label,
                     value: val(b),
-                    detail: `${b.runs} runs`,
+                    detail: runsDetail(b, metric === 'cost'),
                   }))}
                 />
               );
@@ -322,7 +330,7 @@ export default function UsagePage() {
                   key: b.key,
                   label: engineName(b.key),
                   value: val(b),
-                  detail: `${b.runs} runs`,
+                  detail: runsDetail(b, metric === 'cost'),
                 }))}
               />
             </Panel>
@@ -333,7 +341,7 @@ export default function UsagePage() {
                   key: b.key,
                   label: ROLE[b.key] ?? b.key,
                   value: val(b),
-                  detail: `${b.runs} runs`,
+                  detail: runsDetail(b, metric === 'cost'),
                 }))}
               />
             </Panel>
@@ -344,7 +352,7 @@ export default function UsagePage() {
                   key: b.key,
                   label: b.label,
                   value: val(b),
-                  detail: `${b.runs} runs`,
+                  detail: runsDetail(b, metric === 'cost'),
                 }))}
               />
             </Panel>
@@ -355,7 +363,7 @@ export default function UsagePage() {
                   key: b.key,
                   label: b.label,
                   value: val(b),
-                  detail: `${b.runs} runs`,
+                  detail: runsDetail(b, metric === 'cost'),
                 }))}
               />
             </Panel>
@@ -390,7 +398,9 @@ export default function UsagePage() {
                           )}
                         </td>
                         <td className="py-1.5 text-right tabular-nums">{tokens(t.tokens)}</td>
-                        <td className="py-1.5 text-right tabular-nums">{usd(t.costUsd)}</td>
+                        <td className="py-1.5 text-right tabular-nums">
+                          {usdEst(t.costUsd, t.estimatedCostUsd)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -108,8 +108,9 @@ export function PricingEditor({
         </Button>
       </form>
       <p className="text-muted-foreground text-xs">
-        USD per 1M tokens. Used only when a CLI doesn’t report cost itself (Claude Code does); runs
-        with no matching price show as unpriced.
+        USD per 1M tokens. Used only when a CLI doesn’t report cost itself (Claude Code does).
+        Without a matching entry, cost is estimated from built-in list prices for common Claude,
+        GPT/Codex and Gemini models and shown as “est.”; your prices here take precedence.
       </p>
     </div>
   );

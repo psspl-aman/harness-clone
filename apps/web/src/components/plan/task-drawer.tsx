@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { EngineRoles } from '@/components/projects/engine-roles';
+import { EffortSelect, EngineRoles } from '@/components/projects/engine-roles';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -263,6 +263,10 @@ export function TaskDrawer({
     queryFn: () => api.board.get(projectId),
   });
   const chat = useQuery({ queryKey: qk.chat(projectId), queryFn: () => api.chat.list(projectId) });
+  const project = useQuery({
+    queryKey: qk.project(projectId),
+    queryFn: () => api.projects.get(projectId),
+  });
   const task = board.data?.tasks.find((t) => t.id === taskId) ?? null;
   const history = useQuery({
     queryKey: qk.taskHistory(taskId ?? ''),
@@ -531,12 +535,23 @@ export function TaskDrawer({
               </Field>
 
               <Field label="Agent engines & models">
-                <EngineRoles
-                  value={task.roleEngines}
-                  onChange={(v) => update.mutate({ roleEngines: v })}
-                  models={task.roleModels}
-                  onModelsChange={(v) => update.mutate({ roleModels: v })}
-                />
+                <div className="space-y-2">
+                  <EngineRoles
+                    value={task.roleEngines}
+                    onChange={(v) => update.mutate({ roleEngines: v })}
+                    models={task.roleModels}
+                    onModelsChange={(v) => update.mutate({ roleModels: v })}
+                    inherited={project.data}
+                    effort={task.effort ?? project.data?.effort}
+                  />
+                  <div className="rounded-xl border">
+                    <EffortSelect
+                      value={task.effort}
+                      onChange={(v) => update.mutate({ effort: v })}
+                      inherited={project.data?.effort}
+                    />
+                  </div>
+                </div>
               </Field>
 
               {requirement && (

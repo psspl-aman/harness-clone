@@ -58,6 +58,8 @@ export interface PipelineState {
   lastError?: { kind: EngineErrorKind | 'MERGE' | 'VERIFY'; message: string } | null;
   /** Consecutive quota pauses without a known reset time (drives backoff). */
   quotaProbe?: number;
+  /** Automatic resumes after an auth pause; capped so a broken credential can't loop. */
+  authResumes?: number;
   /** Set when resuming after a pause: continue the interrupted role's session. */
   resumeHint?: { role: AgentRole; sessionId: string | null; summary: string } | null;
   /** The PMS ticket changed while the task was in progress. */
@@ -266,6 +268,8 @@ export interface UsageTotals {
   costUsd: number;
   /** Share of cost that is estimated from the price table (0..1). */
   estimatedShare: number;
+  /** Part of costUsd estimated from prices (the CLI reported no cost). */
+  estimatedCostUsd?: number;
   unpricedRuns: number;
   durationMs: number;
 }
@@ -276,6 +280,8 @@ export interface UsageBucket {
   runs: number;
   tokens: number;
   costUsd: number;
+  /** Part of costUsd estimated from prices (the CLI reported no cost). */
+  estimatedCostUsd?: number;
 }
 
 export interface UsageSummaryDto {

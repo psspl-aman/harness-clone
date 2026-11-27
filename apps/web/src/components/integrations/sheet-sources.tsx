@@ -567,7 +567,7 @@ export function SheetSourceDialog({
             </div>
             <p className="text-muted-foreground text-xs">
               {kind === 'google'
-                ? 'Share the sheet as “Anyone with the link — Viewer” (or Publish to web). The tab in the link is the one that’s read. AgentForge only reads it.'
+                ? 'Share the sheet as “Anyone with the link — Viewer” (or Publish to web). The tab in the link is the one that’s read. AI Harness only reads it.'
                 : project
                   ? 'Upload a file, or give the full path of one on this machine. A path is re-read on every sync, so you can keep editing it in Excel; an upload is a copy — upload again to pick up changes.'
                   : 'The file is re-read on every sync, so you can keep editing it in Excel.'}

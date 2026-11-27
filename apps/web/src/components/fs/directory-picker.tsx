@@ -25,9 +25,21 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiClientError, qk } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+/** The daemon's OS, path separator, home folder and drive roots (cached for the session). */
+export function useFsRoots() {
+  return useQuery({ queryKey: qk.fsRoots, queryFn: api.fs.roots, staleTime: Infinity });
+}
 
 interface Props {
   open: boolean;
@@ -69,15 +81,20 @@ export function DirectoryPicker({
       toast.error(err instanceof ApiClientError ? err.message : 'Could not create folder'),
   });
 
-  // Breadcrumbs for both POSIX (/home/you) and Windows (C:\Users\you) paths.
-  const rawPath = data?.path ?? '';
-  const win = /^[A-Za-z]:[\\/]/.test(rawPath);
+  // Breadcrumbs for both POSIX (/home/you) and Windows (C:\Users\you) paths. The platform
+  // comes from the daemon, never from the (possibly failed) path itself.
+  const roots = useFsRoots().data;
+  const win = roots?.platform === 'win32';
+  const posix = roots?.platform === 'posix';
   const sep = win ? '\\' : '/';
+  const rawPath = data?.path ?? '';
   const segments = rawPath ? rawPath.split(/[\\/]/).filter(Boolean) : [];
   const crumbTarget = (i: number) => {
     const parts = segments.slice(0, i + 1);
+    // Windows: segment 0 is the drive (`C:`); its target is the root `C:\`, not `C:` (= cwd).
     return win ? (i === 0 ? parts[0] + sep : parts.join(sep)) : `/${parts.join('/')}`;
   };
+  const drive = win && /^[A-Za-z]:/.test(rawPath) ? `${rawPath[0]!.toUpperCase()}:\\` : '';
   // Callback ref in state: the dialog content mounts through a portal after the
   // first render, so a plain ref would still be null when the path loads.
   const [crumbsEl, setCrumbsEl] = useState<HTMLElement | null>(null);
@@ -116,21 +133,42 @@ export function DirectoryPicker({
           >
             <ArrowUp />
           </Button>
+          {win && !!roots?.drives.length && (
+            <Select value={drive} onValueChange={(d) => setPath(d)}>
+              <SelectTrigger
+                size="sm"
+                className="w-20 shrink-0 font-mono text-xs"
+                aria-label="Drive"
+              >
+                <SelectValue placeholder="Drive" />
+              </SelectTrigger>
+              <SelectContent>
+                {roots?.drives.map((d) => (
+                  <SelectItem key={d} value={d} className="font-mono text-xs">
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <nav
             aria-label="Current folder"
             ref={setCrumbsEl}
             className="bg-muted/60 flex min-w-0 flex-1 items-center overflow-x-auto rounded-md px-2 py-1.5 font-mono text-xs whitespace-nowrap"
           >
-            {!win && (
+            {posix && (
               <button className="hover:text-primary shrink-0" onClick={() => setPath('/')}>
                 /
               </button>
             )}
             {segments.map((seg, i) => (
               <span key={i} className="flex shrink-0 items-center">
-                {i > 0 && <span className="text-muted-foreground px-0.5">{sep}</span>}
+                {/* POSIX: `/` between every segment; Windows: the drive crumb carries its own `\`. */}
+                {(win ? i > 1 : i > 0) && (
+                  <span className="text-muted-foreground px-0.5">{sep}</span>
+                )}
                 <button className="hover:text-primary" onClick={() => setPath(crumbTarget(i))}>
-                  {seg}
+                  {win && i === 0 ? seg + sep : seg}
                 </button>
               </span>
             ))}

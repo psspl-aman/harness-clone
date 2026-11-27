@@ -40,6 +40,7 @@ import type {
   ReviewScope,
   RoleEngines,
   RoleModels,
+  Effort,
   Routing,
   RunStatus,
   ProjectServiceDto,
@@ -122,8 +123,12 @@ export const projectSettings = sqliteTable('project_settings', {
   roleModels: json<RoleModels>('role_models')
     .notNull()
     .default(sql`'{}'`),
+  /** Reasoning effort for every role's runs; null = the CLI default. */
+  effort: text('effort').$type<Effort>(),
   /** Complexity→pipeline routing override; null falls back to the global routing setting. */
   routing: json<Routing>('routing'),
+  /** Monthly spend cap (USD); null falls back to the global cap. */
+  monthlyBudgetUsd: real('monthly_budget_usd'),
   maxConcurrentTasks: integer('max_concurrent_tasks'),
   maxFixLoops: integer('max_fix_loops'),
   requireHumanReview: bool('require_human_review'),
@@ -252,6 +257,8 @@ export const tasks = sqliteTable(
     roleModels: json<RoleModels>('role_models')
       .notNull()
       .default(sql`'{}'`),
+    /** Reasoning effort override; null falls back to the project's effort. */
+    effort: text('effort').$type<Effort>(),
     orderIndex: real('order_index').notNull().default(0),
     fixLoopCount: integer('fix_loop_count').notNull().default(0),
     pipelineState: json<PipelineState>('pipeline_state')
@@ -533,6 +540,8 @@ export const engines = sqliteTable('engines', {
   authStatus: text('auth_status').$type<AuthStatus>().notNull().default('UNKNOWN'),
   authDetail: text('auth_detail'),
   accountLabel: text('account_label'),
+  /** Last real agent run's sign-in failure; holds the engine at EXPIRED across restarts even when the CLI's auth probe passes. Cleared on a successful run or re-login. */
+  runAuthError: text('run_auth_error'),
   resetAt: integer('reset_at'),
   models: json<{ id: string; label: string }[]>('models')
     .notNull()

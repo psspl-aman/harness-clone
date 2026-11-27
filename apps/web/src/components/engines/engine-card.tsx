@@ -9,7 +9,9 @@ import {
   ExternalLink,
   FlaskConical,
   KeyRound,
+  CheckCircle2,
   Loader2,
+  XCircle,
   LogIn,
   LogOut,
   Pencil,
@@ -37,6 +39,7 @@ import { CustomEngineDialog } from './custom-engine-dialog';
 import { LoginDialog } from './login-dialog';
 import { EngineStatusPill } from './status-pill';
 import { TestRunDialog } from './test-run-dialog';
+import { useEngineTest } from './use-engine-test';
 
 const ACCENTS: Record<string, string> = {
   'claude-code': 'from-orange-400 to-amber-600',
@@ -92,10 +95,72 @@ function UsageWindows({ engine }: { engine: EngineInfo }) {
   );
 }
 
+/** Inline pass/fail of the card's quick Test, with the error text on failure. */
+function TestResultLine({
+  test,
+  onDetails,
+}: {
+  test: ReturnType<typeof useEngineTest>;
+  onDetails: () => void;
+}) {
+  const r = test.result;
+  const failed = test.start.isError || (r && r.status !== 'succeeded');
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn(
+        'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm',
+        !r && !test.start.isError
+          ? 'bg-muted/40'
+          : failed
+            ? 'border-destructive/30 bg-destructive/10'
+            : 'border-success/30 bg-success/10',
+      )}
+    >
+      {!r && !test.start.isError ? (
+        <Loader2 className="text-muted-foreground mt-0.5 size-4 shrink-0 animate-spin" />
+      ) : failed ? (
+        <XCircle className="text-destructive mt-0.5 size-4 shrink-0" />
+      ) : (
+        <CheckCircle2 className="text-success mt-0.5 size-4 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">
+          {test.start.isError
+            ? 'Test could not start'
+            : !r
+              ? 'Testing — sending a tiny prompt…'
+              : r.status === 'succeeded'
+                ? `Test passed — answered “${r.finalText.trim().slice(0, 60)}”`
+                : r.status === 'cancelled'
+                  ? 'Test cancelled'
+                  : 'Test failed'}
+          {r && (
+            <span className="text-muted-foreground font-normal">
+              {' '}
+              · {(r.durationMs / 1000).toFixed(1)}s
+            </span>
+          )}
+        </p>
+        {(r?.error || test.start.isError) && (
+          <p className="text-muted-foreground mt-0.5 text-xs break-words whitespace-pre-wrap">
+            {r?.error?.message ?? errText(test.start.error)}
+          </p>
+        )}
+      </div>
+      <button className="text-primary shrink-0 text-xs hover:underline" onClick={onDetails}>
+        Details
+      </button>
+    </div>
+  );
+}
+
 export function EngineCard({ engine, index }: { engine: EngineInfo; index: number }) {
   const queryClient = useQueryClient();
   const [loginOpen, setLoginOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const quickTest = useEngineTest(engine.id);
   const [editOpen, setEditOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
@@ -208,14 +273,15 @@ export function EngineCard({ engine, index }: { engine: EngineInfo; index: numbe
               <LogIn /> {engine.authStatus === 'EXPIRED' ? 'Re-login' : 'Login'}
             </Button>
           )}
-          {installed && engine.authStatus === 'ACTIVE' && (
+          {installed && engine.authStatus !== 'LOGGED_OUT' && (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setTestOpen(true)}
-              disabled={!engine.enabled}
+              onClick={() => quickTest.start.mutate({ model: engine.defaultModel ?? undefined })}
+              disabled={!engine.enabled || quickTest.running}
+              title="Run a tiny real prompt through this engine"
             >
-              <FlaskConical /> Test
+              {quickTest.running ? <Loader2 className="animate-spin" /> : <FlaskConical />} Test
             </Button>
           )}
           <Button
@@ -230,6 +296,12 @@ export function EngineCard({ engine, index }: { engine: EngineInfo; index: numbe
           </Button>
         </div>
       </div>
+
+      {(quickTest.running || quickTest.result || quickTest.start.isError) && (
+        <div className="px-5 pb-3">
+          <TestResultLine test={quickTest} onDetails={() => setTestOpen(true)} />
+        </div>
+      )}
 
       {(installed && engine.usageWindows.length > 0) || !installed ? (
         <div className="space-y-4 px-5 pb-4">

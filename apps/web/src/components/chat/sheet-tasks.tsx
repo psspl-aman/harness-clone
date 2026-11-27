@@ -1,6 +1,6 @@
 'use client';
 
-import type { SheetSourceDto, TaskDto, TaskStatus } from '@agentforge/shared';
+import type { SheetSourceDto, TaskDto, TaskStatus } from '@ai-harness/shared';
 import { useMutation } from '@tanstack/react-query';
 import { AlertTriangle, FileSpreadsheet, RefreshCw, Settings2, Sheet } from 'lucide-react';
 import { useState } from 'react';

@@ -1,16 +1,19 @@
 import type {
+  AppSettings,
   ProjectCostDto,
   UsageBucket,
   UsageSummaryDto,
   UsageWindowStatusDto,
 } from '@ai-harness/shared';
-import { and, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, isNull, lte, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { projects, tasks, usageRecords } from '../db/schema';
 import type { EngineRegistry } from '../engines/registry';
+import { costOf } from '../lib/cost';
 
 const TOKENS = sql<number>`sum(${usageRecords.inputTokens} + ${usageRecords.outputTokens} + ${usageRecords.cacheReadTokens} + ${usageRecords.cacheWriteTokens})`;
 const COST = sql<number>`sum(${usageRecords.costUsd})`;
+const EST_COST = sql<number>`sum(case when ${usageRecords.costSource} = 'estimated' then ${usageRecords.costUsd} else 0 end)`;
 const RUNS = sql<number>`count(*)`;
 
 export interface UsageQuery {
@@ -25,9 +28,72 @@ export class UsageService {
   constructor(
     private readonly db: Db,
     private readonly engines: EngineRegistry,
+    private readonly pricing: () => AppSettings['pricing'] = () => ({}),
   ) {}
 
+  /**
+   * Price runs recorded before a price was known (cost 0, source 'none') with
+   * the current price table / built-in list prices. Cheap: only unpriced rows.
+   */
+  repriceUnpriced(): number {
+    const rows = this.db
+      .select()
+      .from(usageRecords)
+      .where(and(eq(usageRecords.costSource, 'none'), eq(usageRecords.costUsd, 0)))
+      .all();
+    let n = 0;
+    for (const r of rows) {
+      const cost = costOf(
+        { ...r, model: r.model ?? undefined, costUsd: undefined },
+        r.engineId,
+        this.pricing(),
+      );
+      if (cost.source !== 'estimated') continue;
+      this.db
+        .update(usageRecords)
+        .set({ costUsd: cost.costUsd, costSource: 'estimated' })
+        .where(eq(usageRecords.id, r.id))
+        .run();
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * Backfill the model on old rows that recorded none (older Codex runs), from the engine's
+   * default model, so "By model" shows the engine instead of a lump of `unknown`. One-time per
+   * row: cheap once filled.
+   */
+  backfillModels(): number {
+    const engineIds = this.db
+      .selectDistinct({ e: usageRecords.engineId })
+      .from(usageRecords)
+      .where(isNull(usageRecords.model))
+      .all()
+      .map((r) => r.e);
+    let n = 0;
+    for (const engineId of engineIds) {
+      let model: string | null = null;
+      try {
+        const info = this.engines.get(engineId);
+        model = info.defaultModel ?? info.models[0]?.id ?? null;
+      } catch {
+        model = null;
+      }
+      if (!model) continue;
+      this.db
+        .update(usageRecords)
+        .set({ model })
+        .where(and(eq(usageRecords.engineId, engineId), isNull(usageRecords.model)))
+        .run();
+      n++;
+    }
+    return n;
+  }
+
   summary(q: UsageQuery): UsageSummaryDto {
+    this.repriceUnpriced();
+    this.backfillModels();
     const to = q.to ?? Date.now();
     const from = q.from ?? to - 30 * 86_400_000;
     const where = and(
@@ -58,7 +124,14 @@ export class UsageService {
       order: 'cost' | 'key' = 'cost',
     ): UsageBucket[] =>
       this.db
-        .select({ key, label: label ?? key, runs: RUNS, tokens: TOKENS, cost: COST })
+        .select({
+          key,
+          label: label ?? key,
+          runs: RUNS,
+          tokens: TOKENS,
+          cost: COST,
+          est: EST_COST,
+        })
         .from(usageRecords)
         .leftJoin(projects, eq(projects.id, usageRecords.projectId))
         .leftJoin(tasks, eq(tasks.id, usageRecords.taskId))
@@ -72,6 +145,7 @@ export class UsageService {
           runs: Number(r.runs),
           tokens: Number(r.tokens ?? 0),
           costUsd: Number(r.cost ?? 0),
+          estimatedCostUsd: Number(r.est ?? 0),
         }));
 
     const day = sql<string>`strftime('%Y-%m-%d', ${usageRecords.recordedAt} / 1000, 'unixepoch', 'localtime')`;
@@ -85,6 +159,7 @@ export class UsageService {
         runs: RUNS,
         tokens: TOKENS,
         cost: COST,
+        est: EST_COST,
       })
       .from(usageRecords)
       .innerJoin(tasks, eq(tasks.id, usageRecords.taskId))
@@ -121,6 +196,7 @@ export class UsageService {
         cacheWriteTokens: Number(t.cacheWrite),
         costUsd: Number(t.cost),
         estimatedShare: Number(t.cost) > 0 ? Number(t.estimated) / Number(t.cost) : 0,
+        estimatedCostUsd: Number(t.estimated),
         unpricedRuns: Number(t.unpriced),
         durationMs: Number(t.duration),
       },
@@ -141,6 +217,7 @@ export class UsageService {
         runs: Number(r.runs),
         tokens: Number(r.tokens),
         costUsd: Number(r.cost),
+        estimatedCostUsd: Number(r.est ?? 0),
       })),
       byTaskType: [...byType]
         .map(([type, v]) => ({
