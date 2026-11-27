@@ -149,11 +149,11 @@ test('add a custom CLI engine and pick it as a default', async ({ page }) => {
   await expect(card.getByText('v1.2.3')).toBeVisible();
 
   await page.goto('/settings');
-  await page.getByRole('combobox', { name: 'Reviewer' }).click();
+  await page.getByRole('combobox', { name: 'Reviewer', exact: true }).click();
   await page.getByRole('option', { name: /My CLI/ }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Settings saved')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Reviewer' }).click();
+  await page.getByRole('combobox', { name: 'Reviewer', exact: true }).click();
   await page.getByRole('option', { name: /Claude Code/ }).click();
   await page.getByRole('button', { name: 'Save' }).click();
 });

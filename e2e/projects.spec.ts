@@ -54,7 +54,8 @@ test('create a project from scratch through the wizard', async ({ page }) => {
   await expect(docs.getByRole('listitem')).toHaveCount(1);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
-  await expect(page.getByText('brief.md')).toBeVisible();
+  // Exact: the "already attached" toast from above may still be on screen.
+  await expect(page.getByText('brief.md', { exact: true })).toBeVisible();
   await expect(page.getByText('Planner decides')).toBeHidden();
   await expect(page.getByText('Next.js, SQLite')).toBeVisible();
   await page.getByRole('button', { name: 'Create project' }).click();
